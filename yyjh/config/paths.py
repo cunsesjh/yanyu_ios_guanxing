@@ -73,15 +73,34 @@ def _migrate_legacy_files():
 
 
 _migrate_legacy_files()
-if FROZEN and not os.path.exists(KEYS_FILE):
-    # 首次运行：把打包内置的 keys.json 释放到用户目录（之后可自行更新/分享）
+if FROZEN:
+    # 首次运行：把打包内置的 keys.json 释放到用户目录（之后可自行更新/分享）；
+    # 升级运行：内置表里**新增**的密钥合并进用户表 —— 只增不改，
+    # 不碰用户自己挖到/导入的条目，否则老安装永远拿不到新版本密钥。
     import shutil
     _bundled_keys = os.path.join(getattr(sys, '_MEIPASS', ''), 'keys.json')
     if os.path.exists(_bundled_keys):
         try:
             os.makedirs(USER_DIR, exist_ok=True)
-            shutil.copy2(_bundled_keys, KEYS_FILE)
+            if not os.path.exists(KEYS_FILE):
+                shutil.copy2(_bundled_keys, KEYS_FILE)
+            else:
+                import json as _json
+                with open(_bundled_keys, encoding='utf-8') as f:
+                    _b = _json.load(f)
+                with open(KEYS_FILE, encoding='utf-8') as f:
+                    _u = _json.load(f)
+                _rows_u = _u.setdefault('inner_keys', [])
+                _have = {(r.get('runtime'), r.get('version')) for r in _rows_u}
+                _new = [r for r in (_b.get('inner_keys') or [])
+                        if (r.get('runtime'), r.get('version')) not in _have]
+                if _new:
+                    _rows_u.extend(_new)
+                    with open(KEYS_FILE, 'w', encoding='utf-8') as f:
+                        _json.dump(_u, f, ensure_ascii=False, indent=2)
         except OSError:
+            pass
+        except ValueError:                                 # noqa: PERF203 表坏了不挡启动
             pass
 LOCAL_FILE = os.path.join(USER_DIR, 'keys.local.json')
 USER_KEYS = KEYS_FILE                 # 兼容旧名字
