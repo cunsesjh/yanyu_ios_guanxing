@@ -92,6 +92,37 @@ class Har:
                 out.append(e)
         return out
 
+    def power_upload(self):
+        """新版（v73492+）：角色/装备数据走 uploadPower 标准信封。
+
+        存档本体 upload3 被"安全信封"包住（解不开），但同一个会话里
+        uploadPower 的明文 JSON 带 data 字段 = base64(zlib(角色数组))，
+        含全部角色 + 装备 + 打造/洗练种子 —— 从这里取数据。
+        """
+        for e in self.uploads():
+            if (self.header(e, 'command') or '').lower() == 'uploadpower':
+                return e
+        return None
+
+    def platform_hint(self, entry=None):
+        """平台判断线索：realchannel/channel 请求头 > URL 主机 > acc 形态。
+
+        新版（v73492+）acc 不再是邮箱而是随机 token，不能靠 '@' 判平台。
+        """
+        e = entry or self.largest_upload() or (self.entries[0] if self.entries else None)
+        if not e:
+            return None
+        for name in ('realchannel', 'channel'):
+            v = self.header(e, name)
+            if v:
+                return 'ios' if 'ios' in v.lower() else 'android'
+        url = ((e.get('request') or {}).get('url') or '').lower()
+        if 'ios.' in url or '/ios' in url:
+            return 'ios'
+        if 'android' in url:
+            return 'android'
+        return None
+
     def largest_upload(self):
         """存档上传的请求体最大；内力/坐标上传都很小。"""
         ups = self.uploads()

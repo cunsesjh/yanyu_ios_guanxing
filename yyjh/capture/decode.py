@@ -98,7 +98,7 @@ def inner_body(har_path, index=None, real_key=None, steps=None):
     acc = har.account(entry)
     if not acc:
         raise ValueError('upload 请求里没有 acc 请求头')
-    runtime = 'ios' if protocol.is_ios(acc) else 'android'
+    runtime = har.platform_hint(entry) or ('ios' if protocol.is_ios(acc) else 'android')
     server = har.server(entry) or ''
     say('账号 acc', f'{acc}   平台 = {runtime}   服 = {server or "?"}')
     save_id = savefmt.save_id_of(acc)
@@ -203,11 +203,119 @@ def inner_body(har_path, index=None, real_key=None, steps=None):
             'outer_key': rk}
 
 
+def power_data(har_path, real_key=None, steps=None):
+    """新版（v73492+）存档提取：从 uploadPower.data 取角色/装备数据。
+
+    背景：v73492 起存档本体（upload3）不再走 realKey 信封，被"安全信封"
+    包住（marker+base64 + 未知密钥，疑似每账号外层密钥 / ?K 参数里
+    RSA 包裹的会话密钥），HAR 里解不开。但同一会话的 uploadPower 仍走
+    标准信封，其明文 JSON 的 data 字段 = base64(zlib(角色数组 JSON))，
+    含全部角色 + 装备 + 打造/洗练种子（MJSeed/SeedBeforeXL/CZSeed）。
+
+    返回 dict: summary / roles / account / save_id / server / version / real_key
+    """
+    import base64
+    import json as _json
+    import zlib
+
+    say = steps or (lambda *a, **k: None)
+    har = Har(har_path)
+    e = har.power_upload()
+    if e is None:
+        raise ValueError('HAR 里没有 uploadPower 请求 —— 新版存档提取需要它')
+    acc = har.account(e)
+    if not acc:
+        raise ValueError('uploadPower 请求里没有 acc 请求头')
+
+    if real_key:
+        rk = real_key
+        say('realKey', f'{rk}  (命令行指定)')
+    else:
+        k = har.k_header()
+        if not k:
+            raise ValueError('HAR 里没有带 k 的响应头 —— 请从"打开游戏之前"开始抓，'
+                             '或用 --real-key 手动指定')
+        keys = protocol.derive(acc, k)
+        say('key0', keys['key0'])
+        say('realKey', keys['real_key'])
+        rk = keys['real_key']
+
+    body = Har.body(e)
+    cipher = body if isinstance(body, (bytes, bytearray)) else codecs.b64d(body)
+    if cipher is None:
+        raise ValueError('uploadPower 请求体不是合法 base64')
+    plain = xxtea.decrypt(bytes(cipher), rk)
+    if plain is None:
+        raise ValueError('uploadPower 解不开（realKey 不对）')
+    summary = _json.loads(plain.decode('utf-8'))
+    say('信封解密', f'uploadPower -> JSON（{len(summary)} 个字段）')
+
+    try:
+        blob = base64.b64decode(summary.get('data') or '')
+        roles = _json.loads(zlib.decompress(blob))
+    except Exception as e2:                              # noqa: BLE001
+        raise ValueError(f'uploadPower.data 解析失败: {e2}')
+    say('data 字段', f'base64 + zlib -> {len(roles)} 个角色对象（含装备/种子）')
+
+    ver_num = str(summary.get('version') or '')
+    return {
+        'summary': summary,
+        'roles': roles,
+        'account': acc,
+        'save_id': savefmt.save_id_of(acc),
+        'server': har.server(e) or '',
+        'version': ver_num.zfill(8) if ver_num.isdigit() else ver_num,
+        'real_key': rk,
+        'runtime': har.platform_hint(e) or ('ios' if protocol.is_ios(acc) else 'android'),
+    }
+
+
+def power_save(info):
+    """uploadPower 提取物 -> 旧形状存档 dict（dat.json / player 摘要都能用）。
+
+    字段映射与 player.py 的注释一一对应；角色对象原样放在 MainRole / Roles，
+    网页版要的打造/洗练状态就在角色的 Equips 里。"""
+    roles = info.get('roles') or []
+    s = info.get('summary') or {}
+    main = next((r for r in roles
+                 if r.get('IsMaster') or r.get('IsZhu') or r.get('ID') == 1),
+                roles[0] if roles else {})
+    return {
+        'MainRole': main,
+        'Roles': roles,
+        'globalVariable': {'repute': s.get('prestige', 0)},
+        'Energy': s.get('energy', 0),
+        'Money': s.get('money', 0),
+        'SavCode': s.get('saveCode', 0),
+        'Yue': s.get('yue', 0),
+    }
+
+
 def decode(har_path, index=None, real_key=None, inner_key=None,
            avatar_field='auto'):
     """返回 SaveResult。"""
     r = model.SaveResult(source=har_path, kind='har')
-    info = inner_body(har_path, index=index, real_key=real_key, steps=r.step)
+    try:
+        info = inner_body(har_path, index=index, real_key=real_key, steps=r.step)
+    except ValueError as e:
+        if '外层解密失败' not in str(e):
+            raise
+        # ── 新版安全信封：存档本体解不开，退而从 uploadPower.data 提取 ──
+        pinfo = power_data(har_path, real_key=real_key, steps=r.step)
+        r.account, r.runtime = pinfo['account'], pinfo['runtime']
+        r.server, r.save_id = pinfo['server'], pinfo['save_id']
+        r.version = pinfo['version']
+        r.outer_key = pinfo['real_key']
+        r.data = power_save(pinfo)
+        r.step('数据来源',
+               'uploadPower.data（v73492+ 存档本体被安全信封包住，HAR 里解不开）')
+        r.step('解密结果', f'{len(r.data)} 个字段   角色 = {r.nick!r}')
+        r.player = player_mod.build(r.data, r.version, avatar_field)
+        r.step('player 摘要', r.player)
+        r.warn('存档本体 upload3 被新版安全信封包住（非 realKey 信封），'
+               '本次数据来自同会话的 uploadPower.data（角色+装备+打造/洗练种子）；'
+               '如需完整存档，可用 --outer-key 指定该账号的外层密钥。')
+        return r
     version, inner = info['version'], info['body']
     r.account, r.runtime = info['account'], info['runtime']
     r.server, r.save_id = info['server'], info['save_id']
