@@ -55,7 +55,7 @@ def _k_header(seed):
     return base64.b64encode(xxtea.encrypt(seed, protocol_key(ACC, b''))).decode('ascii')
 
 
-def _upload(content, real_key, when, encoding=None, double_b64=False):
+def _upload(content, real_key, when, encoding=None, double_b64=False, cmd='upload'):
     cipher = xxtea.encrypt(content.encode('ascii'), real_key)
     payload = base64.b64encode(cipher).decode('ascii')
     pd = {'mimeType': 'application/octet-stream', 'text': payload}
@@ -66,7 +66,7 @@ def _upload(content, real_key, when, encoding=None, double_b64=False):
     elif encoding:
         pd['encoding'] = encoding
     return {'request': {'url': 'https://game/api_command', 'method': 'POST',
-                        'headers': [{'name': 'command', 'value': 'upload'},
+                        'headers': [{'name': 'command', 'value': cmd},
                                     {'name': 'acc', 'value': ACC}],
                         'postData': pd},
             'response': {'status': 200, 'headers': []},
@@ -83,6 +83,28 @@ def _k_entry(k_header, when):
 def _write_har(path, entries):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump({'log': {'version': '1.2', 'entries': entries}}, f, ensure_ascii=False)
+
+
+def _download_json(psw, suf, real_key, nick):
+    """download 响应：{saveCode, extra, data, code}。
+    data = base64(版本号 + XXTEA(zlib(json), psw+渠道后缀))
+    extra = base64(XXTEA(psw(8), realKey))"""
+    inner_key = (psw + suf)[:16]
+    blob = xxtea.encrypt(zlib.compress(
+        json.dumps({'Nick': nick, 'EncryptID': ACC}).encode('utf-8'), 6), inner_key)
+    content = base64.b64encode(VER.encode('ascii') + blob).decode('ascii')
+    extra = base64.b64encode(xxtea.encrypt(psw.encode('ascii'), real_key)).decode('ascii')
+    return {'saveCode': 1, 'extra': extra, 'data': content, 'code': 0}
+
+
+def _download_entry(resp_json, when):
+    return {'request': {'url': 'https://game/api_command', 'method': 'POST',
+                        'headers': [{'name': 'command', 'value': 'download'},
+                                    {'name': 'acc', 'value': ACC}]},
+            'response': {'status': 200, 'headers': [],
+                         'content': {'mimeType': 'application/json',
+                                     'text': json.dumps(resp_json)}},
+            'startedDateTime': when}
 
 
 # ── 用例 ────────────────────────────────────────────────────
@@ -158,6 +180,76 @@ def main():
             check('全错时报错', False, '居然解开了？')
         except ValueError as e:
             check('全错时报错', '排查建议' in str(e))
+
+        # ⑥ 新版正路：download 响应（多 k 错位也要命中）
+        print('— ⑥ download 正路（多 k）—')
+        s1, s2 = _seed(), _seed()
+        rk1 = protocol_key(ACC, s1).decode('ascii')
+        rk2 = protocol_key(ACC, s2).decode('ascii')
+        psw, suf = 'abcd1234', 'yoqkmrtj'
+        p = os.path.join(tmp, 'download.har')
+        _write_har(p, [_k_entry(_k_header(s1), '2026-10-25T10:00:00Z'),
+                       _k_entry(_k_header(s2), '2026-10-25T10:05:00Z'),
+                       _download_entry(_download_json(psw, suf, rk2, '下载'),
+                                       '2026-10-25T10:05:01Z')])
+        try:
+            d = capdec.download_body(p)
+            check('download 正路命中（k2 会话）', d['real_key'] == rk2,
+                  f'outer_key={d["real_key"]}')
+            check('内层密钥 = psw + 渠道后缀', d['inner_key'] == psw + suf,
+                  f'inner_key={d["inner_key"]}')
+            check('download 存档解出', d['data'].get('Nick') == '下载')
+        except ValueError as e:
+            check('download 正路命中（k2 会话）', False, str(e))
+            check('内层密钥 = psw + 渠道后缀', False, str(e))
+            check('download 存档解出', False, str(e))
+
+        # ⑦ decode 全链路：upload3 被安全信封包住 -> uploadPower 回退（多 k）
+        print('— ⑦ uploadPower 回退（多 k）—')
+        roles = [{'ID': 1, 'Name': '主号', 'IsMaster': True,
+                  'Equips': [{'MJSeed': 123}]},
+                 {'ID': 2, 'Name': '副号'}]
+        summary = {'energy': 7, 'menpai': 3, 'sex': 1, 'money': 99, 'lev': 100,
+                   'prestige': 5, 'saveCode': 42, 'job': 2, 'version': 73492,
+                   'avatar': 9, 'yue': 1,
+                   'data': base64.b64encode(zlib.compress(
+                       json.dumps(roles).encode('utf-8'), 6)).decode('ascii')}
+        p = os.path.join(tmp, 'power.har')
+        _write_har(p, [_k_entry(_k_header(s1), '2026-10-25T10:00:00Z'),
+                       _upload(_content('坏存档'), 'z' * 16,   # 安全信封：解不开
+                               '2026-10-25T10:00:01Z', cmd='upload3'),
+                       _k_entry(_k_header(s2), '2026-10-25T10:05:00Z'),
+                       _upload(json.dumps(summary), rk2,
+                               '2026-10-25T10:05:01Z', cmd='uploadPower')])
+        try:
+            r = capdec.decode(p)
+            check('回退到 uploadPower 且命中 k2', r.outer_key == rk2,
+                  f'outer_key={r.outer_key}')
+            check('MainRole/装备种子完整',
+                  (r.data.get('MainRole') or {}).get('Equips', [{}])[0].get('MJSeed') == 123
+                  and len(r.data.get('Roles') or []) == 2)
+            check('版本/摘要字段组装',
+                  r.version == '00073492' and r.data.get('Money') == 99)
+        except ValueError as e:
+            check('回退到 uploadPower 且命中 k2', False, str(e))
+            check('MainRole/装备种子完整', False, str(e))
+            check('版本/摘要字段组装', False, str(e))
+
+        # ⑧ download 响应不是存档（不挡路，自动回退旧路径）
+        print('— ⑧ download 非存档回退 —')
+        s = _seed()
+        rk = protocol_key(ACC, s).decode('ascii')
+        p = os.path.join(tmp, 'fake_dl.har')
+        _write_har(p, [_k_entry(_k_header(s), '2026-10-25T10:00:00Z'),
+                       _download_entry({'code': 0, 'msg': 'ok'},
+                                       '2026-10-25T10:00:01Z'),
+                       _upload(_content('旧路'), rk, '2026-10-25T10:00:02Z')])
+        try:
+            r = capdec.decode(p, inner_key=INNER_KEY)
+            check('download 非存档时自动回退旧路径', r.data.get('Nick') == '旧路',
+                  f'Nick={r.data.get("Nick")!r}')
+        except ValueError as e:
+            check('download 非存档时自动回退旧路径', False, str(e))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

@@ -104,6 +104,25 @@ class Har:
                 return e
         return None
 
+    def download_entry(self):
+        """download 命令 —— 服务器把**完整存档**发回来的那条。
+
+        新版（v73492+）存档本体 upload3 被安全信封包住解不开，但游戏里
+        点「下载」拉云端存档时，响应是明文 JSON：
+            {saveCode, extra, data, code}
+        · data  = 初版 content = base64(版本号 + XXTEA(zlib(json), 内层密钥))
+        · extra = base64(XXTEA(psw(8), realKey)) —— 内层密钥的 psw 由它下发
+        一条响应同时拿到完整存档（含 Rnds 世界种子）和新版本内层密钥。
+        """
+        best = None
+        for e in self.entries:
+            cmd = (self.header(e, 'command') or '').lower()
+            if cmd.startswith('download') or cmd in ('down', 'down2', 'getsave'):
+                txt = ((e.get('response') or {}).get('content') or {}).get('text') or ''
+                if best is None or len(txt) > len(best[1]):
+                    best = (e, txt)
+        return best[0] if best else None
+
     def platform_hint(self, entry=None):
         """平台判断线索：realchannel/channel 请求头 > URL 主机 > acc 形态。
 
