@@ -493,7 +493,13 @@ def cmd_har(a):
             print(f' {mark}[{i}] cmd={Har.header(e, "command")} '
                   f'acc={Har.header(e, "acc")} ver={Har.header(e, "ver")} '
                   f'area={Har.header(e, "area")} body={har.body_len(e):,}')
-        print(f'k 响应头: {"有" if har.k_header() else "没有（抓包开始得太晚）"}')
+        ks = har.k_sources()
+        if not ks:
+            print('k 响应头: 没有（抓包开始得太晚）')
+        else:
+            print(f'k 响应头: {len(ks)} 处（多次会话时会逐个试）：')
+            for ki, ke, kv in ks:
+                print(f'    [{ki}] cmd={Har.header(ke, "command") or "?"} k={kv[:24]}…')
         return 0
 
     if a.action == 'decrypt':
