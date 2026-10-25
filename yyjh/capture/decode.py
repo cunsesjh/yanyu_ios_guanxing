@@ -234,16 +234,41 @@ def download_body(har_path, real_key=None, steps=None):
 
     say = steps or (lambda *a, **k: None)
     har = Har(har_path)
-    e = har.download_entry()
-    if e is None:
+    cands = har.download_entries()
+    if not cands:
         raise ValueError('HAR 里没有 download 请求（游戏里点一次「下载」再抓包）')
-    txt = ((e.get('response') or {}).get('content') or {}).get('text') or ''
-    try:
-        j = _json.loads(txt)
-    except Exception as e2:                                # noqa: BLE001
-        raise ValueError(f'download 响应不是 JSON: {e2}')
-    if not (j.get('data') and j.get('extra')):
-        raise ValueError('download 响应缺 data/extra 字段')
+
+    # ── 逐条找「真·存档下载」：响应得是带 data+extra 的 JSON；
+    # 响应体可能是 base64 转码存的（Har.resp_text 统一还原）──
+    def _load_json(txt):
+        try:
+            return _json.loads(txt)
+        except Exception:                                  # noqa: BLE001
+            pass
+        try:
+            return _json.loads(codecs.b64d(txt) or b'')
+        except Exception:                                  # noqa: BLE001
+            return None
+
+    e = j = None
+    skipped = []
+    for e2 in cands:
+        txt = Har.resp_text(e2)
+        jj = _load_json(txt) if txt else None
+        if jj is None:
+            skipped.append(f'[{Har.header(e2, "command") or "?"}] 响应不是 JSON'
+                           f'（前 40 字 {txt[:40]!r}）')
+            continue
+        if not (jj.get('data') and jj.get('extra')):
+            skipped.append(f'[{Har.header(e2, "command") or "?"}] 是 JSON 但缺 '
+                           'data/extra（不是存档下载）')
+            continue
+        e, j = e2, jj
+        break
+    if j is None:
+        raise ValueError('HAR 里有 download 请求，但没有一条是可解析的存档下载：'
+                         + '；'.join(skipped) +
+                         ' —— 抓包时请在游戏里点「下载」拉一次云端存档')
     say('download 响应', f'明文 JSON：saveCode={j.get("saveCode")!r}')
 
     acc = har.account(e) or har.account()
@@ -398,6 +423,7 @@ def decode(har_path, index=None, real_key=None, inner_key=None,
     r = model.SaveResult(source=har_path, kind='har')
 
     # ── ① 新版正路：download 响应里有完整存档 + 新版内层密钥 ──
+    dl_err = None
     if Har(har_path).download_entry() is not None:
         try:
             d = download_body(har_path, real_key=real_key, steps=r.step)
@@ -415,6 +441,7 @@ def decode(har_path, index=None, real_key=None, inner_key=None,
         except savefmt.InnerKeyMissing:
             raise
         except ValueError as e:
+            dl_err = str(e)
             r.step('download 路径', f'没走通（{e}），回退旧路径')
 
     try:
@@ -435,8 +462,12 @@ def decode(har_path, index=None, real_key=None, inner_key=None,
         r.player = player_mod.build(r.data, r.version, avatar_field)
         r.step('player 摘要', r.player)
         r.warn('存档本体 upload3 被新版安全信封包住（非 realKey 信封），'
-               '本次数据来自同会话的 uploadPower.data（角色+装备+打造/洗练种子）；'
-               '如需完整存档，可用 --outer-key 指定该账号的外层密钥。')
+               '本次数据来自同会话的 uploadPower.data（角色+装备+打造/洗练种子）。'
+               '⚠ 这份 dat.json 不含 Rnds.Sds.* 世界种子，网页的鬼市/家园等模块 '
+               '会报「缺少 Rnds.Sds.guishishop 种子」一类错误；'
+               '要完整存档请重抓一次并在游戏里点「下载」拉云端存档')
+        if dl_err:
+            r.warn(f'HAR 里那条 download 响应本次没解析成功：{dl_err}')
         return r
     version, inner = info['version'], info['body']
     r.account, r.runtime = info['account'], info['runtime']

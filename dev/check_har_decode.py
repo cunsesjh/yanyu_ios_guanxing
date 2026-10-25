@@ -97,13 +97,15 @@ def _download_json(psw, suf, real_key, nick):
     return {'saveCode': 1, 'extra': extra, 'data': content, 'code': 0}
 
 
-def _download_entry(resp_json, when):
+def _download_entry(resp_json, when, text=None, encoding=None):
+    content = {'mimeType': 'application/json',
+               'text': text if text is not None else json.dumps(resp_json)}
+    if encoding:
+        content['encoding'] = encoding
     return {'request': {'url': 'https://game/api_command', 'method': 'POST',
                         'headers': [{'name': 'command', 'value': 'download'},
                                     {'name': 'acc', 'value': ACC}]},
-            'response': {'status': 200, 'headers': [],
-                         'content': {'mimeType': 'application/json',
-                                     'text': json.dumps(resp_json)}},
+            'response': {'status': 200, 'headers': [], 'content': content},
             'startedDateTime': when}
 
 
@@ -250,6 +252,49 @@ def main():
                   f'Nick={r.data.get("Nick")!r}')
         except ValueError as e:
             check('download 非存档时自动回退旧路径', False, str(e))
+
+        # ⑨ download 响应被 HAR 转码成 base64（ProxyPin 导出常见）
+        print('— ⑨ download 响应 base64 转码 —')
+        s = _seed()
+        rk = protocol_key(ACC, s).decode('ascii')
+        js = json.dumps(_download_json(psw, suf, rk, '转码'))
+        p = os.path.join(tmp, 'dl_b64.har')
+        _write_har(p, [_k_entry(_k_header(s), '2026-10-25T10:00:00Z'),
+                       _download_entry(None, '2026-10-25T10:00:01Z',
+                                       text=base64.b64encode(js.encode('utf-8')).decode('ascii'),
+                                       encoding='base64')])
+        try:
+            d = capdec.download_body(p)
+            check('download 响应 base64 转码能解开', d['data'].get('Nick') == '转码',
+                  f'Nick={d["data"].get("Nick")!r}')
+        except ValueError as e:
+            check('download 响应 base64 转码能解开', False, str(e))
+
+        # ⑩ 有 download 但拿不到存档：回退 uploadPower，且必须警告缺 Rnds
+        print('— ⑩ 回退时警告缺 Rnds 世界种子 —')
+        s1, s2 = _seed(), _seed()
+        rk2 = protocol_key(ACC, s2).decode('ascii')
+        summary = {'energy': 7, 'menpai': 3, 'sex': 1, 'money': 99, 'lev': 100,
+                   'prestige': 5, 'saveCode': 42, 'job': 2, 'version': 73492,
+                   'avatar': 9, 'yue': 1,
+                   'data': base64.b64encode(zlib.compress(
+                       json.dumps([{'ID': 1, 'Name': '主号', 'IsMaster': True}]
+                                  ).encode('utf-8'), 6)).decode('ascii')}
+        p = os.path.join(tmp, 'dl_bad.har')
+        _write_har(p, [_k_entry(_k_header(s1), '2026-10-25T10:00:00Z'),
+                       _download_entry(None, '2026-10-25T10:00:01Z',
+                                       text='不是JSON的垃圾' * 20),
+                       _k_entry(_k_header(s2), '2026-10-25T10:05:00Z'),
+                       _upload(_content('坏存档'), 'z' * 16,
+                               '2026-10-25T10:05:01Z', cmd='upload3'),
+                       _upload(json.dumps(summary), rk2,
+                               '2026-10-25T10:05:02Z', cmd='uploadPower')])
+        r = capdec.decode(p)
+        w = ' '.join(r.warnings)
+        check('回退后警告缺 Rnds 世界种子', 'Rnds' in w, w[:120])
+        check('警告里点名 download 没解析成功', 'download' in w, w[:120])
+        check('回退数据不丢角色',
+              (r.data.get('MainRole') or {}).get('Name') == '主号')
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
