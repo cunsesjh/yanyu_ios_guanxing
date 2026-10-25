@@ -25,6 +25,22 @@ def pick_entry(har, index=None):
     return max(ups, key=har.body_len), len(ups)
 
 
+def _cipher_cands(payload):
+    """载荷 -> 密文候选。除常规 base64/原始字节外，
+    还兼容「8 字节标记 + base64(...)」这种新版外壳（与存档 NEW 格式同构）。"""
+    out = []
+    c = codecs.b64d(payload)
+    if c:
+        out.append(('base64', c))
+    if len(payload) >= 8 and len(payload) % 4 == 0:
+        out.append(('原始字节', bytes(payload)))
+    if len(payload) > 16:
+        c2 = codecs.b64d(payload[8:])
+        if c2 and len(c2) % 4 == 0:
+            out.append(('去8字节头', c2))
+    return out
+
+
 def _outer_ok(cipher, key):
     """外层解密 + 强校验。成功返回 (content, version, inner)，失败 None。
 
@@ -130,13 +146,7 @@ def inner_body(har_path, index=None, real_key=None, steps=None):
         for vlabel, payload in Har.body_variants(u):
             if hit:
                 break
-            cands = []
-            c = codecs.b64d(payload)
-            if c:
-                cands.append(('base64', c))
-            if len(payload) >= 8 and len(payload) % 4 == 0:
-                cands.append(('原始字节', bytes(payload)))
-            for clabel, cipher in cands:
+            for clabel, cipher in _cipher_cands(payload):
                 for klabel, rk, info in key_cands:
                     got = _outer_ok(cipher, rk)
                     if got:
@@ -144,16 +154,37 @@ def inner_body(har_path, index=None, real_key=None, steps=None):
                         break
 
     if hit is None:
-        n_body = sum(max(1, len(Har.body_variants(u))) for u in tried_ups)
-        raise ValueError(
+        # ── 失败诊断：把现场数据 dump 出来，方便定位是协议变了还是抓包不对 ──
+        lines = [
             f'外层解密失败（realKey 不对）—— 试了 {len(tried_ups)} 个 upload × '
-            f'{len(key_cands)} 把 realKey × {n_body} 种请求体解释，全部不匹配。\n'
-            '排查建议（按可能性排序）:\n'
+            f'{len(key_cands)} 把 realKey，全部不匹配。',
+            '现场数据（发给维护者就能定位）：']
+        for ki, ke, kv in har.k_sources()[:5]:
+            try:
+                info = protocol.derive(acc, kv)
+                seed = info['inner_k']
+                lines.append(f'  k#{ki}: seed长度={len(seed)} seed={seed.hex()} '
+                             f'realKey={info["real_key"]}')
+            except ValueError:
+                lines.append(f'  k#{ki}: 解不开（acc 对不上？） k={kv[:40]}')
+        for u in tried_ups[:5]:
+            body = Har.body(u) or b''
+            if not isinstance(body, (bytes, bytearray)):
+                body = body.encode('utf-8', 'replace')
+            raw = codecs.b64d(body) or b''
+            lines.append(
+                f'  upload cmd={Har.header(u, "command") or "?"} '
+                f'acc={Har.header(u, "acc")} ver={Har.header(u, "ver")} '
+                f'area={Har.header(u, "area")} body长度={len(body)} '
+                f'密文头32B={bytes(raw[:32]).hex()}')
+        lines += [
+            '排查建议（按可能性排序）:',
             '  1. 抓包必须从「打开游戏之前」开始，一次会话内完成 '
-            '（登录 -> 开始游戏 -> 上传存档）后**立刻停止抓包**；\n'
-            '     中途关过游戏 / 重新登录过，HAR 里会有两份 k，拿错那份就解不开外层。\n'
-            '  2. 确认游戏里真的上传过存档（HAR 里最大的那个 upload 就是它）；\n'
-            '  3. 如果游戏最近更新过、协议变了，用 --real-key <16位> 手动指定外层密钥。')
+            '（登录 -> 开始游戏 -> 上传存档）后**立刻停止抓包**；',
+            '  2. 确认游戏里真的上传过存档（HAR 里最大的那个 upload 就是它）；',
+            '  3. 上面 dump 里 ver 头比密钥表新的话，是**游戏更新改了协议**，',
+            '     把这份 dump（连同 HAR）交给维护者分析新协议。']
+        raise ValueError('\n'.join(lines))
 
     u, vlabel, clabel, klabel, rk, info, cipher, (content, version, inner) = hit
     if info:
