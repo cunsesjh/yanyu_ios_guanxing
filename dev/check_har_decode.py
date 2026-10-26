@@ -348,3 +348,4 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+# v2.6-版本号对齐

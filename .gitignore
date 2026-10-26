@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .DS_Store
+# v2.6-版本号对齐
+keys.local.json
+output/ios*

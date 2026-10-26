@@ -33,3 +33,4 @@ if errorlevel 1 (
 echo.
 echo 构建完成：dist\ios观星.exe
 pause
+::v2.6-版本号对齐

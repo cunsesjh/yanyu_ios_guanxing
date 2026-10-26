@@ -39,3 +39,4 @@ from yyjh.__main__ import main       # noqa: E402
 if __name__ == '__main__':
     # main() 会自己处理：没子命令就补 start，非交互终端则打帮助
     sys.exit(main())
+# v2.6-版本号对齐

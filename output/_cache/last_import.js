@@ -124,3 +124,4 @@ window.__latestPlainSave={"data": {"MainRole": {"Name": "自检", "Platform": "i
         setTimeout(applyUi, 0);
     }
 })();
+// v2.6-版本号对齐

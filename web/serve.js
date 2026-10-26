@@ -57,3 +57,4 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log('本地服务器已启动: http://localhost:' + PORT + '/');
 });
+// v2.6-版本号对齐

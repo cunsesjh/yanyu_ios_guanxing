@@ -15,3 +15,4 @@ xxtea>=6.0
 # —— .so 逆向（yyjh elf *）——
 pyelftools>=0.30
 capstone>=5.0
+# v2.6-版本号对齐

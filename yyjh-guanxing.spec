@@ -68,3 +68,4 @@ exe = EXE(
     disable_windowed_traceback=False,
     upx=False,
 )
+# v2.6-版本号对齐

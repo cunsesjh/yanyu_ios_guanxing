@@ -46,3 +46,4 @@ if sys.version_info < (3, 8):
 __version__ = '2.6.0'
 
 __all__ = ['__version__']
+# v2.6-版本号对齐

@@ -68,3 +68,4 @@ jobs:
             -Uri "https://gitee.com/api/v5/repos/$repo/releases/$($mine.id)/attach_files" `
             -Form @{ access_token = $env:GITEE_TOKEN; file = $f }
           Write-Host "Gitee Release $($mine.tag_name) 已同步 $($f.Name)"
+# v2.6-版本号对齐
