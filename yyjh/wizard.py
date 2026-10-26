@@ -216,8 +216,8 @@ def _delete_saves(rows):
     while rows:
         shown = rows[:LIST_LIMIT]
         lines = [describe(r) for r in shown]
-        lines.append('↩　返回（不删了）')
-        idx = ui.choose('🗑 删除存档 —— 选要删的那条（删了就找不回来了）：',
+        lines.append('返回（不删了）')
+        idx = ui.choose('删除存档 —— 选要删的那条（删了就找不回来了）：',
                         lines, default=len(lines) - 1)
         if idx >= len(shown):
             return
@@ -248,9 +248,9 @@ def _pick_saved(rows):
         shown = rows[:LIST_LIMIT]
         n_use = len(shown)
         lines = [describe(r) for r in shown]
-        lines.append('＋　导入新存档')
-        lines.append('🗑　删除现有存档')
-        lines.append('📂　打开输出目录')
+        lines.append('导入新存档')
+        lines.append('删除现有存档')
+        lines.append('打开输出目录')
         idx = ui.choose('已导入的存档（默认最新的那条）：', lines, default=0)
         if idx < n_use:
             return shown[idx]
