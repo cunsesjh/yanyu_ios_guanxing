@@ -11,19 +11,20 @@
 """
 from ..config.constants import (PROTOCOL_INNER_MAX, PROTOCOL_INNER_MIN,
                                 PROTOCOL_KEY_LEN, PROTOCOL_MIDDLE,
-                                PROTOCOL_SEED_ZERO)
+                                PROTOCOL_MIDDLES, PROTOCOL_SEED_ZERO)
 from ..core import codecs, xxtea
 
 
-def protocol_key(account, seed):
+def protocol_key(account, seed, middle=PROTOCOL_MIDDLE):
     """ProtocolEnvelope.key(String account, byte[] seed)
 
     buf = 16 个 '0'
-    buf[0:10]  = account[:5] + "eakec"
+    buf[0:10]  = account[:5] + middle      ← middle 是客户端魔数：
+                                              国服 'eakec'，国际服 'qwmyk'
     buf[10:16] = seed[:6]
     """
     buf = bytearray(b'0' * PROTOCOL_KEY_LEN)
-    prefix = (account[:5] + PROTOCOL_MIDDLE).encode('ascii', 'ignore')[:10]
+    prefix = (account[:5] + middle).encode('ascii', 'ignore')[:10]
     buf[:len(prefix)] = prefix
     if seed:
         take = min(6, len(seed))
@@ -31,26 +32,37 @@ def protocol_key(account, seed):
     return bytes(buf)
 
 
-def key0(account):
-    return protocol_key(account, b'').decode('ascii')
+def key0(account, middle=PROTOCOL_MIDDLE):
+    return protocol_key(account, b'', middle).decode('ascii')
 
 
 def derive(account, k_header):
-    """返回 dict(key0, inner_k, real_key)。k_header 是响应头 k 的 base64 值。"""
+    """返回 dict(key0, inner_k, real_key, middle)。k_header 是响应头 k 的 base64 值。
+
+    ⚠ 国际服（xinma 等）客户端魔数是 'qwmyk' 而不是国服的 'eakec'，
+    逐个魔数试出能解开 k 头的那个（种子长度 + ASCII 双重校验，误报概率 ~1e-9）。
+    """
     if not k_header:
         raise ValueError('缺少 k 响应头（需要从"打开游戏之前"开始抓包）')
-    k0 = protocol_key(account, b'')
     raw = codecs.b64d(k_header)
     if raw is None:
         raise ValueError(f'k 头不是合法 base64: {k_header[:40]!r}')
-    inner = xxtea.decrypt(raw, k0)
-    if not inner or not (PROTOCOL_INNER_MIN <= len(inner) <= PROTOCOL_INNER_MAX):
-        raise ValueError('k 头解密失败或种子长度非法（acc 取错了？）')
-    return {
-        'key0': k0.decode('ascii'),
-        'inner_k': inner,
-        'real_key': protocol_key(account, inner).decode('ascii'),
-    }
+    for middle in PROTOCOL_MIDDLES:
+        k0 = protocol_key(account, b'', middle)
+        inner = xxtea.decrypt(raw, k0)
+        if not inner or not (PROTOCOL_INNER_MIN <= len(inner) <= PROTOCOL_INNER_MAX):
+            continue
+        try:
+            inner.decode('ascii')
+        except UnicodeDecodeError:
+            continue
+        return {
+            'key0': k0.decode('ascii'),
+            'inner_k': inner,
+            'real_key': protocol_key(account, inner, middle).decode('ascii'),
+            'middle': middle,
+        }
+    raise ValueError('k 头解密失败或种子长度非法（acc 取错了？或新平台魔数未收录）')
 
 
 def is_ios(account):

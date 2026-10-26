@@ -55,6 +55,7 @@ INNER_KEY_ROWS = [
     ('ios', '00073420', 'n0b06b00', 'po06ewkx'),          # ⚠ 全表唯一例外
     ('ios', '00071352', '15fgt27w', 'meeo0wmk'),
     ('ios', '00073661', 'wmjhuy6d', 'meeo0wmk'),
+    ('ios', '00073674', '2dsf45ad', 'meeo0wmk'),          # 国际服 xinma_ios ✅ 已实测（协议魔数 qwmyk）
     # —— 旧版本（早期从内存读到，官服后缀）——
     ('android', '00072280', 'hjo0e3q9', 'po06ewkx'),
     ('android', '00072288', 'jkds85we', 'po06ewkx'),

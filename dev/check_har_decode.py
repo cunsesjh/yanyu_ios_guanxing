@@ -295,6 +295,50 @@ def main():
         check('警告里点名 download 没解析成功', 'download' in w, w[:120])
         check('回退数据不丢角色',
               (r.data.get('MainRole') or {}).get('Name') == '主号')
+
+        # ⑩ 国际服：协议魔数 qwmyk（非国服 eakec），acc 是数字 UID
+        print('— ⑪ 国际服魔数 qwmyk —')
+        acc_i, mid = '103389291', 'qwmyk'
+        s_i = _seed(6)
+        k0_i = protocol_key(acc_i, b'', mid)
+        rk_i = protocol_key(acc_i, s_i, mid).decode('ascii')
+        psw_i, suf_i = 'abcd5678', 'meeo0wmk'
+        ik_i = psw_i + suf_i
+        blob_i = xxtea.encrypt(zlib.compress(
+            json.dumps({'Nick': '国际', 'EncryptID': acc_i}).encode('utf-8'), 6), ik_i)
+        content_i = base64.b64encode(b'00073674' + blob_i).decode('ascii')
+        extra_i = base64.b64encode(
+            xxtea.encrypt(psw_i.encode('ascii'), rk_i)).decode('ascii')
+        p = os.path.join(tmp, 'intl.har')
+        _write_har(p, [
+            {'request': {'url': 'https://yanyuonline.novastargame.net/api_command',
+                         'method': 'POST',
+                         'headers': [{'name': 'command', 'value': 'startGame'},
+                                     {'name': 'acc', 'value': acc_i}]},
+             'response': {'status': 200,
+                          'headers': [{'name': 'k', 'value': base64.b64encode(
+                              xxtea.encrypt(s_i, k0_i)).decode('ascii')}]},
+             'startedDateTime': '2026-10-26T09:46:00Z'},
+            {'request': {'url': 'https://yanyuonline.novastargame.net/api_command',
+                         'method': 'POST',
+                         'headers': [{'name': 'command', 'value': 'download'},
+                                     {'name': 'acc', 'value': acc_i}]},
+             'response': {'status': 200, 'headers': [],
+                          'content': {'mimeType': 'application/json',
+                                      'text': json.dumps({'saveCode': 'x', 'extra': extra_i,
+                                                          'data': content_i, 'code': 0})}},
+             'startedDateTime': '2026-10-26T09:46:01Z'}])
+        try:
+            d = capdec.download_body(p)
+            check('国际服魔数 qwmyk 推导命中', d['real_key'] == rk_i,
+                  f'outer_key={d["real_key"]}')
+            check('国际服内层密钥 = psw+meeo0wmk', d['inner_key'] == ik_i,
+                  f'inner_key={d["inner_key"]}')
+            check('国际服存档解出', d['data'].get('Nick') == '国际')
+        except ValueError as e:
+            check('国际服魔数 qwmyk 推导命中', False, str(e))
+            check('国际服内层密钥 = psw+meeo0wmk', False, str(e))
+            check('国际服存档解出', False, str(e))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

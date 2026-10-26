@@ -96,7 +96,8 @@ def _real_key_cands(har, acc, real_key, say):
             continue
         seed = info['inner_k']
         for off in range(0, max(1, len(seed) - 5)):
-            rk = protocol.protocol_key(acc, seed[off:off + 6]).decode('ascii')
+            rk = protocol.protocol_key(acc, seed[off:off + 6],
+                                      info.get('middle') or 'eakec').decode('ascii')
             if rk != info['real_key']:
                 out.append((f'k#{ki} 种子窗口[{off}:{off + 6}]', rk, None))
     return out

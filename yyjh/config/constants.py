@@ -62,6 +62,7 @@ DEFAULT_OUTER_KEY = ''
 
 # ───────────────────── 协议（抓包） ─────────────────────
 PROTOCOL_MIDDLE = 'eakec'        # realKey = acc[:5] + "eakec" + innerK[:6]
+PROTOCOL_MIDDLES = ('eakec', 'qwmyk')   # 国服魔数 / 国际服（xinma 等）魔数
 PROTOCOL_SEED_ZERO = '000000'
 PROTOCOL_KEY_LEN = 16
 PROTOCOL_INNER_MIN = 1
