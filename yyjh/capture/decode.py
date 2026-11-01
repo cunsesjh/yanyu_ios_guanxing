@@ -423,6 +423,30 @@ def decode(har_path, index=None, real_key=None, inner_key=None,
     """返回 SaveResult。"""
     r = model.SaveResult(source=har_path, kind='har')
 
+    # ── ⓪ 新版动态信封（JHNetClient: md5(platform_session_time)[:16]）──
+    #   upload3/download3 直接解完整存档（含 Rnds 世界种子）；失败回退旧链路
+    try:
+        from . import envelope as env_mod
+        hit = env_mod.decode_har(har_path, steps=r.step)
+    except Exception as e:                       # noqa: BLE001
+        hit = None
+        r.step('动态信封', f'尝试失败（{e}），回退旧路径')
+    if hit:
+        r.account, r.runtime = hit['account'], hit['runtime']
+        r.server, r.save_id = hit['server'], hit['save_id']
+        r.version = '%08d' % int(hit['version'])   # 工具约定：8 位数字字符串
+        r.data = hit['data']
+        r.inner_key = hit['inner_key']
+        r.step('数据来源',
+               f"动态信封 {hit['command']}（含 Rnds 世界种子，完整存档）")
+        r.step('解密结果', f'{len(r.data)} 个字段   角色 = {r.nick!r}')
+        r.player = player_mod.build(r.data, r.version, avatar_field)
+        r.step('player 摘要', r.player)
+        enc = r.data.get('EncryptID')
+        if enc and r.account and enc != r.account:
+            r.warn(f'JSON 里的 EncryptID（{enc}）与 acc 不一致')
+        return r
+
     # ── ① 新版正路：download 响应里有完整存档 + 新版内层密钥 ──
     dl_err = None
     if Har(har_path).download_entry() is not None:

@@ -114,7 +114,16 @@
       "runtime": "ios",
       "version": "00073674",
       "key": "2dsf45admeeo0wmk"
+    },
+    {
+      "runtime": "ios",
+      "version": 73570,
+      "key": "xi9iz9h4yoqkmrtj"
+    },
+    {
+      "runtime": "ios",
+      "version": "00073570",
+      "key": "xi9iz9h4yoqkmrtj"
     }
-  ],
-  "_版本": "v2.6-版本号对齐"
+  ]
 }

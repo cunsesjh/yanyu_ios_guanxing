@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>烟雨江湖 · 角色状态</title>
+    <meta name="description" content="烟雨江湖角色状态：永久培养来源、当前进度与属性上限">
+    <link rel="stylesheet" href="../shared/simulator.css">
+    <link rel="stylesheet" href="./status.css">
+</head>
+<body>
+    <div class="app-container role-app">
+        <header class="app-header">
+            <h1>角色状态</h1>
+            <p class="subtitle">烟雨江湖 · 永久培养来源与进度上限一览</p>
+            <nav class="sim-nav">
+                <a href="../index.html">首页</a>
+                <span class="nav-sep">·</span>
+                <a href="../wash/index.html">洗髓模拟</a>
+                <span class="nav-sep">·</span>
+                <a href="../equip/index.html">装备模拟</a>
+                <span class="nav-sep">·</span>
+                <a href="../hengshan/index.html">恒山模拟</a>
+                <span class="nav-sep">·</span>
+                <a href="../guishi/index.html">鬼市千宝阁</a><span class="nav-sep">·</span><a href="./index.html">角色面板</a>
+                <span class="nav-sep">·</span>
+                <a href="./status.html" class="active" aria-current="page">角色状态</a>
+                <span class="nav-sep">·</span>
+                <a href="../auto/index.html">自动模拟</a>
+            </nav>
+        </header>
+
+        <section class="archive-summary" aria-label="存档信息">
+            <div class="archive-summary-info">
+                <div class="archive-summary-item">
+                    <span>存档状态</span>
+                    <strong id="saveStatus">未导入</strong>
+                </div>
+                <div class="archive-summary-item">
+                    <span>主角</span>
+                    <strong id="archiveMainRole">—</strong>
+                </div>
+            </div>
+
+        </section>
+<section class="config-panel">
+            <div class="config-row" id="roleSelectRow" hidden>
+                <div class="config-group grow">
+                    <label>角色</label>
+                    <div class="select-with-btn">
+                        <select id="roleSelect">
+                            <option value="">请先导入存档</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="config-group grow">
+                    <label>筛选</label>
+                    <input type="search" id="roleFilter" placeholder="名称 / ID / 标签" autocomplete="off">
+                </div>
+            </div>
+        </section>
+
+        <div id="roleStatusEmpty" class="role-status-empty">导入存档后选择角色，查看永久培养来源、当前进度与属性上限</div>
+
+        <main id="roleStatusPanel" class="role-status-panel" hidden>
+            <div id="roleStatus" class="role-status-groups"></div>
+        </main>
+
+        <footer class="app-footer">
+            <p>数据来源于 <a href="https://wiki.biligame.com/yanyu/" target="_blank" rel="noopener">烟雨江湖 Wiki</a></p>
+        </footer>
+    </div>
+
+
+    <script src="../shared/pako.min.js"></script>
+    <script src="../shared/save_decrypt.js"></script>
+    <script src="../shared/archive_state.js"></script>
+    <script src="../shared/role_status_data.js"></script>
+    <script src="./status.js"></script>
+</body>
+</html>

@@ -60,11 +60,11 @@ body {
 .exporter-panel > p { margin: 1rem 0; color: var(--muted); font-size: 0.8rem; line-height: 1.6; }
 .exporter-download { width: 100%; margin-top: auto; }
 .exporter-download[hidden] { display: none; }
-.module-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; margin-top: 1rem; }
-.module-card { min-height: 8.5rem; padding: 1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-soft); color: var(--text); text-decoration: none; transition: transform 0.15s, border-color 0.15s, background 0.15s; }
+.module-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.85rem 1.15rem; margin-top: 1rem; }
+.module-card { display: flex; flex-direction: column; justify-content: center; gap: 0.38rem; min-height: 4.6rem; padding: 0.85rem 1.15rem; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-soft); color: var(--text); text-decoration: none; transition: transform 0.15s, border-color 0.15s, background 0.15s; }
 .module-card:hover { transform: translateY(-2px); border-color: rgba(47, 111, 208, 0.55); background: rgba(47, 111, 208, 0.08); }
-.module-card strong { display: block; margin-bottom: 0.65rem; color: var(--purple); font-family: var(--font-serif); }
-.module-card span { color: var(--muted); font-size: 0.75rem; line-height: 1.6; }
+.module-card strong { display: block; color: var(--purple); font-family: var(--font-serif); font-size: 0.98rem; }
+.module-card span { color: var(--muted); font-size: 0.75rem; line-height: 1.55; }
 
 .changelog-panel { max-height: 34rem; overflow-y: auto; scrollbar-color: var(--border) transparent; }
 .changelog-header { display: flex; align-items: flex-end; justify-content: space-between; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
@@ -85,7 +85,6 @@ body {
 @media (max-width: 760px) {
     .home-shell { width: min(100% - 1rem, 1040px); padding: 1.5rem 0; }
     .home-grid { grid-template-columns: 1fr; }
-    .module-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 460px) {
