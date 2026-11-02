@@ -1,12 +1,13 @@
 name: build-exe
 
-# 推 v* 标签自动构建 Windows exe 并挂到 Release
+# 推 v* 标签：自动构建 Windows exe → GitHub Release + Gitee Release + 代码同步 Gitee
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
-  contents: write   # 创建 Release / 上传资产需要（Settings→Actions→Workflow permissions 也要允许 Read and write）
+  contents: write
 
 jobs:
   build:
@@ -36,36 +37,49 @@ jobs:
       - name: PyInstaller 打包
         run: python -m PyInstaller yyjh-guanxing.spec --noconfirm
 
-      # 关键：直接把 exe 作为 Release 资产上传，不要用 upload-artifact（那个只出 zip）
-      - name: 发布到 Release
+      - name: 发布到 GitHub Release（仅 tag）
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/ios观星.exe
           generate_release_notes: true
 
-      # 同步一份到 Gitee 的同名 Release（镜像）
-      - name: 同步 exe 到 Gitee Release
+      # Gitee Release 同步：脚本方式，缺 token 或上传失败都会让本步骤报错（不再静默跳过）
+      - name: 同步 exe 到 Gitee Release（仅 tag）
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_TOKEN: *** secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO || 'cunses/yanyu_ios_guanxing' }}
         run: |
-          if (-not $env:GITEE_TOKEN) { Write-Host '未配置 secrets.GITEE_TOKEN，跳过 Gitee 同步'; exit 0 }
-          $tag = "${{ github.ref_name }}"
-          $repo = "cunses/yanyu_ios_guanxing"
-          $h = @{ Authorization = "token $env:GITEE_TOKEN" }
-          $rels = Invoke-RestMethod -Headers $h -Uri "https://gitee.com/api/v5/repos/$repo/releases?per_page=20"
-          $mine = $rels | Where-Object { $_.tag_name -eq $tag } | Select-Object -First 1
-          if (-not $mine) {
-            $b = @{ tag_name = $tag; name = $tag; target_commitish = 'main'
-                    body = "构建产物见附件 ios观星.exe（与 GitHub Release 同一份）"
-                    prerelease = 'false'; draft = 'false' }
-            $mine = Invoke-RestMethod -Method Post -Headers $h `
-              -Uri "https://gitee.com/api/v5/repos/$repo/releases" -Body $b
+          if (-not $env:GITEE_TOKEN) {
+            Write-Host '::error::未配置 secrets.GITEE_TOKEN —— Gitee 同步失败。请到仓库 Settings → Secrets → Actions 添加 GITEE_TOKEN（Gitee 私人令牌，勾选 projects 权限）'
+            exit 1
           }
-          $f = Get-Item 'dist/ios观星.exe'
-          Invoke-RestMethod -Method Post -Headers $h `
-            -Uri "https://gitee.com/api/v5/repos/$repo/releases/$($mine.id)/attach_files" `
-            -Form @{ access_token = $env:GITEE_TOKEN; file = $f }
-          Write-Host "Gitee Release $($mine.tag_name) 已同步 $($f.Name)"
-# v2.6-版本号对齐
+          python .github/scripts/gitee_release.py "dist/ios观星.exe" "${{ github.ref_name }}"
+
+  sync-gitee-code:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 推送代码到 Gitee
+        env:
+          GITEE_TOKEN: *** secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO || 'cunses/yanyu_ios_guanxing' }}
+        run: |
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "::error::未配置 secrets.GITEE_TOKEN，无法同步代码到 Gitee"
+            exit 1
+          fi
+          git remote add gitee "https://oauth2:${GITEE_TOKEN}@gitee.com/${GITEE_REPO}.git"
+          for i in 1 2 3; do
+            git push gitee "HEAD:main" --force && break || { echo "retry $i"; sleep 5; }
+          done
+          for i in 1 2 3; do
+            git push gitee --tags --force && break || { echo "retry $i"; sleep 5; }
+          done
+          echo "Gitee 代码同步完成"
