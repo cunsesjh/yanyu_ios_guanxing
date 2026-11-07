@@ -1,0 +1,192 @@
+(function () {
+    'use strict';
+
+    var engine = window.HengshanStudentEngine;
+    var data = window.HENGSHAN_TALENT_DATA;
+    var students = [];
+    var snapshots = new Map();
+    var current = null;
+    var lastChain = null;
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>'"]/g, function (character) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character];
+        });
+    }
+
+    function nameOf(id) { return engine.talentName(data, id); }
+    function namesOf(ids) { return (ids || []).map(nameOf).join('、') || '暂无'; }
+
+    function publicError(error) {
+        var message = error && error.message ? error.message : String(error || '未知错误');
+        return /(?:seed|种子|权重|候选池|落点|\$\.)/i.test(message) ? '后续推演状态无效，无法继续预测' : message;
+    }
+
+    function cloneState(student) {
+        return {
+            key: student.key, id: student.id, name: student.name, level: student.level,
+            exp: student.exp, seed: student.seed, talents: student.talents.slice(), path: student.path
+        };
+    }
+
+    function currentKey() {
+        var select = document.getElementById('studentSelect');
+        return select ? select.value : '';
+    }
+
+    function setMessage(message, isError) {
+        var element = document.getElementById('studentMessage');
+        if (!element) return;
+        element.textContent = message;
+        element.classList.toggle('is-error', !!isError);
+    }
+
+    function renderTalents() {
+        var container = document.getElementById('studentTalents');
+        var slot = document.getElementById('refreshSlot');
+        if (!container || !slot || !current) return;
+        container.innerHTML = current.talents.map(function (id, index) {
+            return '<div class="student-talent"><span>槽位 ' + (index + 1) + '</span><strong>' + escapeHtml(nameOf(id)) + '</strong></div>';
+        }).join('');
+        var previous = slot.value;
+        slot.innerHTML = current.talents.map(function (id, index) {
+            return '<option value="' + index + '">槽位 ' + (index + 1) + ' · ' + escapeHtml(nameOf(id)) + '</option>';
+        }).join('');
+        if (Array.from(slot.options).some(function (option) { return option.value === previous; })) slot.value = previous;
+    }
+
+    function renderUnlock() {
+        var panel = document.getElementById('unlockPanel');
+        var result = document.getElementById('unlockResult');
+        var button = document.getElementById('btnAdvanceUnlock');
+        if (!panel || !result || !button || !current) return;
+        var preview = current.level < 100 && current.talents.length < 3 ? engine.unlockPreview(data, current) : { steps: [] };
+        var next = preview.steps[0];
+        panel.hidden = !next;
+        button.disabled = !next;
+        if (!next) return;
+        result.innerHTML = '<strong>' + next.level + ' 级解锁候选：' + escapeHtml(nameOf(next.id)) + '</strong><br>'
+            + '当前组合：' + escapeHtml(namesOf(current.talents)) + '<br>'
+            + '节点后组合：' + escapeHtml(namesOf(next.talents)) + '<br>'
+            + '该解锁节点仍需用实际升级前后存档校准。';
+        button.dataset.level = String(next.level);
+    }
+
+    function clearRefreshResult() {
+        lastChain = null;
+        document.getElementById('btnApplyRefresh').disabled = true;
+        document.getElementById('refreshSummary').textContent = '选择槽位和次数后开始本地推演。';
+        document.getElementById('refreshRows').innerHTML = '<tr><td colspan="3">尚未推演</td></tr>';
+    }
+
+    function renderCurrent() {
+        var hasCurrent = !!current;
+        document.getElementById('studentStatePanel').hidden = !hasCurrent;
+        document.getElementById('refreshPanel').hidden = !hasCurrent;
+        document.getElementById('btnResetStudent').disabled = !hasCurrent;
+        if (!current) return;
+        document.getElementById('studentLevel').textContent = current.level + ' / 100';
+        document.getElementById('studentExp').textContent = current.exp.toLocaleString();
+        renderTalents();
+        renderUnlock();
+        clearRefreshResult();
+    }
+
+    function selectStudent(key) {
+        var snapshot = snapshots.get(String(key));
+        current = snapshot ? cloneState(snapshot) : null;
+        renderCurrent();
+    }
+
+    function loadStudents() {
+        var shared = typeof loadShareStore === 'function' ? loadShareStore() : null;
+        var saveData = shared && shared.data;
+        if (typeof renderArchiveState === 'function') renderArchiveState(saveData);
+        students = engine.collectStudents(saveData);
+        snapshots = new Map(students.map(function (student) { return [String(student.key), cloneState(student)]; }));
+        var select = document.getElementById('studentSelect');
+        select.innerHTML = '';
+        if (!students.length) {
+            select.disabled = true;
+            select.appendChild(new Option('当前存档未包含可识别的恒山弟子', ''));
+            setMessage(saveData ? '已读取存档，但没有找到可识别的恒山弟子记录。' : '请先在首页导入存档。', false);
+            current = null;
+            renderCurrent();
+            return;
+        }
+        students.forEach(function (student) {
+            select.appendChild(new Option(student.name + ' · ' + student.level + '级 · ' + namesOf(student.talents), student.key));
+        });
+        select.disabled = false;
+        setMessage('已识别 ' + students.length + ' 名恒山弟子；所有操作只推进当前页面沙盒。', false);
+        selectStudent(select.value);
+    }
+
+    function previewRefresh() {
+        if (!current) return;
+        try {
+            var count = Math.max(1, Math.min(5000, Number(document.getElementById('refreshCount').value) || 20));
+            document.getElementById('refreshCount').value = String(count);
+            var slot = Number(document.getElementById('refreshSlot').value);
+            lastChain = engine.replacementChain(data, current, slot, count);
+            var shown = lastChain.steps.slice(0, 500);
+            document.getElementById('refreshRows').innerHTML = shown.map(function (step) {
+                return '<tr><td>' + step.n + '</td><td>' + escapeHtml(nameOf(step.id)) + '</td><td>'
+                    + escapeHtml(namesOf(step.talents)) + '</td></tr>';
+            }).join('') || '<tr><td colspan="3">没有结果</td></tr>';
+            document.getElementById('refreshSummary').textContent = '保留 ' + namesOf(lastChain.keep) + '；共推演 ' + count + ' 次'
+                + (count > shown.length ? '，表格仅展示前 ' + shown.length + ' 次' : '') + '。';
+            document.getElementById('btnApplyRefresh').disabled = !lastChain.steps.length;
+        } catch (error) {
+            lastChain = null;
+            document.getElementById('btnApplyRefresh').disabled = true;
+            document.getElementById('refreshSummary').textContent = '推演失败：' + publicError(error);
+        }
+    }
+
+    function applyRefresh() {
+        if (!current || !lastChain || !lastChain.steps.length) return;
+        var finalStep = lastChain.steps[lastChain.steps.length - 1];
+        current.seed = finalStep.nextSeed;
+        current.talents = finalStep.talents.slice();
+        renderCurrent();
+        setMessage('已在页面沙盒推进 ' + finalStep.n + ' 次刷新；导入存档未改变。', false);
+    }
+
+    function advanceUnlock() {
+        if (!current) return;
+        try {
+            var preview = engine.unlockPreview(data, current);
+            var next = preview.steps[0];
+            if (!next) return;
+            current.level = next.level;
+            current.exp = 0;
+            current.seed = next.nextSeed;
+            current.talents = next.talents.slice();
+            renderCurrent();
+            setMessage('已按参考节点规则推进到 ' + next.level + ' 级；该步骤仍需用实际升级前后存档校准。', false);
+        } catch (error) {
+            setMessage('升级节点推演失败：' + publicError(error), true);
+        }
+    }
+
+    function resetStudent() {
+        var key = currentKey();
+        selectStudent(key);
+        setMessage('已恢复当前弟子的导入快照。', false);
+    }
+
+    function init() {
+        document.getElementById('studentSelect').addEventListener('change', function (event) { selectStudent(event.target.value); });
+        document.getElementById('btnResetStudent').addEventListener('click', resetStudent);
+        document.getElementById('btnPreviewRefresh').addEventListener('click', previewRefresh);
+        document.getElementById('btnApplyRefresh').addEventListener('click', applyRefresh);
+        document.getElementById('btnAdvanceUnlock').addEventListener('click', advanceUnlock);
+        document.getElementById('refreshSlot').addEventListener('change', clearRefreshResult);
+        document.getElementById('refreshCount').addEventListener('change', clearRefreshResult);
+        loadStudents();
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+})();

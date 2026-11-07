@@ -1,0 +1,63 @@
+name: Build Windows desktop
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-desktop.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements-desktop.txt "pyinstaller>=6.10,<7"
+      - name: Offline tests including Windows credential encryption
+        run: python -m unittest discover -s tests -v
+      - name: Embedded page smoke test
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+        run: python dev/smoke_desktop.py
+      - name: Build executable
+        run: python -m PyInstaller --noconfirm --clean iosGuanxing.spec
+      - name: Packaged executable startup and embedded page test
+        shell: pwsh
+        run: |
+          $env:IOSGUANXING_SMOKE_REPORT = "$env:RUNNER_TEMP\packaged-smoke.json"
+          $env:QTWEBENGINE_CHROMIUM_FLAGS = '--disable-gpu'
+          $process = Start-Process dist/iosGuanxing.exe -PassThru
+          if (-not $process.WaitForExit(120000)) { $process.Kill(); throw 'Packaged startup timed out' }
+          if (-not (Test-Path $env:IOSGUANXING_SMOKE_REPORT)) { throw 'Packaged smoke report missing' }
+          $report = Get-Content $env:IOSGUANXING_SMOKE_REPORT -Raw | ConvertFrom-Json
+          if (-not $report.ok) { throw 'Packaged embedded page failed' }
+          Get-Content $env:IOSGUANXING_SMOKE_REPORT
+      - name: Hash executable
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist/iosGuanxing.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  iosGuanxing.exe" | Set-Content dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iosGuanxing-Windows-x64
+          path: |
+            dist/iosGuanxing.exe
+            dist/SHA256SUMS.txt
+          retention-days: 14
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: iosGuanxing v0.1.0 预览版
+          prerelease: true
+          body: |
+            Windows 10/11 x64 首版预览：原生窗口、HAR 导入、主动下载、内置观星网页、历史存档。
+            登录会话由 Windows 当前用户加密保存；启动仅恢复本地存档，点击下载才访问游戏服务器。
+            下载 iosGuanxing.exe 直接运行。未签名预览版，临时图标。
+          files: |
+            dist/iosGuanxing.exe
+            dist/SHA256SUMS.txt

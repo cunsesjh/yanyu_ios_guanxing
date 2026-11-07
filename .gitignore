@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+build/
+dist/
+output/
+*.har
+*.dpapi
+keys.local.json
+keys.user.json
