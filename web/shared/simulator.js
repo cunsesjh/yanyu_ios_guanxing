@@ -6479,7 +6479,7 @@ function setAutoSimulatorMode(mode) {
     if (washPanel) washPanel.hidden = !isWash;
     if (wash2Panel) wash2Panel.hidden = !isWash2;
     if (title) {
-        title.textContent = isEquip ? '自动模拟 · 装备批量预测' : isJianwang ? '自动模拟 · 剑王阁同词条' : isWash2 ? '自动模拟 · 自动洗脉 2' : '自动模拟 · 洗脉路线';
+        title.textContent = isEquip ? '自动模拟 · 装备批量预测' : isJianwang ? '自动模拟 · 剑王阁同词条' : isWash2 ? '自动模拟 · 自动洗脉(改进)' : '自动模拟 · 洗脉路线';
     }
     if (intro) {
         intro.textContent = isEquip
