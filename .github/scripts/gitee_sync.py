@@ -29,7 +29,7 @@ def main():
             specs.append(ref + ':' + ref)
         for attempt in range(3):
             result = subprocess.run(
-                ['git', '-c', 'credential.helper=', 'push',
+                ['git', '-c', 'credential.helper=', 'push', '--force',
                  'https://gitee.com/' + repo + '.git'] + specs,
                 env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, timeout=180)
