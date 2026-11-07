@@ -33,6 +33,16 @@ jobs:
             build/smoke.json
             build/screenshots/*.png
           if-no-files-found: ignore
+      - name: All module layouts at minimum and default window sizes
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+        run: python dev/check_desktop_layout.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-layout-report
+          path: build/layout/
+          if-no-files-found: ignore
       - name: Build executable
         run: python -m PyInstaller --noconfirm --clean iosGuanxing.spec
       - name: Packaged executable startup and embedded page test

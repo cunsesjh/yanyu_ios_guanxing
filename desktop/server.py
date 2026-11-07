@@ -43,6 +43,14 @@ class LocalSite:
                     if relative == 'last-import.js':
                         with site.lock:
                             body = site.payload + body
+                    elif target.suffix.lower() == '.html':
+                        marker = b'</head>'
+                        prefix = site.prefix.encode('ascii')
+                        theme = (b'<link rel="stylesheet" href="' + prefix + b'desktop-theme.css">'
+                                 b'<script defer src="' + prefix + b'desktop-ui.js"></script>')
+                        position = body.lower().find(marker)
+                        if position >= 0:
+                            body = body[:position] + theme + body[position:]
                 except OSError:
                     self.send_error(404)
                     return

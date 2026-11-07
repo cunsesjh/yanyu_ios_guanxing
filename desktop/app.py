@@ -38,8 +38,9 @@ QPushButton:disabled { color: #5e718a; background: #142031; border-color: #21304
 QPushButton#primary { background: #68dbc0; color: #09241e; border: 0; font-weight: 700; }
 QPushButton#primary:hover { background: #8ae9d2; }
 QPushButton#primary:disabled { background: #345b53; color: #93b8af; }
-QPushButton#nav { background: transparent; border: 0; padding: 11px 14px; color: #a9bcd4; }
-QPushButton#nav:hover { background: #1b2b3e; color: #eef6ff; }
+QPushButton#nav { background: #1d3d46; border: 1px solid #2d665f; padding: 11px 14px; color: #b6f3e3; }
+QPushButton#nav:hover { background: #28545a; color: #f0fff9; }
+QPushButton#nav:disabled { background: #182b32; color: #6d9a91; border-color: #29454a; }
 QFrame#header { background: #101824; border-bottom: 1px solid #243145; }
 QFrame#status { background: #152236; border-top: 1px solid #283c54; }
 QLabel#error { color: #ffb4a6; }
@@ -214,7 +215,7 @@ class MainWindow(QMainWindow):
         sidebar = QVBoxLayout(side)
         sidebar.setContentsMargins(20, 28, 20, 22)
         sidebar.setSpacing(10)
-        mark = QLabel('G  /  iosGuanxing')
+        mark = QLabel('iosGuanxing')
         mark.setObjectName('brand')
         mark.setStyleSheet('font-size: 18px;')
         sidebar.addWidget(mark)
@@ -237,6 +238,9 @@ class MainWindow(QMainWindow):
         self.session_label.setWordWrap(True)
         sidebar.addWidget(self.session_label)
         sidebar.addStretch()
+        author = QLabel('作者：B站 / 贴吧 / 抖音\n辣笔小勋')
+        author.setObjectName('muted')
+        sidebar.addWidget(author)
         footer = QLabel('本地解码 · 内置观星\n\nv' + VERSION + '  /  预览版')
         footer.setObjectName('muted')
         sidebar.addWidget(footer)
