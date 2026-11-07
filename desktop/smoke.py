@@ -49,7 +49,7 @@ def run_smoke(app, web, report):
         def received(value):
             state['pending'] = False
             callback(value)
-        window.page.runJavaScript(script, received)
+        window.page.runJavaScript(script, 0, received)
 
     def home_ready(value):
         if value != '导入成功|观星预览':
