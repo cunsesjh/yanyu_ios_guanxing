@@ -143,6 +143,7 @@ header.app-header,
     color: #9babc2 !important;
     font-size: 12px !important;
     line-height: 1.5 !important;
+    letter-spacing: 0 !important;
 }
 
 .sim-nav,
@@ -156,7 +157,7 @@ body > header:has(.guishi-header) {
     margin: 0 auto !important;
     padding: 0 16px !important;
     background: #0c111b !important;
-    border-color: #2b3c53 !important;
+    border: 0 !important;
     box-shadow: none !important;
 }
 
@@ -170,7 +171,7 @@ body > header:has(.guishi-header) {
 .guishi-header,
 .guishi-header + .header-row {
     border-color: #2b3c53 !important;
-    background: #111925 !important;
+    background: transparent !important;
 }
 
 .archive-summary,
