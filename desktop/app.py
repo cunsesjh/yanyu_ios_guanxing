@@ -140,6 +140,7 @@ class Welcome(QWidget):
         outer = QHBoxLayout(self)
         outer.setContentsMargins(60, 40, 60, 40)
         card = QWidget()
+        card.setMinimumWidth(500)
         card.setMaximumWidth(660)
         layout = QVBoxLayout(card)
         layout.setSpacing(18)

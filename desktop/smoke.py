@@ -25,6 +25,8 @@ def run_smoke(app, web, report):
     temporary = tempfile.TemporaryDirectory()
     store = Store(temporary.name)
     window = MainWindow(store, web)
+    window.view.renderProcessTerminated.connect(
+        lambda status, code: print('WebEngine process stopped:', status, code, flush=True))
     window.show()
     state = dict(stage=0, started=time.monotonic(), ticks=0, pending=False)
     results = []
@@ -93,7 +95,9 @@ def run_smoke(app, web, report):
         if time.monotonic() - state['started'] > 70:
             if window.worker:
                 return
-            finish(False, 'Timed out at stage ' + str(state['stage']))
+            save_image('99-timeout.png')
+            finish(False, 'Timed out at stage %s: %s; URL=%s' %
+                   (state['stage'], window.status_label.text(), window.view.url().toString()))
             return
         if state['pending']:
             return
