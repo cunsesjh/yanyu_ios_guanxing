@@ -116,6 +116,10 @@ def main():
     check('HAR extra 确认的 psw+渠道后缀已收录',
           keytables.lookup_inner_key('ios', '00073576')[0] == 'xi9iz9h4yoqkmrtj')
 
+    print('— ⓪′ v73580 先行服内层密钥 —')
+    check('HAR download3.extra 确认的 psw+先行服后缀已收录',
+          keytables.lookup_inner_key('ios', '00073580')[0] == 'a6vkz6vocgkmi4cq')
+
     tmp = tempfile.mkdtemp(prefix='yyjh_har_')
     try:
         # ① 多会话：k1/upload1（小）+ k2/upload2（大）—— 旧代码取 k1 + 最大 upload = 错位

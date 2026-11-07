@@ -405,18 +405,9 @@ def _flow_import(args):
     p = _ask_path('抓包文件路径（可直接把文件拖进来）: ',
                   '路径不能为空；q + 回车 = 退出')
     ui.info()
-    pick = ui.choose('如何读取？', [
-        '离线读取 HAR（旧版完整存档或角色摘要）',
-        '主动下载当前云存档（支持 iOS 73576，需要有效会话）',
-    ], default=0)
-    extra = []
-    if pick == 1:
-        ui.info('  将把 HAR 中的账号、区服和登录会话发给原游戏服务器，')
-        ui.info('  发起一次下载；存档只在本地解码，不发送到第三方。')
-        if ui.choose('继续主动下载？', ['返回', '继续'], default=0) != 1:
-            return 2
-        extra = ['--fetch']
-    return _run_import(['capture', p] + extra + _forward(args), args)
+    ui.info('  将使用 HAR 中的登录会话向游戏服务器请求当前云存档，')
+    ui.info('  请求只发往游戏服务器，下载后在本地解码。')
+    return _run_import(['capture', p, '--fetch'] + _forward(args), args)
 
 
 def _confirm_open(row):
@@ -438,7 +429,7 @@ def _confirm_open(row):
 
 def _wizard(args):
     ui.title(f'烟雨观星 · 存档工具 v{__version__}')
-    ui.info('  存档导入向导 —— 默认离线，可选择向原游戏服务器主动下载')
+    ui.info('  存档导入向导 —— 使用抓包会话从游戏服务器下载当前云存档')
 
     rows = list_snapshots(getattr(args, 'outdir', None))
     if rows:

@@ -1,4 +1,4 @@
-var SIMULATOR_VERSION = "2.9";
+var SIMULATOR_VERSION = "2.1.7";
 
 (function () {
     function applyVersion() {

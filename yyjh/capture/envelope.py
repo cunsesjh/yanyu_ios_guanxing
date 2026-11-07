@@ -38,10 +38,16 @@ def _extra_psw_keys():
     """密钥表里出现过的所有 psw × 所有渠道后缀 —— 版本再新也能蒙对。
 
     psw 按版本变、后缀按渠道变，两者正交；把已知 psw 全配一遍后缀
-    （几十把，试起来零成本），就不用等表更新了。"""
+    （几十把，试起来零成本），就不用等表更新了。
+    ⚠ keys.json（主表）里的 psw 也要算进去 —— 新挖到的密钥只写主表，
+    内置表是兜底，不收新版本。"""
     from ..config import keytables
+    psws = set(keytables._PSW_BY_VERSION.values())
+    for _rt, _ver, k, _src in keytables.all_inner_rows():
+        if len(k) == 16:
+            psws.add(k[:8])
     out = set()
-    for psw in set(keytables._PSW_BY_VERSION.values()):
+    for psw in psws:
         for suf in keytables.CHANNEL_SUFFIXES:
             out.add(psw + suf)
     return tuple(sorted(out))
@@ -130,7 +136,9 @@ def open_full(cipher, key, platform='ios', version_hint=None):
     inner = env[8:]
     cands = list(INNER_KEYS_FALLBACK.get(platform, ()))
     try:
-        cands += list(savefmt.inner_candidates(platform, version, None))
+        # 版本号统一按工具约定的 8 位字符串查表（keytables 的键是 '00073580'，
+        # int 会全部落空、只剩后缀兑底候选）
+        cands += list(savefmt.inner_candidates(platform, '%08d' % version, None))
     except Exception:
         pass
     try:

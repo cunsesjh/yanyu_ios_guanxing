@@ -203,7 +203,7 @@ def pipeline_capture(args):
             raise ui.UserError(str(e), [
                 '会话失效时，请从登录前开始重新抓包，进入目标角色后立即导出 HAR',
                 '此模式需要本地完整解码成功，不会使用角色摘要替代存档',
-                '已验证 iOS 国服 73576；后续版本仍需按实际响应校验',
+                '已验证 iOS 国服 73576 / 先行服 73580；后续版本仍需按实际响应校验',
             ]) from e
         for s in res.steps:
             ui.step(s.label, s.value)
@@ -604,7 +604,7 @@ def add_parsers(sub):
     p.add_argument('--index', type=int, help='用第几个 upload（默认取请求体最大的）')
     p.add_argument('--outer-key', help='HAR 里的 realKey（没有 k 响应头时手动给）')
     p.add_argument('--fetch', action='store_true',
-                   help='用 HAR 会话向原游戏服务器主动下载完整云存档（支持 iOS 73576）')
+                   help='用 HAR 会话向原游戏服务器主动下载完整云存档（支持 iOS 73576+，含先行服）')
     _add_out(p)
     _add_mem(p)
     p.set_defaults(func=pipeline_capture)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""烟雨观星（com.lanjing.yanyu.*）存档研究工具集  v2.6
+"""烟雨观星（com.lanjing.yanyu.*）存档研究工具集  v2.9.1
 
 目录分层
 ────────
@@ -43,7 +43,7 @@ if sys.version_info < (3, 8):
              '  D:\\Anaconda\\envs\\py311\\python.exe run.py'
              % sys.version_info[:2])
 
-__version__ = '2.6.0'
+__version__ = '2.9.1'
 
 __all__ = ['__version__']
 # v2.6-版本号对齐

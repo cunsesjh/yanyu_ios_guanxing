@@ -26,9 +26,29 @@ RSA_N = int(
     '5d65b67487194249e36903dda4c975fea73c07c191675445fe5fcf4572f8bd4795ba'
     '81a754505529922f8182719b431ceb2716ca87e2ba83a01e85ef75e463882d0b5376'
     'b6b3d66819e26c2b674f0a9ddefe934243ce87ad', 16)
-HOSTS = frozenset(('ios.wlfy.blue8.cn', 'andr.wlfy.blue8.cn'))
+HOSTS = frozenset(('ios.wlfy.blue8.cn', 'andr.wlfy.blue8.cn',
+                   'pre.wlfy.blue8.cn'))          # 先行服（ios/android 同域名，按渠道头判平台）
 COPY_HEADERS = ('ver', 'appver', 'channel', 'realchannel', 'whale', 'lang',
                 'blue', 'green', 'user-agent', 'plat')
+
+
+def _platform_of(headers, host):
+    """平台判定：主机名 -> channel/realchannel 头 -> plat 头。
+
+    先行服 ios/android 共用 pre.wlfy.blue8.cn，只能靠渠道头区分
+    （如 lanjing_ios_pre）。"""
+    if host.startswith('ios.'):
+        return 'ios'
+    if host.startswith('andr.'):
+        return 'android'
+    for name in ('realchannel', 'channel'):
+        v = (headers.get(name) or '').lower()
+        if 'ios' in v:
+            return 'ios'
+        if 'android' in v or 'andr' in v:
+            return 'android'
+    plat = (headers.get('plat') or '').strip().lower()
+    return plat if plat in ('ios', 'android') else 'android'
 
 
 def session_from_har(path):
@@ -75,7 +95,7 @@ def session_from_har(path):
             selected = dict(url=f'{url.scheme}://{url.hostname}/api_command',
                             account=account, session=session, area=area,
                             protocol_key=key, headers=h.copy(),
-                            platform='ios' if url.hostname.startswith('ios.') else 'android')
+                            platform=_platform_of(h, url.hostname or ''))
     if selected is None:
         raise ValueError('HAR 缺少同一账号的有效登录握手 k、会话和区服；请从登录前重新抓包')
     return selected

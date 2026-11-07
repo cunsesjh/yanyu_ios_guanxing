@@ -283,7 +283,17 @@ def download_body(har_path, real_key=None, steps=None):
 
     # ── data -> 初版 content -> 内层密文 ──
     content = j['data']
-    version, inner = savefmt.parse_old(content)
+    try:
+        version, inner = savefmt.parse_old(content)
+    except ValueError as e:
+        # v73576+ 的 download3 请求是 {"stamp","auto"} —— auto 是 RSA 包裹的
+        # **随机传输密钥**（只存在游戏内存里），响应 data 外层用它加密，
+        # 被动抓包拿不到这把钥匙，所以这里解不出版本号。
+        raise ValueError(
+            f'download 响应的 data 不是初版存档壳（{e}）—— '
+            'v73576+ 起 download3 响应用「auto」随机传输密钥包裹，'
+            '密钥只在游戏内存里，被动抓包解不开；'
+            '请改用「主动下载当前云存档」（yyjh capture <har> --fetch）') from e
     say('版本号', version)
 
     # ── extra -> psw（8 字符）× 渠道后缀 -> 内层密钥；
