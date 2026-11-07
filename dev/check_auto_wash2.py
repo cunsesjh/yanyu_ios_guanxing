@@ -17,7 +17,7 @@ store = Store(temp.name)
 role = dict(ID=10044, Name='测试人物', ZiZhi=154, BornTalent=dict(S=12345, RC=0),
             Talents=[dict(ID=271, Lock=True)], Sex=1, Level=100)
 save = dict(MainRole=role, Roles={}, CenterID=1278440, Items=[dict(ID=2601, Num=5000)],
-            Rnds={'preview': 12345}, globalVariable={}, DBVersion=73576)
+            Rnds={'preview': 12345}, MakeRnd={}, globalVariable={}, DBVersion=73576)
 store.save_snapshot(save, 'ios', '1', '73576')
 window = MainWindow(store, ROOT / 'web')
 window.resize(1000, 680)

@@ -1,4 +1,8 @@
 /* Light palette overrides. Applied only to the selected desktop theme. */
+html[data-theme="light"] .desktop-select-popup { background: #fff; color: #202d40; border-color: #8ea7c8; }
+html[data-theme="light"] .desktop-select-popup button:hover,
+html[data-theme="light"] .desktop-select-popup button.focused { background: #e3ecf8; }
+html[data-theme="light"] .desktop-select-popup button[aria-selected="true"] { color: #116956; }
 html[data-theme="light"] {
     color-scheme: light;
     --bg-primary: #f3f6fb;

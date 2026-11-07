@@ -291,6 +291,21 @@ table.rare-table td.pos-free,
 .auto-tag { color: #a8c8ff !important; }
 
 .paste-body textarea,
+.desktop-select-popup {
+    position: fixed; z-index: 100000; overflow-y: auto; overscroll-behavior: contain;
+    scroll-behavior: auto !important; box-sizing: border-box; padding: 5px;
+    border: 1px solid #557596; border-radius: 9px; background: #151f2e;
+    box-shadow: 0 8px 28px #0006; color: #e6edf6;
+}
+.desktop-select-popup button {
+    display: block !important; width: 100%; min-height: 36px; margin: 0; padding: 8px 10px;
+    border: 0; border-radius: 5px; text-align: left; white-space: normal;
+    background: transparent; color: inherit; cursor: pointer; transition: none !important;
+}
+.desktop-select-popup button:hover, .desktop-select-popup button.focused { background: #294253; }
+.desktop-select-popup button[aria-selected="true"] { color: #8ae9d2; font-weight: 700; }
+.desktop-select-popup button:disabled { opacity: .4; cursor: default; }
+.desktop-select-group { padding: 8px 10px 4px; opacity: .65; font-size: 12px; }
 input, select, textarea {
     color: #e6edf6;
     background-color: #151f2e;

@@ -20,6 +20,11 @@ jobs:
         run: python -m pip install -r requirements-desktop.txt "pyinstaller>=6.10,<7"
       - name: Offline tests including Windows credential encryption
         run: python -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Improved wash engine and legacy route replay
+        run: node tests/test_auto_wash2.cjs
       - name: Embedded page smoke test
         env:
           QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
@@ -37,6 +42,18 @@ jobs:
         env:
           QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
         run: python dev/check_desktop_layout.py
+      - name: Dropdown confirmation
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+        run: python dev/check_desktop_controls.py
+      - name: History deletion and active page cleanup
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+        run: python dev/check_history_delete.py
+      - name: Independent improved wash module
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+        run: python dev/check_auto_wash2.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

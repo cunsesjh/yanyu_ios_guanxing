@@ -59,7 +59,7 @@ async function send(type, payload) {
     for (const zizhi of [151, 152, 153, 154]) {
         const initial = {...converted, zizhi, talents: [], tal_lucky: 900};
         const config = sandbox.ZZ_DATA[zizhi];
-        const baseline = new sandbox.WashSourceEngine.Engine(sandbox.TALENT_DATA, initial, {
+        const baseline = new sandbox.AutoWash2SourceCache.UncachedEngine(sandbox.TALENT_DATA, initial, {
             slotCount: config.num_talent, eligibleZi: zizhi, pity: config.bd_zz,
             eat: config.eat_xisui, advancePerDraw: true, international: false,
         });
@@ -86,5 +86,31 @@ async function send(type, payload) {
     assert.equal(route.finalState.seed, predicted.state.bornSeed);
     assert.equal(route.finalState.born_talent_rc, predicted.state.bornRC);
     assert.equal(JSON.stringify({save, role}), before);
-    console.log('PASS: immutable save adapter, target groups, eligibility, verified routes, inventory, no-route boundary, 120 cross-engine wash/lock/pity checks, nonzero route replay');
+    // The new search strategy must reproduce a real legacy route and keep its
+    // exact cost through conversion; no mocked route or private save fixture.
+    const anchorRaw = {seed:23456, zizhi:153, role_id:10031, salt:278440, vip:1, sex:1,
+        role_level:100, role_stats:{str_val:150, con:150, dex:150, int_val:150},
+        talents:[], tal_lucky:0, luck_seed_inited:false};
+    const anchorBefore = JSON.stringify(anchorRaw);
+    const planner = sandbox.AnchorRoutePlanner;
+    const purples = planner.scan(anchorRaw, 12);
+    const anchors = purples.filter(p => !p.fromPity && p.id !== 251).slice(0, 3);
+    const source = planner.usableSources(anchorRaw, anchors, purples)[0];
+    const targetIds = [276, 268, 266];
+    const legacy = planner.search(anchorRaw, anchors, source, 0,
+        {targets:targetIds, maxNodes:500, depth:10, maxCost:10000, sequenceBasis:'theory2'}).routes[0];
+    assert.equal(legacy.cost, 1025);
+    const settings = {options:{maxTotalPills:10000}, bagPills:5000, hasBagPills:true};
+    const migrated = sandbox.AutoWash2Anchor.convert(anchorRaw, anchors, legacy, targetIds, settings);
+    assert.equal(migrated.verified, true);
+    assert.equal(migrated.totalPills, 1025);
+    assert.equal(migrated.steps.reduce((sum, s) => sum + s.pills, 0), 1025);
+    assert.equal(migrated.inventory.remaining, 3975);
+    assert.equal(sandbox.AutoWash2Anchor.convert(anchorRaw, anchors, legacy, targetIds,
+        {...settings, options:{maxTotalPills:1024}}), null, 'respect pill ceiling');
+    const broken = JSON.parse(JSON.stringify(legacy));
+    broken.steps[0].after.cost++;
+    assert.throws(() => sandbox.AutoWash2Anchor.convert(anchorRaw, anchors, broken, targetIds, settings), /回放/);
+    assert.equal(JSON.stringify(anchorRaw), anchorBefore);
+    console.log('PASS: immutable adapter, target groups, inventory, 120 uncached-engine parity checks, wash replay, exact 1025-pill legacy route migration and tamper/budget rejection');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -673,6 +673,7 @@
         }
         push(initial);
         while(heap.size && expanded<maxNodes) {
+            if(opts.shouldCancel?.()) { bounded=true; break; }
             const n=heap.pop();expanded++;
             // 已找到更省丹的路线后，这些状态的后续洗法也不会更省丹。
             if(routes.length && n.cost>=routes[0].cost)continue;
@@ -757,6 +758,8 @@
         }
         bounded=heap.size>0;
         let refinementExpanded=0,lockExpanded=0,firstLockOptimization=null;
+        if(opts.shouldCancel?.())return {routes,expanded,bounded:true,pad,depth,maxNodes,sequence,cancelled:true,
+            reason:'已保留回放验证的候选，继续比较其他序列。'};
         // 开槽分歧需要重新探索后续锁法；深入模式不能仍被固定的6000节点截断。
         let lockBudget=Math.min(maxNodes*2,6000);
         if(!prepared&&opts.optimizeLocks!==false&&!routes.length) {

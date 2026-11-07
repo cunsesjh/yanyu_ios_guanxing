@@ -15,7 +15,7 @@
             <div class="w2-fields">
                 <label>存档人物<select id="w2Role"><option value="">请先导入存档</option></select></label>
                 <label>VIP<select id="w2Vip"><option value="0">无 VIP</option><option value="1" selected>VIP 1+</option><option value="2">VIP 2+</option></select></label>
-                <label>最大耗丹数量<input id="w2Budget" type="number" min="0" max="20000" step="100" value="5000"></label>
+                <label>最大耗丹数量<input id="w2Budget" type="number" min="0" max="20000" step="100" value="10000"></label>
                 <div class="w2-stock">背包洗髓丹<strong id="w2Bag">—</strong></div>
             </div>
             <p id="w2Summary" class="w2-muted">请先在首页导入存档，再选择人物。</p>
@@ -33,7 +33,7 @@
                 <button id="w2Preset" type="button" class="btn btn-reset">金顶混</button>
                 <button id="w2Clear" type="button" class="btn btn-reset">清空选择</button>
             </div>
-            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。单个组合最多计算 30 秒，整轮最多 60 秒；达到上限会保留已找到的候选。</p>
+            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。整轮最多计算约 60 秒；会继续比较更省丹的路线，达到上限或停止时保留已找到的候选。</p>
             <div id="w2Targets" class="w2-targets"></div>
             <p id="w2Requirements" class="w2-requirements"></p>
         </section>
@@ -186,7 +186,7 @@
         if (!lastResult?.routes?.length) return;
         const text = lastResult.routes.map((r, i) => `路线 ${i + 1}：${r.totalPills} 丹\n` + r.steps.map((s, n) => `${n + 1}. ${s.label}：${s.detail}（累计 ${s.cumulativePills || 0} 丹，剩余 ${bag - Number(s.cumulativePills || 0)} 丹）`).join('\n')).join('\n\n');
         const url = URL.createObjectURL(new Blob([text], {type: 'text/plain;charset=utf-8'}));
-        const a = document.createElement('a'); a.href = url; a.download = '自动洗脉2_路线.txt'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+        const a = document.createElement('a'); a.href = url; a.download = '自动洗脉(改进)_路线.txt'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
     window.AutoWash2 = Object.freeze({refresh});
     refresh();

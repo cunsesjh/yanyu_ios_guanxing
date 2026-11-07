@@ -1,7 +1,8 @@
 /* Dedicated runtime: does not install or replace any legacy page/worker globals. */
 'use strict';
 self.window = self;
-importScripts('data.js', 'wash_source_engine.js', 'auto_wash2_engine.js', 'auto_wash2_optimizer.js', 'auto_wash2_model.js');
+importScripts('data.js', 'wash_source_engine.js', 'auto_wash2_source_cache.js', 'auto_wash2_engine.js', 'auto_wash2_optimizer.js', 'auto_wash2_model.js');
+importScripts('anchor_route_planner.js', 'anchor_route_search.js', 'auto_wash2_anchor.js');
 self.onmessage = async ({data: message}) => {
     const send = (type, payload) => self.postMessage({type, requestId: message.requestId, ...payload});
     try {
@@ -36,14 +37,20 @@ self.onmessage = async ({data: message}) => {
             if (Date.now() - searchStarted > 60000) { limited = true; break; }
             const progress = value => send('progress', {progress: {...value,
                 message: `目标组合 ${branch + 1}/${branches.length} · ${value?.message || '正在搜索'}`}});
-            const started = Date.now();
+            const tacticalStarted = Date.now();
             const result = await AutoWash2Optimizer.searchWashRoutes({
                 ...input, talentData: TALENT_DATA, targetIds: branches[branch],
                 onProgress: progress, onCandidate: collect,
-                shouldCancel: () => Date.now() - started > 30000 || Date.now() - searchStarted > 60000,
+                shouldCancel: () => Date.now() - tacticalStarted > 20000 || Date.now() - searchStarted > 60000,
             });
             limited ||= !!result.cancelled || !!result.searchScope?.safetyLimitReached;
             collect(result);
+            const started = Date.now();
+            const bestCost = combined().routes[0]?.totalPills;
+            const anchorInput = {...input, options: {...input.options,
+                maxTotalPills: Math.min(Number(input.options?.maxTotalPills ?? 10000), bestCost ?? Infinity)}};
+            limited = !!AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
+                () => Date.now() - started > 40000 || Date.now() - searchStarted > 60000) || limited;
         }
         send('result', {result: {...combined(), limited}});
     } catch (error) {

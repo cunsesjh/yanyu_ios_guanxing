@@ -81,6 +81,27 @@ class DesktopTests(unittest.TestCase):
         self.assertTrue(result['warning'])
         self.assertEqual(self.store.load_snapshot(result['row']['id']), DATA)
 
+    def test_delete_snapshot_is_recoverable_and_preserves_session(self):
+        self.store.save_session(SESSION)
+        session = self.store.session_path.read_bytes()
+        first = self.store.save_snapshot(DATA, 'ios', '1', '73576')
+        second = self.store.save_snapshot(DATA, 'ios', '1', '73580')
+        with self.assertRaises(ValueError):
+            self.store.delete_snapshot('../session.dpapi')
+        self.store.delete_snapshot(first['id'])
+        self.assertEqual(self.store.selected()['id'], second['id'])
+        archived = self.store.root / '.deleted-snapshots' / first['id'] / 'dat.json'
+        self.assertEqual(json.loads(archived.read_text()), DATA)
+        with self.assertRaises(ValueError):
+            self.store.load_snapshot(first['id'])
+        third = self.store.save_snapshot(DATA, 'ios', '1', '73580')
+        self.store.delete_snapshot(third['id'])
+        self.assertEqual(Store(self.tmp.name).selected()['id'], second['id'])
+        self.store.delete_snapshot(second['id'])
+        self.assertIsNone(Store(self.tmp.name).selected())
+        self.assertEqual(self.store.list_snapshots(), [])
+        self.assertEqual(self.store.session_path.read_bytes(), session)
+
     def test_incomplete_or_corrupt_snapshots_are_not_silently_loaded(self):
         row = self.store.save_snapshot(DATA, 'ios', '1', '73576')
         (self.store.snapshots / '.pending-test').mkdir()

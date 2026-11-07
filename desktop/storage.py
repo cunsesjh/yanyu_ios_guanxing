@@ -129,6 +129,29 @@ class Store:
     def select(self, ident):
         atomic_write(self.state_path, json.dumps(dict(selected=ident)).encode())
 
+    def delete_snapshot(self, ident):
+        rows = self.list_snapshots()
+        if not any(row['id'] == ident for row in rows):
+            raise ValueError('找不到这份历史存档。')
+        folder = self.snapshots / ident
+        if folder.is_symlink() or folder.resolve().parent != self.snapshots.resolve():
+            raise ValueError('历史存档路径无效。')
+        selected = self.selected()
+        trash = self.root / '.deleted-snapshots'
+        trash.mkdir(exist_ok=True)
+        destination = trash / ident
+        if destination.exists():
+            raise ValueError('这份存档已存在于本地回收目录。')
+        # Atomic, recoverable removal; never touch session credentials or cloud data.
+        os.replace(folder, destination)
+        try:
+            if selected and selected['id'] == ident:
+                remaining = [row for row in rows if row['id'] != ident]
+                self.select(remaining[0]['id'] if remaining else None)
+        except OSError:
+            os.replace(destination, folder)
+            raise
+
     def theme(self):
         try:
             value = json.loads((self.root / 'preferences.json').read_text()).get('theme')

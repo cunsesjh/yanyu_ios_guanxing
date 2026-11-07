@@ -27,6 +27,9 @@ QFrame#sidebar { background: #111925; border-right: 1px solid #243145; }
 QLabel#brand { font-size: 21px; font-weight: 700; color: #f5f8ff; }
 QLabel#eyebrow { color: #67dbc1; font-size: 11px; font-weight: 700; }
 QLabel#muted { color: #91a2ba; }
+QLabel#author { background: #193c40; color: #b7f6e5; border: 1px solid #4a9f8c;
+                border-radius: 10px; padding: 12px 8px; font-family: "Microsoft YaHei", "Segoe UI";
+                font-size: 13px; font-weight: 700; line-height: 1.6; }
 QLabel#headline { font-size: 30px; font-weight: 700; color: #f4f7fd; }
 QLabel#pageTitle { font-size: 18px; font-weight: 600; }
 QLabel#drop { border: 1px dashed #3a526d; border-radius: 14px; background: #151f2e;
@@ -58,6 +61,7 @@ QFrame#sidebar, QFrame#header { background: #ffffff; border-color: #d4deeb; }
 QFrame#status { background: #e9eff7; border-color: #d4deeb; }
 QLabel#brand, QLabel#headline { color: #1c2b40; }
 QLabel#muted { color: #596d86; }
+QLabel#author { background: #e0f4ec; color: #105d4b; border-color: #71b49e; }
 QLabel#eyebrow { color: #147b69; }
 QLabel#drop { background: #f4f7fc; color: #4b627d; border-color: #9cacc0; }
 QPushButton { background: #eef3fa; color: #253a54; border-color: #cdd9e8; }
@@ -264,7 +268,8 @@ class MainWindow(QMainWindow):
         sidebar.addWidget(self.session_label)
         sidebar.addStretch()
         author = QLabel('作者：B站 / 贴吧 / 抖音\n辣笔小勋    欢迎关注')
-        author.setObjectName('muted')
+        author.setObjectName('author')
+        author.setAlignment(Qt.AlignCenter)
         sidebar.addWidget(author)
         self.theme_button = self.button('☀  切换浅色模式', self.toggle_theme)
         sidebar.addWidget(self.theme_button)
@@ -487,10 +492,55 @@ class MainWindow(QMainWindow):
                                    (row['nick'], row['area'], row['version'],
                                     row['downloaded_at'].replace('T', ' '), row['fields']))
             items.addItem(item)
-        items.setCurrentRow(0)
+        items.setCurrentRow(next((i for i, row in enumerate(rows)
+                                  if self.current and row['id'] == self.current['id']), 0))
         layout.addWidget(items)
         button = self.button('打开选中存档', dialog.accept, 'primary')
-        layout.addWidget(button)
+        buttons = QHBoxLayout()
+        buttons.addWidget(button)
+        remove = self.button('删除选中存档', lambda: delete_selected())
+        remove.setObjectName('deleteSnapshot')
+        buttons.addWidget(remove)
+        layout.addLayout(buttons)
+
+        def delete_selected():
+            index = items.currentRow()
+            if index < 0 or index >= len(rows):
+                return
+            row = rows[index]
+            answer = QMessageBox.question(dialog, '删除本地历史存档',
+                '删除「%s · %s 区 · %s」？\n仅移除这份本地记录，不影响游戏云存档或登录会话。' %
+                (row['nick'], row['area'], row['downloaded_at'].replace('T', ' ')),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if answer != QMessageBox.Yes:
+                return
+            try:
+                self.store.delete_snapshot(row['id'])
+            except (OSError, ValueError) as error:
+                QMessageBox.warning(dialog, '删除失败', str(error))
+                return
+            rows.pop(index)
+            items.takeItem(index)
+            items.setCurrentRow(min(index, len(rows) - 1))
+            button.setEnabled(bool(rows))
+            remove.setEnabled(bool(rows))
+            if self.current and self.current['id'] == row['id']:
+                self.current = None
+                self.view.stop()
+                self.view.setUrl(QUrl('about:blank'))
+                with self.site.lock:
+                    self.site.payload = b''
+                self.stack.setCurrentWidget(self.welcome)
+                self.page_title.setText('欢迎使用 iosGuanxing')
+                remaining = self.store.selected()
+                if remaining:
+                    try:
+                        self.open_snapshot(remaining)
+                    except (OSError, ValueError):
+                        pass
+            self.update_buttons()
+            self.show_status('已删除本地历史记录 · 文件已移至本地回收目录，可恢复')
+
         items.itemDoubleClicked.connect(lambda item: dialog.accept())
         if dialog.exec() == QDialog.Accepted and items.currentRow() >= 0:
             try:
