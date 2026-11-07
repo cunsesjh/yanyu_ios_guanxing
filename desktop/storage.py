@@ -129,6 +129,18 @@ class Store:
     def select(self, ident):
         atomic_write(self.state_path, json.dumps(dict(selected=ident)).encode())
 
+    def theme(self):
+        try:
+            value = json.loads((self.root / 'preferences.json').read_text()).get('theme')
+            return value if value in ('dark', 'light') else 'dark'
+        except (OSError, ValueError, AttributeError):
+            return 'dark'
+
+    def set_theme(self, theme):
+        if theme not in ('dark', 'light'):
+            raise ValueError('Unknown theme')
+        atomic_write(self.root / 'preferences.json', json.dumps(dict(theme=theme)).encode())
+
     def selected(self):
         rows = self.list_snapshots()
         try:

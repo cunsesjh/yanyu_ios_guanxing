@@ -51,6 +51,31 @@ QProgressBar { border: 0; background: #182b3c; max-height: 3px; }
 QProgressBar::chunk { background: #68dbc0; }
 '''
 
+LIGHT_STYLE = '''
+QMainWindow, QDialog { background: #f3f6fb; color: #202d40; }
+QWidget { color: #202d40; }
+QFrame#sidebar, QFrame#header { background: #ffffff; border-color: #d4deeb; }
+QFrame#status { background: #e9eff7; border-color: #d4deeb; }
+QLabel#brand, QLabel#headline { color: #1c2b40; }
+QLabel#muted { color: #596d86; }
+QLabel#eyebrow { color: #147b69; }
+QLabel#drop { background: #f4f7fc; color: #4b627d; border-color: #9cacc0; }
+QPushButton { background: #eef3fa; color: #253a54; border-color: #cdd9e8; }
+QPushButton:hover { background: #e3ecf8; border-color: #8ea7c8; }
+QPushButton:disabled { background: #edf1f6; color: #8898ab; border-color: #dce3ec; }
+QPushButton#primary { background: #168470; color: #ffffff; }
+QPushButton#primary:hover { background: #106d5b; }
+QPushButton#primary:disabled { background: #d7e7e2; color: #76988f; }
+QPushButton#nav { background: #e0f3ed; color: #116956; border-color: #96cbbb; }
+QPushButton#nav:hover { background: #cdeade; color: #0c5845; }
+QLabel#error { color: #b5332a; }
+QListWidget { background: #ffffff; color: #202d40; border-color: #cdd9e8; }
+QListWidget::item { border-color: #dce3ec; }
+QListWidget::item:selected { background: #d9eee8; color: #116956; }
+QProgressBar { background: #dce7f1; }
+QProgressBar::chunk { background: #168470; }
+'''
+
 
 def app_icon():
     root = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
@@ -238,9 +263,11 @@ class MainWindow(QMainWindow):
         self.session_label.setWordWrap(True)
         sidebar.addWidget(self.session_label)
         sidebar.addStretch()
-        author = QLabel('作者：B站 / 贴吧 / 抖音\n辣笔小勋')
+        author = QLabel('作者：B站 / 贴吧 / 抖音\n辣笔小勋    欢迎关注')
         author.setObjectName('muted')
         sidebar.addWidget(author)
+        self.theme_button = self.button('☀  切换浅色模式', self.toggle_theme)
+        sidebar.addWidget(self.theme_button)
         footer = QLabel('本地解码 · 内置观星\n\nv' + VERSION + '  /  预览版')
         footer.setObjectName('muted')
         sidebar.addWidget(footer)
@@ -298,6 +325,7 @@ class MainWindow(QMainWindow):
         bottom.addWidget(self.progress)
         content.addWidget(status)
         main.addLayout(content, 1)
+        self.apply_theme(self.store.theme())
         self.update_buttons()
         QTimer.singleShot(0, self.restore)
 
@@ -419,8 +447,22 @@ class MainWindow(QMainWindow):
             self.view.setUrl(QUrl(self.site.url + '?snapshot=' + self.current['id']))
 
     def page_loaded(self, success):
+        if success:
+            self.page.runJavaScript('document.documentElement.dataset.theme="%s"' % self.site.theme)
         if not success:
             self.show_status('内置页面未能载入。请点击“观星主页”重试；本地存档已保留。', True)
+
+    def toggle_theme(self):
+        theme = 'light' if self.site.theme == 'dark' else 'dark'
+        self.store.set_theme(theme)
+        self.apply_theme(theme)
+
+    def apply_theme(self, theme):
+        self.site.theme = theme
+        self.setStyleSheet(STYLE + (LIGHT_STYLE if theme == 'light' else ''))
+        self.theme_button.setText('☾  切换深色模式' if theme == 'light' else '☀  切换浅色模式')
+        self.page.setBackgroundColor(QColor('#f3f6fb' if theme == 'light' else '#0c111b'))
+        self.page.runJavaScript('document.documentElement.dataset.theme="%s"' % theme)
 
     def page_crashed(self, status, code):
         self.show_status('内置网页进程已停止，点击“观星主页”重新载入。', True)

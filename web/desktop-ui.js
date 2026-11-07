@@ -3,6 +3,11 @@
     'use strict';
     var script = document.currentScript;
     var root = new URL('./', script.src);
+    // Each module opens at its header instead of inheriting a previous page's scroll.
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    window.addEventListener('load', function () {
+        if (!location.hash) requestAnimationFrame(function () { window.scrollTo(0, 0); });
+    }, {once: true});
     var pages = [
         ['首页', 'index.html'],
         ['洗髓模拟', 'wash/index.html'],
@@ -31,4 +36,17 @@
             nav.appendChild(link);
         });
     });
+    if (location.pathname.endsWith('/guishi/index.html')) {
+        var page = new URL(location.href).searchParams.get('page') === 'hs' ? 'hs' : 'ghost';
+        document.querySelectorAll('.page').forEach(function (node) {
+            node.classList.toggle('active', node.id === 'page-' + page);
+        });
+        ['btnGhostBack', 'btnHsBack'].forEach(function (id) {
+            var button = document.getElementById(id);
+            if (!button) return;
+            var replacement = button.cloneNode(true);
+            button.replaceWith(replacement);
+            replacement.addEventListener('click', function () { location.href = new URL('index.html', root); });
+        });
+    }
 })();

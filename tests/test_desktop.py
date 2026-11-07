@@ -44,6 +44,17 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn(b'fake-session', raw)
         self.assertNotIn(b'never-save', raw)
 
+    def test_theme_preference_is_separate_from_snapshot_selection(self):
+        row = self.store.save_snapshot(DATA, 'ios', '1', '73576')
+        self.assertEqual(self.store.theme(), 'dark')
+        self.store.set_theme('light')
+        reopened = Store(self.tmp.name)
+        self.assertEqual(reopened.theme(), 'light')
+        self.assertEqual(reopened.selected()['id'], row['id'])
+        self.assertEqual(reopened.load_snapshot(row['id']), DATA)
+        with self.assertRaises(ValueError):
+            self.store.set_theme('invalid')
+
     def test_failed_refresh_keeps_previous_snapshot_and_session(self):
         self.store.save_session(SESSION)
         row = self.store.save_snapshot(DATA, 'ios', '1', '73576')

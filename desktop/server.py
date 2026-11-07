@@ -14,6 +14,7 @@ class LocalSite:
         self.token = secrets.token_urlsafe(24)
         self.prefix = '/' + self.token + '/'
         self.payload = b''
+        self.theme = 'dark'
         self.lock = threading.Lock()
         site = self
 
@@ -47,6 +48,8 @@ class LocalSite:
                         marker = b'</head>'
                         prefix = site.prefix.encode('ascii')
                         theme = (b'<link rel="stylesheet" href="' + prefix + b'desktop-theme.css">'
+                                 b'<link rel="stylesheet" href="' + prefix + b'desktop-light.css">'
+                                 b'<script>document.documentElement.dataset.theme="' + site.theme.encode('ascii') + b'";</script>'
                                  b'<script defer src="' + prefix + b'desktop-ui.js"></script>')
                         position = body.lower().find(marker)
                         if position >= 0:

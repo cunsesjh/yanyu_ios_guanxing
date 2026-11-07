@@ -110,14 +110,12 @@ def run_smoke(app, web, report):
             window.start_download('synthetic.har')
             state['stage'] = 1
         elif state['stage'] == 1 and window.current and not window.worker:
-            inspect_js("(document.getElementById('homeSaveStatus')?.textContent || '')+'|'+"
-                       "(document.getElementById('homeMainRole')?.textContent || '')", home_ready)
+            inspect_js("(()=>{var s=typeof loadShareStore==='function'&&loadShareStore();return s?.data?'导入成功|'+s.data.MainRole.Name:''})()", home_ready)
         elif state['stage'] == 2:
             inspect_js("typeof loadShareStore === 'function' ? "
                        "(loadShareStore()?.data?.MainRole?.Name || '') : ''", module_ready)
         elif state['stage'] == 3:
-            inspect_js("(document.getElementById('homeSaveStatus')?.textContent || '')+'|'+"
-                       "(document.getElementById('homeMainRole')?.textContent || '')", restored_home)
+            inspect_js("(()=>{var s=typeof loadShareStore==='function'&&loadShareStore();return s?.data?'导入成功|'+s.data.MainRole.Name:''})()", restored_home)
 
     def fake_fetch(session):
         time.sleep(0.4)  # Only the worker waits, while Qt continues to process events.
