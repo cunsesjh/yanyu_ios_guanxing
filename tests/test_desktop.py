@@ -91,7 +91,7 @@ class DesktopTests(unittest.TestCase):
         self.store.delete_snapshot(first['id'])
         self.assertEqual(self.store.selected()['id'], second['id'])
         archived = self.store.root / '.deleted-snapshots' / first['id'] / 'dat.json'
-        self.assertEqual(json.loads(archived.read_text()), DATA)
+        self.assertEqual(json.loads(archived.read_text(encoding='utf-8')), DATA)
         with self.assertRaises(ValueError):
             self.store.load_snapshot(first['id'])
         third = self.store.save_snapshot(DATA, 'ios', '1', '73580')
