@@ -3,7 +3,7 @@ from pathlib import Path
 
 root = Path(SPECPATH)
 a = Analysis([str(root / 'desktop_main.py')], pathex=[str(root)],
-             binaries=[], datas=[(str(root / 'web'), 'web'),
+             binaries=[], datas=[(str(root / 'web'), 'web'), (str(root / 'assets'), 'assets'),
                                  (str(root / 'keys.json'), '.')],
              hiddenimports=[], hookspath=[], hooksconfig={}, runtime_hooks=[],
              excludes=['tkinter', 'PyQt5', 'PyQt6'], noarchive=False)

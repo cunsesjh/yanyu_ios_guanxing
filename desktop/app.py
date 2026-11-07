@@ -52,6 +52,10 @@ QProgressBar::chunk { background: #68dbc0; }
 
 
 def app_icon():
+    root = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
+    image = root / 'assets' / 'iosGuanxing.png'
+    if image.is_file():
+        return QIcon(str(image))
     pix = QPixmap(128, 128)
     pix.fill(Qt.transparent)
     painter = QPainter(pix)
@@ -190,6 +194,7 @@ class MainWindow(QMainWindow):
         self.current = None
         self.worker = None
         self.closing_after_download = False
+        self.setAcceptDrops(True)
         self.setWindowTitle('iosGuanxing')
         self.setWindowIcon(app_icon())
         self.resize(1380, 900)
@@ -337,6 +342,19 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, '选择 ProxyPin HAR 文件', '', 'HAR 文件 (*.har)')
         if path:
             self.start_download(path)
+
+    def dragEnterEvent(self, event):
+        urls = event.mimeData().urls()
+        if (not self.worker and len(urls) == 1 and urls[0].isLocalFile()
+                and urls[0].toLocalFile().lower().endswith('.har')):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        if (not self.worker and len(urls) == 1 and urls[0].isLocalFile()
+                and urls[0].toLocalFile().lower().endswith('.har')):
+            self.start_download(urls[0].toLocalFile())
+            event.acceptProposedAction()
 
     def refresh(self):
         if self.session:
