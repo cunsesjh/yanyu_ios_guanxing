@@ -45,6 +45,8 @@ KEYS_FILE = os.path.join(USER_DIR, 'keys.json')
 
 def _migrate_legacy_files():
     """旧版把 keys*.json / output/ 放在 exe 旁边 —— 首次运行搬进 USER_DIR。"""
+    if os.environ.get('YYJH_SKIP_LEGACY_MIGRATION') == '1':
+        return
     if not FROZEN or os.path.abspath(USER_DIR) == os.path.abspath(TOOL_DIR):
         return
     try:
