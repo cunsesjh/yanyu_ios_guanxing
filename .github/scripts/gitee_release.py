@@ -52,7 +52,8 @@ def main():
             name='v2.9(适配ios73576)' if tag == 'v2.9' else tag,
             body='iOS 73576 存档适配、查看历史存档修复及 HAR 导入提示修复。',
             prerelease=False))
-    attachments = (release.get('assets') or {}).get('attachments', [])
+    assets = release.get('assets') or []
+    attachments = assets.get('attachments', []) if isinstance(assets, dict) else assets
     if any(item.get('name') == path.name for item in attachments):
         print('同名附件已存在，保留已有文件。')
         return
