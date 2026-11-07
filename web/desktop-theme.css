@@ -296,6 +296,35 @@ input, select, textarea {
     border-color: #2b3c53;
 }
 
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+select, textarea {
+    color: #e6edf6 !important;
+    background-color: #151f2e !important;
+    border-color: #2b3c53 !important;
+}
+
+.auto-mode-tab.is-active,
+.tab-btn.active,
+.btn-analyze-purple,
+.btn-select-exchange.active {
+    background: #2b233c !important;
+    color: #d5bbff !important;
+    border-color: #6d528e !important;
+}
+
+.btn-wash-custom,
+.btn-exchange-sequence,
+.btn-select-exchange {
+    background: #192c43 !important;
+    color: #b5d3fb !important;
+}
+
+.anchor-chip:has(input:checked),
+.anchor-card:has(input:checked) {
+    background: #342f25 !important;
+    color: #f1d9a5 !important;
+}
+
 .module-card strong,
 .module-card:hover strong {
     color: #87aef0 !important;

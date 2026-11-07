@@ -73,11 +73,13 @@ def next_page():
             if row['page'] == 'index.html':
                 if row['scrollHeight'] > row['height'] + 1 or row['homeBottom'] > row['height'] + 1:
                     failures.append((row['size'], row['page'], 'homepage overflow'))
-            elif len(row['links']) != 9 or any(link['left'] < 0 or link['right'] > row['width'] + 1
+            elif len(row['links']) != 9 or row['nav']['top'] < 0 or any(link['left'] < 0 or link['right'] > row['width'] + 1
                                               or link['bottom'] > row['nav']['bottom'] + 1
                                               or link['scrollWidth'] > link['clientWidth'] + 1
                                               for link in row['links']):
                 failures.append((row['size'], row['page'], 'navigation cropped'))
+            if row['background'] != 'rgb(12, 17, 27)':
+                failures.append((row['size'], row['page'], 'inconsistent dark background'))
         print(json.dumps(dict(pages=len(results), failures=failures), ensure_ascii=False), flush=True)
         window.close()
         app.exit(bool(failures))
