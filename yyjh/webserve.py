@@ -41,6 +41,7 @@ import time
 import urllib.parse
 import urllib.request
 import webbrowser
+import uuid
 import zlib
 import http.server
 
@@ -384,8 +385,15 @@ def write_last_import(row, port=DEFAULT_PORT):
 
     out = _last_import_path(port)
     paths.ensure_dir(runtime_dir())
-    with open(out, 'w', encoding='utf-8', newline='\n') as f:
-        f.write(body)
+    # 服务可能同时读取；原子替换防止浏览器读到只写了一半的脚本。
+    fd, temporary = tempfile.mkstemp(prefix='last_import_', dir=runtime_dir())
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(body)
+        os.replace(temporary, out)
+    finally:
+        if os.path.exists(temporary):
+            os.remove(temporary)
     # 兼容副本：给还在读旧缓存目录的老版本服务
     try:
         paths.ensure_dir(paths.CACHE_DIR)
@@ -442,6 +450,9 @@ def open_site(snapshot=None):
                 ui.warn('自动导入没生效（端口上的服务不认这份存档），请手动导入。')
         except Exception as e:                           # noqa: BLE001
             ui.warn(f'准备自动导入失败，改开普通入口页：{e}')
+    if auto:
+        # 每次查看都重新执行首页导入，避免浏览器复用上一次的页面。
+        target = base + '?open=' + uuid.uuid4().hex
     ok = False
     try:
         ok = bool(webbrowser.open(target))

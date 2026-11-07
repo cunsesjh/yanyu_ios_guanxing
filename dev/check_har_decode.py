@@ -19,6 +19,7 @@ import zlib
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from yyjh.capture import decode as capdec                       # noqa: E402
+from yyjh.config import keytables                               # noqa: E402
 from yyjh.core import xxtea                                     # noqa: E402
 from yyjh.game.protocol import protocol_key                     # noqa: E402
 
@@ -111,6 +112,10 @@ def _download_entry(resp_json, when, text=None, encoding=None):
 
 # ── 用例 ────────────────────────────────────────────────────
 def main():
+    print('— ⓪ v73576 iOS 内层密钥 —')
+    check('HAR extra 确认的 psw+渠道后缀已收录',
+          keytables.lookup_inner_key('ios', '00073576')[0] == 'xi9iz9h4yoqkmrtj')
+
     tmp = tempfile.mkdtemp(prefix='yyjh_har_')
     try:
         # ① 多会话：k1/upload1（小）+ k2/upload2（大）—— 旧代码取 k1 + 最大 upload = 错位

@@ -219,7 +219,7 @@ def case_use_existing():
     check('返回 0', rc == 0, rc)
     check('调用了浏览器', len(s.opened) == 1, s.opened)
     check('打开的是网页版首页（自动导入走 index 里的 last-import.js）',
-          bool(s.opened) and s.opened[0] == 'http://127.0.0.1:8765/', s.opened)
+          bool(s.opened) and s.opened[0].startswith('http://127.0.0.1:8765/?open='), s.opened)
     check('存档交给了自动载入', len(s.autoloads) == 1, s.autoloads)
     check('没有跑任何子命令（不重复导入）', s.runs == [], s.runs)
     check('剪贴板里是存档目录（不是文件路径）',
@@ -230,7 +230,7 @@ def case_import_new():
     print('— 有历史 -> 选「导入新存档」-> 抓包导入 —')
     out = new_outdir(seed=2)          # 列表 3 项，[3] 就是导入新存档
     with Stub(out) as s:
-        rc, txt = drive(['3', r'C:\some\x.har', '2'], args_for(out))
+        rc, txt = drive(['3', r'C:\some\x.har', '1', '2'], args_for(out))
     check('返回 0', rc == 0, rc)
     check('跑的是 capture + 给的路径',
           s.runs == [['capture', r'C:\some\x.har', '--outdir', out]], s.runs)
@@ -242,7 +242,7 @@ def case_capture():
     print('— 无历史 -> 抓包导入（不再选模式）—')
     out = new_outdir()
     with Stub(out) as s:
-        rc, txt = drive([r'C:\some\x.har', '2'], args_for(out))
+        rc, txt = drive([r'C:\some\x.har', '1', '2'], args_for(out))
     check('跑的是 capture',
           s.runs == [['capture', r'C:\some\x.har', '--outdir', out]], s.runs)
     check('第一个提示就是抓包路径（没有模式菜单）',
@@ -269,7 +269,7 @@ def case_key_expired():
     with Stub(out) as s:
         wizard._run_argv = fake_run          # 盖掉 Stub 里的假执行器
         try:
-            rc, txt = drive([r'C:\some\x.har', '1', '2'], args_for(out))
+            rc, txt = drive([r'C:\some\x.har', '1', '1', '2'], args_for(out))
         finally:
             wizard._run_argv = real
     check('返回 0（挖到之后原命令跑通了）', rc == 0, rc)
@@ -310,7 +310,7 @@ def case_key_target():
         return calls
 
     # ① capture <har> -> crack --har（抓包不需要外层密钥）
-    calls = drive_fail(new_outdir(), [r'C:\some\x.har', '1', '2'], 'capture')
+    calls = drive_fail(new_outdir(), [r'C:\some\x.har', '1', '1', '2'], 'capture')
     check('capture 失败 -> crack 拿到 --har',
           len(calls) > 1 and calls[1][:3] == ['key', 'crack', '--har'], calls)
     check('capture 的 --har 就是那条抓包',
@@ -347,7 +347,7 @@ def case_fail_no_open():
     with Stub(out) as s:
         wizard._run_argv = fake_expired
         try:
-            rc, txt = drive([r'C:\some\x.har', '2'], args_for(out))
+            rc, txt = drive([r'C:\some\x.har', '1', '2'], args_for(out))
         finally:
             wizard._run_argv = real
     check('放弃挖之后返回非 0', rc not in (0, None), rc)
@@ -364,7 +364,7 @@ def case_fail_no_open():
     with Stub(out2) as s2:
         wizard._run_argv = fake_other
         try:
-            raised, txt2 = drive_raw([r'C:\some\x.har'], args_for(out2))
+            raised, txt2 = drive_raw([r'C:\some\x.har', '1'], args_for(out2))
         finally:
             wizard._run_argv = real
     check('非密钥类错误原样上抛（交给 start 问"要重来吗"）', raised)
@@ -398,7 +398,7 @@ def case_key_retry():
         wizard._run_argv = fake_run
         try:
             # 抓包 -> 要挖吗(1) -> 挖失败 -> 再挖一次(1) -> 成功 -> 重跑 -> 不打开(2)
-            rc, txt = drive([r'C:\some\x.har', '1', '1', '2'], args_for(out))
+            rc, txt = drive([r'C:\some\x.har', '1', '1', '1', '2'], args_for(out))
         finally:
             wizard._run_argv = real
     checks = [c for c in calls if c and c[0] == 'key']
@@ -434,7 +434,7 @@ def case_rc_of():
     with Stub(out):
         wizard._run_argv = fake_run
         try:
-            rc, txt = drive(['"x.har"', '2'], args_for(out))
+            rc, txt = drive(['"x.har"', '1', '2'], args_for(out))
         finally:
             wizard._run_argv = real
     check('成功时不再提示"没导出成功"', '没导出成功' not in txt, txt[-300:])
@@ -474,7 +474,7 @@ def case_key_raises():
     with Stub(out):
         wizard._run_argv = fake_run
         try:
-            rc, txt = drive([r'C:\some\x.har', '1', '1', '2'], args_for(out))
+            rc, txt = drive([r'C:\some\x.har', '1', '1', '1', '2'], args_for(out))
         finally:
             wizard._run_argv = real
     checks = [c for c in calls if c and c[0] == 'key']
@@ -503,7 +503,7 @@ def case_game_not_running():
         wizard._run_argv = fake_run
         wizard._ensure_game_running = lambda args: False   # 游戏没开 + 用户选了"算了"
         try:
-            rc, txt = drive([r'C:\some\x.har', '1'], args_for(out))
+            rc, txt = drive([r'C:\some\x.har', '1', '1'], args_for(out))
         finally:
             wizard._run_argv = real
     check('游戏没开时直接给结论，不去硬扫内存',
@@ -516,7 +516,7 @@ def case_quoted_path():
     print('— 把文件拖进窗口会带引号 —')
     out = new_outdir()
     with Stub(out) as s:
-        drive(['"C:\\a b\\x.har"', '2'], args_for(out))
+        drive(['"C:\\a b\\x.har"', '1', '2'], args_for(out))
     check('外层引号被去掉',
           bool(s.runs) and s.runs[0][1] == r'C:\a b\x.har', s.runs)
 
@@ -527,7 +527,7 @@ def case_forward():
     args = cli.build_parser().parse_args(
         ['start', '--outdir', out, '--pkg', 'huawei', '--report', '--runtime', 'ios'])
     with Stub(out) as s:
-        drive([r'C:\some\x.har', '2'], args)
+        drive([r'C:\some\x.har', '1', '2'], args)
     got = s.runs[0] if s.runs else []
     check('--pkg / --report / --runtime 都转过去了',
           '--pkg' in got and 'huawei' in got and '--report' in got
@@ -540,7 +540,7 @@ def case_open_site():
     with Stub(out) as s:
         rc, txt = drive(['1'], args_for(out))
     check('浏览器打开的是网页版首页',
-          s.opened == ['http://127.0.0.1:8765/'], s.opened)
+          len(s.opened) == 1 and s.opened[0].startswith('http://127.0.0.1:8765/?open='), s.opened)
     check('自动载入拿到了这条存档', len(s.autoloads) == 1, s.autoloads)
     check('剪贴板里是目录而不是文件路径',
           bool(s.copied) and not s.copied[-1].endswith('.db'), s.copied)

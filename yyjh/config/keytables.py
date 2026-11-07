@@ -52,6 +52,7 @@ INNER_KEY_ROWS = [
     ('ios', '00073440', 'pon1dxg7', 'yoqkmrtj'),          # 当前 iOS ✅ 已实测
     ('ios', '00073460', 'u52kw6lb', 'yoqkmrtj'),
     ('ios', '00073492', 'xi9iz9h4', 'yoqkmrtj'),          # v73492 新协议 ✅ 已实测（psw 由 download extra 下发）
+    ('ios', '00073576', 'xi9iz9h4', 'yoqkmrtj'),          # v73576 iOS：HAR download3.extra 确认 psw
     ('ios', '00073420', 'n0b06b00', 'po06ewkx'),          # ⚠ 全表唯一例外
     ('ios', '00071352', '15fgt27w', 'meeo0wmk'),
     ('ios', '00073661', 'wmjhuy6d', 'meeo0wmk'),

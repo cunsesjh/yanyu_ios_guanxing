@@ -69,6 +69,8 @@
                         format: result.format || 'json'
                     })) {
                         renderHomeState();
+                    } else {
+                        setMessage('浏览器无法保存存档，请允许本地存储或释放空间后重试；本地 dat.json 不受影响。', true);
                     }
                 })
                 .catch(function (err) {
@@ -88,6 +90,7 @@
                 format: 'plain-json'
             });
             if (ok) renderHomeState();
+            else setMessage('浏览器无法保存存档，请允许本地存储或释放空间后重试；本地 dat.json 不受影响。', true);
         }
 
         var input = document.getElementById('saveFileInput');

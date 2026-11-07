@@ -23,12 +23,39 @@ from ..game import savefmt
 
 MAX_SAVE_BYTES = 32 * 1024 * 1024
 COMMANDS = frozenset(('upload3', 'upload_auto3', 'download3'))
-PLATFORM_HOSTS = {'ios.wlfy.blue8.cn': 'ios', 'andr.wlfy.blue8.cn': 'android'}
+PLATFORM_HOSTS = {'ios.wlfy.blue8.cn': 'ios', 'andr.wlfy.blue8.cn': 'android',
+                  'pre.wlfy.blue8.cn': 'ios'}   # 先行服（同域名也走安卓，下面按 plat 头兜底）
 # 兜底内层密钥（psw + 渠道后缀）；优先还试 keytables 的版本化候选
 INNER_KEYS_FALLBACK = {
     'android': ('xi9iz9h4po06ewkx',),
     'ios': ('xi9iz9h4yoqkmrtj', 'xi9iz9h4po06ewkx'),
+    # 先行服（ljpre）内层后缀是 'cgkmi4cq'，iOS 先行服同样用它
+    'ios_pre': ('xi9iz9h4cgkmi4cq',),
 }
+
+
+def _extra_psw_keys():
+    """密钥表里出现过的所有 psw × 所有渠道后缀 —— 版本再新也能蒙对。
+
+    psw 按版本变、后缀按渠道变，两者正交；把已知 psw 全配一遍后缀
+    （几十把，试起来零成本），就不用等表更新了。"""
+    from ..config import keytables
+    out = set()
+    for psw in set(keytables._PSW_BY_VERSION.values()):
+        for suf in keytables.CHANNEL_SUFFIXES:
+            out.add(psw + suf)
+    return tuple(sorted(out))
+
+
+def _platform_of(request_headers, host):
+    """平台判定：主机表 -> plat 请求头（先行服 ios/android 同域名）-> None。"""
+    p = PLATFORM_HOSTS.get(host)
+    if p:
+        if p == 'ios' and (request_headers.get('plat') or '').strip() == 'android':
+            return 'android'
+        return p
+    plat = (request_headers.get('plat') or '').strip().lower()
+    return plat if plat in ('ios', 'android') else None
 
 
 class EnvelopeError(ValueError):
@@ -106,6 +133,10 @@ def open_full(cipher, key, platform='ios', version_hint=None):
         cands += list(savefmt.inner_candidates(platform, version, None))
     except Exception:
         pass
+    try:
+        cands += list(_extra_psw_keys())       # 已知 psw × 全部渠道后缀
+    except Exception:
+        pass
     seen = set()
     for ik in cands:
         if not ik or ik in seen:
@@ -164,7 +195,7 @@ def decode_har(har_path, window=5, steps=None):
             host = (urlsplit(request.get('url', '')).hostname or '').lower()
         except Exception:
             continue
-        platform = PLATFORM_HOSTS.get(host)
+        platform = _platform_of(h, host)
         if platform is None:
             continue
         session = h.get('session')

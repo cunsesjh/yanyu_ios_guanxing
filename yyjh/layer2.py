@@ -16,8 +16,8 @@
 为什么 capture / local 要"去内存抓"：
     外层密钥是**每账号一把**的随机 16 字符 token，只在游戏进程内存里，推导不出来。
       · local   要解新版 dat.db 就必须先拿到它 -> 扫内存爆破
-      · capture 从抓包能免费拿到初版 content，但顺手把该账号的外层密钥也挖出来记进
-                keys.local.json，以后同一账号解本地存档就不用再扫内存了
+      · capture 默认只解析抓包，不额外连接设备；抓包自带的外层密钥可直接记下。
+                需要额外挖设备密钥时显式使用 --mem force。
     rebuild 不需要 —— JSON 已是明文，重新加密用的是"版本 + 渠道"的固定内层密钥。
 
 不支持的输入
@@ -194,6 +194,21 @@ def pipeline_capture(args):
 
     ui.title('从抓包导出存档')
     ui.info(f'  输入: {os.path.basename(p)}')
+    if getattr(args, 'fetch', False):
+        from .capture import retrieve
+        ui.info('  使用 HAR 登录会话向原游戏服务器下载当前云存档。')
+        try:
+            res = retrieve.acquire(p, avatar_field=args.avatar_field)
+        except ValueError as e:
+            raise ui.UserError(str(e), [
+                '会话失效时，请从登录前开始重新抓包，进入目标角色后立即导出 HAR',
+                '此模式需要本地完整解码成功，不会使用角色摘要替代存档',
+                '已验证 iOS 国服 73576；后续版本仍需按实际响应校验',
+            ]) from e
+        for s in res.steps:
+            ui.step(s.label, s.value)
+        # Acquisition does not provide the per-account local storage key.
+        return _finish(res, args)
     try:
         res = capdec.decode(p, index=args.index, real_key=args.outer_key,
                             inner_key=args.inner_key,
@@ -224,13 +239,16 @@ def pipeline_capture(args):
                                          save_id=res.save_id)
             ui.info(f'  外层密钥 {res.outer_key}'
                     '（抓包自带，已记入 keys.local.json，以后解本地存档不用再扫内存）')
-        key, note = _mem_outer_key(args, res.account, new_content=None, res=res)
-        if key:
-            res.outer_key = key
-        else:
-            ui.step('外层密钥', f'未取到：{note}')
-            res.warn(f'没拿到外层密钥（{note}）。本次输出不受影响，'
-                     f'但以后解这个账号的本地存档还得再扫一次内存。')
+        # HAR 已经解码成功；设备外层密钥只用于另一条「解设备本地库」路径。
+        # 默认不为这个可选用途连接 ADB，避免无设备的用户收到误导性警告。
+        if getattr(args, 'mem', 'auto') == 'force':
+            key, note = _mem_outer_key(args, res.account, new_content=None, res=res)
+            if key:
+                res.outer_key = key
+            else:
+                ui.step('外层密钥', f'未取到：{note}')
+                res.warn(f'没拿到外层密钥（{note}）。本次输出不受影响，'
+                         f'但以后解这个账号的本地存档还得再扫一次内存。')
     return _finish(res, args)
 
 
@@ -564,7 +582,7 @@ def _add_out(p):
 
 def _add_mem(p):
     p.add_argument('--mem', choices=MEM_MODES, default='auto',
-                   help='内存步骤：auto(默认，没记录才扫) / force(强制重扫) / off(跳过)')
+                   help='内存步骤：auto(默认，仅本地库缺密钥时扫描；HAR 不扫描) / force(强制重扫) / off(跳过)')
     p.add_argument('--adb', help='adb 路径')
     p.add_argument('--serial', help='设备 serial（不填自动挑装了游戏的那台）')
     p.add_argument('--pkg', default=None,
@@ -585,6 +603,8 @@ def add_parsers(sub):
     p.add_argument('input', metavar='抓包.har')
     p.add_argument('--index', type=int, help='用第几个 upload（默认取请求体最大的）')
     p.add_argument('--outer-key', help='HAR 里的 realKey（没有 k 响应头时手动给）')
+    p.add_argument('--fetch', action='store_true',
+                   help='用 HAR 会话向原游戏服务器主动下载完整云存档（支持 iOS 73576）')
     _add_out(p)
     _add_mem(p)
     p.set_defaults(func=pipeline_capture)
@@ -612,6 +632,8 @@ def add_parsers(sub):
 
     p = sub.add_parser('auto', help='★ 按扩展名自动选 capture/local/rebuild')
     p.add_argument('input')
+    p.add_argument('--fetch', action='store_true',
+                   help='HAR 输入时向原游戏服务器主动下载完整云存档')
     p.add_argument('--index', type=int)
     p.add_argument('--outer-key')
     p.add_argument('--account')

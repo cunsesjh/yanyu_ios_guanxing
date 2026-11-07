@@ -6,6 +6,7 @@
 
     python -m yyjh start                   ★ 向导：选模式 -> 导入 -> 打开网页版
     python -m yyjh capture  <抓包.har>      抓包结果  -> 初版 dat.db
+    python -m yyjh retrieve <抓包.har>      检查会话；加 --fetch 主动下载云存档
     python -m yyjh local                    去模拟器上取存档 -> 初版 dat.db
     python -m yyjh local    <dat.db>        本地存档  -> 初版 dat.db
     python -m yyjh rebuild  <存档.json>     明文 JSON -> 初版 dat.db
@@ -85,6 +86,8 @@ def build_parser():
     layer2.add_parsers(sub)
     layer1.add_parsers(sub)
     webserve.add_parsers(sub)
+    from .capture import retrieve
+    retrieve.add_parser(sub)
     return ap
 
 

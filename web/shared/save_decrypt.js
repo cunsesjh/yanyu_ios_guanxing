@@ -280,14 +280,41 @@ var SAVE_SHARE_KEY = 'yyjh_share_save_v1';
 var SAVE_SHARE_META_KEY = 'yyjh_share_save_meta_v1';
 
 function saveShareStore(data, meta) {
+    let previous, previousMeta;
     try {
         if (typeof localStorage === 'undefined') return false;
-        localStorage.setItem(SAVE_SHARE_KEY, JSON.stringify(data));
-        localStorage.setItem(SAVE_SHARE_META_KEY, JSON.stringify(meta || {}));
-        return true;
+        previous = localStorage.getItem(SAVE_SHARE_KEY);
+        previousMeta = localStorage.getItem(SAVE_SHARE_META_KEY);
+        const raw = JSON.stringify(data);
+        const metaRaw = JSON.stringify(meta || {});
+        function persist(value) {
+            localStorage.setItem(SAVE_SHARE_META_KEY, metaRaw);
+            localStorage.setItem(SAVE_SHARE_KEY, value);
+            return localStorage.getItem(SAVE_SHARE_KEY) === value
+                && localStorage.getItem(SAVE_SHARE_META_KEY) === metaRaw;
+        }
+        try { if (persist(raw)) return true; } catch (e) { }
+        // 各页面共用压缩持久化，不能只在首页内存中假装导入成功。
+        if (typeof pako !== 'undefined' && typeof btoa === 'function') {
+            const gz = pako.deflate(raw);
+            let bin = '';
+            for (let i = 0; i < gz.length; i += 8192) {
+                bin += String.fromCharCode.apply(null, gz.subarray(i, i + 8192));
+            }
+            if (persist(btoa(bin))) return true;
+        }
     } catch (e) {
-        return false;
+        // 失败时尽力保留之前那份存档，而不是展示当前页面的临时副本。
     }
+    try {
+        if (previous !== undefined) {
+            if (previous === null) localStorage.removeItem(SAVE_SHARE_KEY);
+            else localStorage.setItem(SAVE_SHARE_KEY, previous);
+            if (previousMeta === null) localStorage.removeItem(SAVE_SHARE_META_KEY);
+            else localStorage.setItem(SAVE_SHARE_META_KEY, previousMeta);
+        }
+    } catch (e) { }
+    return false;
 }
 
 function loadShareStore() {
