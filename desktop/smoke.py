@@ -57,13 +57,16 @@ def run_smoke(app, web, report):
         if value != '导入成功|观星预览':
             return
         results.append('worker -> snapshot -> embedded home auto-import')
-        save_image('02-home.png')
         if not window.profile.isOffTheRecord():
             finish(False, 'Browser profile is persistent')
             return
         results.append('off-the-record Chromium profile')
-        window.view.setUrl(QUrl(window.site.url + 'wash/index.html'))
-        state['stage'] = 2
+        state['stage'] = 1.5
+        def after_paint():
+            save_image('02-home.png')
+            window.view.setUrl(QUrl(window.site.url + 'wash/index.html'))
+            state['stage'] = 2
+        QTimer.singleShot(600, after_paint)
 
     def module_ready(value):
         if value != '观星预览':
