@@ -147,6 +147,7 @@ class DownloadThread(QThread):
         self.store, self.session, self.har = store, session, har
 
     def run(self):
+        session = None
         try:
             if self.har:
                 self.progress.emit('正在读取 HAR 登录会话…')
@@ -159,14 +160,37 @@ class DownloadThread(QThread):
             # GUI 文本保持安全：不展示请求头、响应体、账号、堆栈、OS 文件路径。
             # 完整诊断写进数据目录 last_error.log（仅本机），用户可主动发给维护者。
             message = str(error) if isinstance(error, ValueError) else '文件读取或保存失败，请检查文件和磁盘权限。'
+            if self._passive_fallback(error, session, message):
+                return
             self._log_failure(error)
             self.failed.emit(message + _LOG_HINT)
         except Exception as error:
+            if self._passive_fallback(error, session, '下载或解码未完成。'):
+                return
             self._log_failure(error)
             self.failed.emit('下载或解码未完成，请重新导入 HAR 后重试。之前的存档已保留。'
                              + _LOG_HINT)
 
-    def _log_failure(self, error):
+    def _passive_fallback(self, error, session, reason):
+        """主动下载失败（常见：会话过期/断网）→ 若 HAR 里带了完整存档
+        （旧式明文 download 响应），离线导入，不浪费这次抓包。"""
+        if not self.har:
+            return False
+        try:
+            self.progress.emit('主动下载未成功，正在离线导入抓包里的存档…')
+            result = DownloadService(self.store).import_passive(
+                self.har, session, self.progress.emit)
+        except Exception:
+            return False                     # 离线也解不开 → 走正常报错
+        result['warning'] = (
+            '主动下载未成功（%s）已改为离线导入：这是抓包时下载到的存档快照；'
+            '需要服务器最新进度时，请重抓 HAR 或修复网络后点「下载最新云存档」。'
+            % reason)
+        self._log_failure(error, note='已离线导入抓包里的存档快照')
+        self.completed.emit(result)
+        return True
+
+    def _log_failure(self, error, note=''):
         """把完整诊断（含堆栈/响应片段）写到本机数据目录，供排障。"""
         try:
             import traceback
@@ -180,6 +204,8 @@ class DownloadThread(QThread):
             detail = getattr(error, 'detail', '')
             if detail:
                 lines.append('detail:\n' + str(detail))
+            if note:
+                lines.append('note: ' + note)
             session = self.session
             if session:
                 acc = str(session.get('account') or '')
