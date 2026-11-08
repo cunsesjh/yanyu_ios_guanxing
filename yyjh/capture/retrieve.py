@@ -57,14 +57,20 @@ def session_from_har(path):
     Some game replies are encrypted; only an actual download can confirm expiry.
     """
     with open(path, encoding='utf-8') as f:
-        entries = json.load(f).get('log', {}).get('entries', [])
+        entries = json.load(f).get('log') or {}
+        entries = entries.get('entries') or []
     account = key = selected = None
+    diag = {'records': len(entries), 'api': 0, 'k': 0, 'commands': []}
     for entry in entries:
         req, res = entry.get('request', {}), entry.get('response', {})
         url = urlsplit(req.get('url', ''))
         if url.hostname not in HOSTS or url.path not in ('/api_check_user', '/api_command'):
             continue
         h, rh = envelope._headers(req), envelope._headers(res)
+        if url.path == '/api_command':
+            diag['api'] += 1
+            if h.get('command'):
+                diag['commands'].append(h['command'])
         payload = {}
         try:
             payload = json.loads(envelope._body(res, True) or b'{}')
@@ -83,6 +89,7 @@ def session_from_har(path):
         if rh.get('k') and account:
             # A failed fresh handshake must invalidate an earlier working key.
             key = selected = None
+            diag['k'] += 1
             try:
                 key = protocol.derive(account, rh['k'])['real_key']
             except ValueError:
@@ -97,7 +104,11 @@ def session_from_har(path):
                             protocol_key=key, headers=h.copy(),
                             platform=_platform_of(h, url.hostname or ''))
     if selected is None:
-        raise ValueError('HAR 缺少同一账号的有效登录握手 k、会话和区服；请从登录前重新抓包')
+        cmds = ','.join(diag['commands'][:8]) or '无'
+        raise ValueError(
+            'HAR 缺少同一账号的有效登录握手 k、会话和区服；请从登录前重新抓包'
+            f'（诊断：共 {diag["records"]} 条记录，游戏接口 {diag["api"]} 条，'
+            f'k 响应头 {diag["k"]} 处，命令：{cmds}）')
     return selected
 
 
@@ -153,8 +164,29 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+class FetchError(ValueError):
+    """下载失败。str(e) 是给界面看的安全文本；e.detail 是给维护者看的完整诊断
+    （写进本地 last_error.log，不进 GUI —— GUI 不展示响应体/请求头/账号）。"""
+
+    def __init__(self, message, detail=''):
+        super().__init__(message)
+        self.detail = detail
+
+
+def _snippet(raw, limit=300):
+    """响应体诊断片段：去不可打印字符、遮长数字串（防账号/存档泄漏），截断。"""
+    if isinstance(raw, (bytes, bytearray)):
+        text = bytes(raw).decode('utf-8', 'replace')
+    else:
+        text = str(raw)
+    text = ''.join(c if c.isprintable() or c in '\r\n\t' else '.' for c in text)
+    return re.sub(r'\d{7,}', lambda m: m.group(0)[:3] + '*' * (len(m.group(0)) - 3),
+                  text)[:limit]
+
+
 def fetch(session):
     """One download request to the original game host; never follows redirects."""
+    import time
     url = urlsplit(session['url'])
     if (url.hostname not in HOSTS or url.scheme not in ('http', 'https')
             or url.path != '/api_command' or url.username or url.password or url.port):
@@ -162,32 +194,46 @@ def fetch(session):
     body, headers, key = prepare(session)
     request = urllib.request.Request(session['url'], data=body, headers=headers, method='POST')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    started = time.monotonic()
     try:
         with opener.open(request, timeout=30) as response:
             raw = response.read(envelope.MAX_SAVE_BYTES + 1)
+            status = getattr(response, 'status', 200)
     except urllib.error.HTTPError as e:
         # 非 2xx（NoRedirect 下 3xx 也走到这）—— 多半是 WAF/网关拦截或服务临时不可用。
         # HTTPError 是 URLError 子类，必须放在前面，否则真实状态码又被吞掉。
         loc = (e.headers or {}).get('Location')
-        detail = f'HTTP {e.code}' + (f' → {loc}' if loc else '')
-        raise ValueError(
-            f'游戏服务器请求失败（{detail}；未重试，未转发到其他服务）—— '
-            '服务端拒绝或被防火墙/WAF 拦截，原存档未改动；稍后重试或换网络（如手机热点）再试') from None
+        loc_host = urlsplit(loc).hostname if loc else None
+        detail = (f'HTTPError code={e.code} reason={e.reason!r}\n'
+                  f'  Location: {loc!r}\n'
+                  f'  Server: {(e.headers or {}).get("Server")!r}  '
+                  f'Content-Type: {(e.headers or {}).get("Content-Type")!r}\n'
+                  f'  响应体片段: {_snippet(e.read(2048) or b"")!r}')
+        raise FetchError(
+            f'游戏服务器请求失败（HTTP {e.code}'
+            + (f'，被重定向到 {loc_host}' if loc_host else '')
+            + '；未重试，未转发到其他服务）—— 服务端拒绝或被防火墙/WAF 拦截，'
+            '原存档未改动；稍后重试或换网络（如手机热点）再试', detail) from None
     except (urllib.error.URLError, OSError) as e:
         # DNS 失败 / 连接被拒或重置 / 30 秒超时等网络层错误 —— 把真实原因带出去，
         # 否则单看这句话无法区分是断网、被墙还是服务器挂了。
         reason = getattr(e, 'reason', None) or e
-        raise ValueError(
-            f'游戏服务器请求失败（{url.hostname} 网络错误：{reason!r}；'
-            '未重试，未转发到其他服务）—— 多为本机网络不通'
-            '（DNS 解析失败、代理/防火墙/杀软拦截、网络超时），'
-            '原存档未改动；换网络或稍后重试') from None
+        raise FetchError(
+            f'游戏服务器请求失败（{url.hostname} 网络错误：'
+            f'{type(reason).__name__}: {reason}；未重试，未转发到其他服务）—— '
+            '多为本机网络不通（DNS 解析失败、代理/防火墙/杀软拦截、网络超时），'
+            '原存档未改动；换网络或稍后重试',
+            f'{type(e).__name__}: {e!r}\n  reason: {reason!r}') from None
+    elapsed = time.monotonic() - started
     if len(raw) > envelope.MAX_SAVE_BYTES:
-        raise ValueError('游戏服务器响应超过大小限制')
+        raise FetchError('游戏服务器响应超过大小限制',
+                         f'响应 {len(raw)} 字节，耗时 {elapsed:.1f}s')
     try:
         payload = json.loads(raw)
     except ValueError:
-        raise ValueError('游戏服务器返回的不是有效 JSON') from None
+        raise FetchError('游戏服务器返回的不是有效 JSON（可能被网关/WAF 拦截）；'
+                         '原存档未改动',
+                         f'HTTP {status}，耗时 {elapsed:.1f}s，响应体片段: {_snippet(raw)!r}') from None
     return decode_response(payload, key, session)
 
 

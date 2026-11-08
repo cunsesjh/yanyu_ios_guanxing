@@ -19,6 +19,9 @@ from .service import DownloadService
 from .storage import Store
 from yyjh.capture import retrieve
 
+# GUI 提示只给安全文本；完整诊断在数据目录 last_error.log（仅本机）。
+_LOG_HINT = '  详细诊断已写入数据目录 last_error.log，可发给维护者定位。'
+
 
 STYLE = '''
 QMainWindow, QDialog { background: #0c111b; color: #e6edf6; }
@@ -153,12 +156,44 @@ class DownloadThread(QThread):
             result = DownloadService(self.store).download(session, self.progress.emit)
             self.completed.emit(result)
         except (ValueError, OSError, RuntimeError) as error:
-            # Domain errors are user-readable. Never expose headers, raw responses,
-            # account IDs, tracebacks, or OS file paths in the GUI.
+            # GUI 文本保持安全：不展示请求头、响应体、账号、堆栈、OS 文件路径。
+            # 完整诊断写进数据目录 last_error.log（仅本机），用户可主动发给维护者。
             message = str(error) if isinstance(error, ValueError) else '文件读取或保存失败，请检查文件和磁盘权限。'
-            self.failed.emit(message)
+            self._log_failure(error)
+            self.failed.emit(message + _LOG_HINT)
+        except Exception as error:
+            self._log_failure(error)
+            self.failed.emit('下载或解码未完成，请重新导入 HAR 后重试。之前的存档已保留。'
+                             + _LOG_HINT)
+
+    def _log_failure(self, error):
+        """把完整诊断（含堆栈/响应片段）写到本机数据目录，供排障。"""
+        try:
+            import traceback
+            from datetime import datetime
+            lines = [
+                'iosGuanxing 下载失败诊断',
+                'time: ' + datetime.now().astimezone().isoformat(timespec='seconds'),
+                'app: iosGuanxing ' + VERSION,
+                'error: %s: %s' % (type(error).__name__, error),
+            ]
+            detail = getattr(error, 'detail', '')
+            if detail:
+                lines.append('detail:\n' + str(detail))
+            session = self.session
+            if session:
+                acc = str(session.get('account') or '')
+                masked = (acc[:3] + '*' * max(0, len(acc) - 5) + acc[-2:]) if len(acc) > 5 else '***'
+                lines.append('context: host=%s platform=%s area=%s account=%s'
+                             % (session.get('url', '').split('/')[2] if '://' in session.get('url', '') else '?',
+                                session.get('platform'), session.get('area'), masked))
+            if self.har:
+                lines.append('har: ' + os.path.basename(str(self.har)))
+            lines.append('traceback:\n' + ''.join(
+                traceback.format_exception(type(error), error, error.__traceback__)))
+            self.store.write_error_log('\n'.join(lines))
         except Exception:
-            self.failed.emit('下载或解码未完成，请重新导入 HAR 后重试。之前的存档已保留。')
+            pass                                   # 日志失败绝不影响错误提示本身
 
 
 class Welcome(QWidget):

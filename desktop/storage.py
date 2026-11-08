@@ -66,7 +66,17 @@ class Store:
         self.protector = protector or WindowsProtector()
         self.session_path = self.root / 'session.dpapi'
         self.state_path = self.root / 'state.json'
+        self.error_path = self.root / 'last_error.log'
         self.snapshots = self.root / 'snapshots'
+
+    def write_error_log(self, text):
+        """把完整诊断写进数据目录（仅本机；用户主动发给维护者才离开这台机器）。
+        含请求头/响应体片段/堆栈都可以，但调用方仍应隐去会话密钥。"""
+        try:
+            atomic_write(self.error_path, text.encode('utf-8', 'replace'))
+            return True
+        except OSError:
+            return False
 
     def save_session(self, session):
         # Do not retain cookies, unrelated headers, or the original HAR path.
