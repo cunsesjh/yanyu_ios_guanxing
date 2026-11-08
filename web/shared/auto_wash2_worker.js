@@ -32,16 +32,20 @@ self.onmessage = async ({data: message}) => {
             if (found.size) send('candidate', {result: combined()});
         }
         let limited = false;
+        // The improved planner is intentionally cost-oriented. Give it enough
+        // wall time to refine an initially expensive route instead of stopping
+        // after the first feasible candidate.
         const searchStarted = Date.now();
+        const totalSearchMs = 180000;
         for (let branch = 0; branch < branches.length; branch++) {
-            if (Date.now() - searchStarted > 60000) { limited = true; break; }
+            if (Date.now() - searchStarted > totalSearchMs) { limited = true; break; }
             const progress = value => send('progress', {progress: {...value,
                 message: `目标组合 ${branch + 1}/${branches.length} · ${value?.message || '正在搜索'}`}});
             const tacticalStarted = Date.now();
             const result = await AutoWash2Optimizer.searchWashRoutes({
                 ...input, talentData: TALENT_DATA, targetIds: branches[branch],
                 onProgress: progress, onCandidate: collect,
-                shouldCancel: () => Date.now() - tacticalStarted > 20000 || Date.now() - searchStarted > 60000,
+                shouldCancel: () => Date.now() - tacticalStarted > 60000 || Date.now() - searchStarted > totalSearchMs,
             });
             limited ||= !!result.cancelled || !!result.searchScope?.safetyLimitReached;
             collect(result);
@@ -50,7 +54,7 @@ self.onmessage = async ({data: message}) => {
             const anchorInput = {...input, options: {...input.options,
                 maxTotalPills: Math.min(Number(input.options?.maxTotalPills ?? 10000), bestCost ?? Infinity)}};
             limited = !!AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
-                () => Date.now() - started > 40000 || Date.now() - searchStarted > 60000) || limited;
+                () => Date.now() - started > 120000 || Date.now() - searchStarted > totalSearchMs) || limited;
         }
         send('result', {result: {...combined(), limited}});
     } catch (error) {

@@ -36,9 +36,9 @@
         // Locks describe the initial game state, not a permanent restriction.
         // Model.targets already adds every preserved purple to the final targets,
         // matching the tactical planner's unlock-and-reacquire semantics.
-        if (![153, 154].includes(Number(raw.zizhi)) || ![3, 4].includes(targets.length)
+        if (![153, 154].includes(Number(raw.zizhi)) || targets.length < 1 || targets.length > 4
                 || Number(input.options?.maxTotalPills) === 0) return false;
-        const purples = planner.scan(raw, 12);
+        const purples = planner.scan(raw, 24);
         const choices = [purples.filter(p => !p.fromPity && p.id !== 251).slice(0, targets.length),
             purples.slice(0, targets.length), purples.filter(p => p.id !== 251).slice(0, targets.length)];
         const seen = new Set();
@@ -62,14 +62,14 @@
             root.AnchorRouteSearch.run({mode: 'auto', raw, anchors, purples,
                 options: {targets, maxCost: Number(input.options?.maxTotalPills ?? 10000),
                     maxNodes: 3000, sequenceBasis: 'theory2', exhaustive: true, perJobMs: 1000,
-                    stages: [{limit:100,depth:20},{limit:300,depth:30}],
-                    shouldCancel: () => shouldCancel() || Date.now() - choiceStarted > 13000}}, packet => {
+                    stages: [{limit:150,depth:24},{limit:450,depth:36},{limit:900,depth:48}],
+                    shouldCancel: () => shouldCancel() || Date.now() - choiceStarted > 20000}}, packet => {
                 if (packet.type === 'progress') progress({message: `置换路线比较 · 序列 ${packet.pad} · 深度 ${packet.depth}`});
                 if (packet.candidate || packet.routes?.length) {
                     (packet.candidate ? [packet.candidate] : packet.routes).forEach(route => accept(route, anchors));
                 }
             });
-            bounded ||= Date.now() - choiceStarted > 13000;
+            bounded ||= Date.now() - choiceStarted > 20000;
         }
         // Fast sequence comparison must not skip the legacy late-lock and slot
         // optimizations. Refine the best verified sequence with a separate budget.

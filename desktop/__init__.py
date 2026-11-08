@@ -1,2 +1,2 @@
 """iosGuanxing native desktop shell."""
-VERSION = '0.1.4'
+VERSION = '3.0.3'

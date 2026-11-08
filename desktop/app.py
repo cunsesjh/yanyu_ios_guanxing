@@ -17,6 +17,7 @@ from . import VERSION
 from .server import LocalSite
 from .service import DownloadService
 from .storage import Store
+from .update import check_update
 from yyjh.capture import retrieve
 
 
@@ -27,6 +28,8 @@ QFrame#sidebar { background: #111925; border-right: 1px solid #243145; }
 QLabel#brand { font-size: 21px; font-weight: 700; color: #f5f8ff; }
 QLabel#eyebrow { color: #67dbc1; font-size: 11px; font-weight: 700; }
 QLabel#muted { color: #91a2ba; }
+QLabel#supportedVersions { background: #151f2e; color: #a9bdd5; border: 1px solid #263850;
+                           border-radius: 7px; padding: 8px; font-size: 12px; }
 QLabel#author { background: #193c40; color: #b7f6e5; border: 1px solid #4a9f8c;
                 border-radius: 10px; padding: 12px 8px; font-family: "Microsoft YaHei", "Segoe UI";
                 font-size: 13px; font-weight: 700; line-height: 1.6; }
@@ -61,6 +64,7 @@ QFrame#sidebar, QFrame#header { background: #ffffff; border-color: #d4deeb; }
 QFrame#status { background: #e9eff7; border-color: #d4deeb; }
 QLabel#brand, QLabel#headline { color: #1c2b40; }
 QLabel#muted { color: #596d86; }
+QLabel#supportedVersions { background: #f1f5fa; color: #50657e; border-color: #cbd7e5; }
 QLabel#author { background: #e0f4ec; color: #105d4b; border-color: #71b49e; }
 QLabel#eyebrow { color: #147b69; }
 QLabel#drop { background: #f4f7fc; color: #4b627d; border-color: #9cacc0; }
@@ -161,6 +165,17 @@ class DownloadThread(QThread):
             self.failed.emit('下载或解码未完成，请重新导入 HAR 后重试。之前的存档已保留。')
 
 
+class UpdateThread(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def run(self):
+        try:
+            self.completed.emit(check_update(VERSION))
+        except (RuntimeError, ValueError) as error:
+            self.failed.emit(str(error))
+
+
 class Welcome(QWidget):
     fileDropped = Signal(str)
 
@@ -224,6 +239,7 @@ class MainWindow(QMainWindow):
         self.session = None
         self.current = None
         self.worker = None
+        self.update_worker = None
         self.closing_after_download = False
         self.setAcceptDrops(True)
         self.setWindowTitle('iosGuanxing')
@@ -266,6 +282,11 @@ class MainWindow(QMainWindow):
         self.session_label.setObjectName('muted')
         self.session_label.setWordWrap(True)
         sidebar.addWidget(self.session_label)
+        supported = QLabel('当前支持版本\n国服 73576 · 先行服 73580\n国际服 73680')
+        supported.setTextFormat(Qt.PlainText)
+        supported.setObjectName('supportedVersions')
+        supported.setWordWrap(True)
+        sidebar.addWidget(supported)
         sidebar.addStretch()
         author = QLabel('作者：B站 / 贴吧 / 抖音\n辣笔小勋    欢迎关注')
         author.setObjectName('author')
@@ -273,9 +294,11 @@ class MainWindow(QMainWindow):
         sidebar.addWidget(author)
         self.theme_button = self.button('☀  切换浅色模式', self.toggle_theme)
         sidebar.addWidget(self.theme_button)
-        footer = QLabel('本地解码 · 内置观星\n\nv' + VERSION + '  /  预览版')
+        footer = QLabel('本地解码 · 内置观星\n\nv' + VERSION + '  /  正式版')
         footer.setObjectName('muted')
         sidebar.addWidget(footer)
+        self.update_button = self.button('↻  检查更新', self.check_for_updates)
+        sidebar.addWidget(self.update_button)
         main.addWidget(side)
 
         content = QVBoxLayout()
@@ -368,6 +391,7 @@ class MainWindow(QMainWindow):
         self.welcome.select_button.setEnabled(not busy)
         self.home_button.setEnabled(self.current is not None)
         self.back_button.setEnabled(self.view.history().canGoBack())
+        self.update_button.setEnabled(self.update_worker is None)
         if self.session:
             platform = 'iOS' if self.session['platform'] == 'ios' else 'Android'
             self.session_label.setText('当前下载会话\n%s · %s 区\n有效期由游戏服务器决定' % (platform, self.session['area']))
@@ -461,6 +485,50 @@ class MainWindow(QMainWindow):
         theme = 'light' if self.site.theme == 'dark' else 'dark'
         self.store.set_theme(theme)
         self.apply_theme(theme)
+
+    def check_for_updates(self):
+        if self.update_worker:
+            return
+        self.update_worker = UpdateThread(self)
+        self.update_worker.completed.connect(self.update_check_complete)
+        self.update_worker.failed.connect(self.update_check_failed)
+        self.update_worker.finished.connect(self.update_check_finished)
+        self.update_button.setText('↻  正在检查…')
+        self.show_status('正在检查 iosGuanxing 更新…')
+        self.update_buttons()
+        self.update_worker.start()
+
+    def update_check_complete(self, result):
+        if not result['available']:
+            QMessageBox.information(self, '检查更新', '当前已是最新版本 v%s。' % VERSION)
+            self.show_status('当前已是最新版本 v%s' % VERSION)
+            return
+        detail = ('发现新版本 v%s。\n\n%s\n\n请选择下载页面：'
+                  % (result['version'], result['body'] or '请前往发布页面查看更新说明。'))
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle('发现新版本')
+        dialog.setText(detail)
+        github = dialog.addButton('前往 GitHub', QMessageBox.ActionRole)
+        gitee = dialog.addButton('前往 Gitee', QMessageBox.ActionRole)
+        dialog.addButton('取消', QMessageBox.RejectRole)
+        dialog.exec()
+        if dialog.clickedButton() == github:
+            QDesktopServices.openUrl(QUrl(result['github_url']))
+        elif dialog.clickedButton() == gitee:
+            QDesktopServices.openUrl(QUrl(result['gitee_url']))
+        self.show_status('发现新版本 v%s' % result['version'])
+
+    def update_check_failed(self, message):
+        QMessageBox.warning(self, '检查更新失败', message)
+        self.show_status(message, True)
+
+    def update_check_finished(self):
+        worker = self.update_worker
+        self.update_worker = None
+        if worker:
+            worker.deleteLater()
+        self.update_button.setText('↻  检查更新')
+        self.update_buttons()
 
     def apply_theme(self, theme):
         self.site.theme = theme
