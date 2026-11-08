@@ -1,0 +1,299 @@
+/* Light palette overrides. Applied only to the selected desktop theme. */
+html[data-theme="light"] .desktop-select-popup { background: #fff; color: #202d40; border-color: #8ea7c8; }
+html[data-theme="light"] .desktop-select-popup button:hover,
+html[data-theme="light"] .desktop-select-popup button.focused { background: #e3ecf8; }
+html[data-theme="light"] .desktop-select-popup button[aria-selected="true"] { color: #116956; }
+html[data-theme="light"] {
+    color-scheme: light;
+    --bg-primary: #f3f6fb;
+    --bg-secondary: #f2f5fa;
+    --bg-card: #ffffff;
+    --bg-card-hover: #edf2f9;
+    --border-color: #d1dcea;
+    --border-accent: #97abc2;
+    --text-primary: #202d40;
+    --text-secondary: #435a76;
+    --text-muted: #5d7089;
+    --accent: #137c69;
+    --green: #26763c;
+    --green-bright: #22723e;
+    --blue: #2a60a5;
+    --blue-bright: #275c9f;
+    --purple: #7752aa;
+    --purple-bright: #6d459e;
+    --red: #b7352c;
+    --bg: #f3f6fb;
+    --panel: #ffffff;
+    --panel-soft: #edf2f9;
+    --line: #d1dcea;
+    --text: #202d40;
+    --text-2: #435a76;
+    --muted: #5d7089;
+    --card: #ffffff;
+    --line-soft: #dce4ef;
+    --accent-dark: #116957;
+    --ghost: #7752aa;
+    --ghost-soft: #f0eafa;
+    --hs: #137c69;
+    --hs-soft: #e1f3ec;
+    --gold: #906114;
+    --gold-soft: #fbf1dd;
+    --free: #22723e;
+    --free-soft: #e3f3e7;
+    --warn: #906114;
+    --ok: #22723e;
+    --danger: #b7352c;
+    --white: #33465f;
+    --white-dim: #596d86;
+}
+html[data-theme="light"],
+html[data-theme="light"] body {
+    background: #f3f6fb !important;
+    color: #202d40;
+    scrollbar-color: #aabbd0 #ffffff;
+}
+html[data-theme="light"] .sim-nav,
+html[data-theme="light"] .guishi-header .sim-nav,
+html[data-theme="light"] .role-app .sim-nav {
+    border-top: 1px solid #d1dcea !important;
+    color: #5d7089 !important;
+}
+html[data-theme="light"] .sim-nav a,
+html[data-theme="light"] .guishi-header .sim-nav a,
+html[data-theme="light"] .role-app .sim-nav a,
+html[data-theme="light"] .sim-nav > .active {
+    border: 1px solid #d1dcea !important;
+    background: #f2f5fa !important;
+    color: #435a76 !important;
+}
+html[data-theme="light"] .sim-nav a:hover,
+html[data-theme="light"] .guishi-header .sim-nav a:hover,
+html[data-theme="light"] .role-app .sim-nav a:hover,
+html[data-theme="light"] .sim-nav a.active,
+html[data-theme="light"] .guishi-header .sim-nav .active,
+html[data-theme="light"] .role-app .sim-nav a.active,
+html[data-theme="light"] .sim-nav > .active {
+    border-color: #8bbfaf !important;
+    background: #e0f3ed !important;
+    color: #146b57 !important;
+}
+html[data-theme="light"] .app-header,
+html[data-theme="light"] .guishi-header,
+html[data-theme="light"] header.app-header,
+html[data-theme="light"] .guishi-header h1 {
+    color: #202d40 !important;
+}
+html[data-theme="light"] .app-header .subtitle,
+html[data-theme="light"] .guishi-header .subtitle {
+    color: #5d7089 !important;
+}
+html[data-theme="light"] body > header:has(.guishi-header) {
+    background: #f3f6fb !important;
+}
+html[data-theme="light"] .guishi-header .app-version {
+    color: #7752aa !important;
+}
+html[data-theme="light"] .guishi-header,
+html[data-theme="light"] .guishi-header + .header-row {
+    border-color: #d1dcea !important;
+}
+html[data-theme="light"] .archive-summary,
+html[data-theme="light"] .guishi-header ~ .archive-summary {
+    border-color: #d1dcea !important;
+    background: #ffffff !important;
+}
+html[data-theme="light"] .archive-summary-item strong,
+html[data-theme="light"] #guishiMainRole,
+html[data-theme="light"] #guishiSaveStatus {
+    color: #202d40 !important;
+}
+html[data-theme="light"] .home-header h1 {
+    color: #202d40 !important;
+}
+html[data-theme="light"] .home-panel {
+    border-color: #d1dcea !important;
+    background: #ffffff !important;
+}
+html[data-theme="light"] .panel-heading h2,
+html[data-theme="light"] .home-panel h2 {
+    color: #202d40 !important;
+}
+html[data-theme="light"] .home-main-role {
+    border: 1px solid #d1dcea !important;
+    background: #edf2f9 !important;
+}
+html[data-theme="light"] .home-main-role span,
+html[data-theme="light"] .home-panel p,
+html[data-theme="light"] .home-panel .home-message,
+html[data-theme="light"] .home-panel .module-card span {
+    color: #536982 !important;
+}
+html[data-theme="light"] .module-card {
+    border-color: #d1dcea !important;
+    background: #edf2f9 !important;
+}
+html[data-theme="light"] .save-sidebar,
+html[data-theme="light"] .anchor-route summary,
+html[data-theme="light"] .anchor-step-table th,
+html[data-theme="light"] .anchor-route summary,
+html[data-theme="light"] .ok-block .refresh,
+html[data-theme="light"] #restoreBar,
+html[data-theme="light"] .status-bar code {
+    background: #edf2f9 !important;
+    color: #435a76 !important;
+    border-color: #d1dcea !important;
+}
+html[data-theme="light"] .source-note,
+html[data-theme="light"] .rare-warn,
+html[data-theme="light"] .rare-more.excl b,
+html[data-theme="light"] .rare-sample-body b,
+html[data-theme="light"] .col[data-kind=gold] .col-head h3,
+html[data-theme="light"] table.rare-table td.pos-gold {
+    color: #906114 !important;
+}
+html[data-theme="light"] .btn-free,
+html[data-theme="light"] .conf-badge.ok,
+html[data-theme="light"] table.rare-table td.pos-free,
+html[data-theme="light"] .col[data-kind=free] .col-head h3 {
+    color: #22723e !important;
+}
+html[data-theme="light"] .paste-toggle,
+html[data-theme="light"] .auto-tag {
+    color: #275c9f !important;
+}
+html[data-theme="light"] .paste-body textarea,
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea {
+    color: #202d40;
+    background-color: #f2f5fa;
+    border-color: #d1dcea;
+}
+html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+html[data-theme="light"] select,
+html[data-theme="light"] textarea {
+    color: #202d40 !important;
+    background-color: #f2f5fa !important;
+    border-color: #d1dcea !important;
+}
+html[data-theme="light"] .auto-mode-tab.is-active,
+html[data-theme="light"] .tab-btn.active,
+html[data-theme="light"] .btn-analyze-purple,
+html[data-theme="light"] .btn-select-exchange.active {
+    background: #eee7f8 !important;
+    color: #704da2 !important;
+    border-color: #b39ccf !important;
+}
+html[data-theme="light"] .btn-wash-custom,
+html[data-theme="light"] .btn-exchange-sequence,
+html[data-theme="light"] .btn-select-exchange {
+    background: #e8f0fd !important;
+    color: #2c5d97 !important;
+}
+html[data-theme="light"] .anchor-chip:has(input:checked),
+html[data-theme="light"] .anchor-card:has(input:checked) {
+    background: #f9efd9 !important;
+    color: #7e5717 !important;
+}
+html[data-theme="light"] .module-card strong,
+html[data-theme="light"] .module-card:hover strong {
+    color: #2d5c9e !important;
+}
+html[data-theme="light"] .status-badge {
+    border-color: #99c9ba !important;
+    color: #146b57 !important;
+}
+html[data-theme="light"] .home-actions .btn-primary,
+html[data-theme="light"] .home-actions .btn-secondary {
+    background: #edf2f9 !important;
+    color: #253a54 !important;
+}
+html[data-theme="light"] .app-footer,
+html[data-theme="light"] footer {
+    color: #5d7089 !important;
+}
+html[data-theme="light"] #autoWash2ModePanel {
+    color: var(--text-primary, #202d40);
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-note {
+    border: 1px solid #a3cbbd;
+    background: #e7f4ee;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-note strong {
+    color: #156b57;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-section {
+    border: 1px solid var(--border-color, #d1dcea);
+    background: var(--bg-card, #ffffff);
+}
+html[data-theme="light"] #autoWash2ModePanel h3 > span {
+    color: #137c69;
+}
+html[data-theme="light"] #autoWash2ModePanel h3 > strong {
+    color: #7752aa;
+}
+html[data-theme="light"] #autoWash2ModePanel label {
+    color: #435a76;
+}
+html[data-theme="light"] #autoWash2ModePanel select,
+html[data-theme="light"] #autoWash2ModePanel input {
+    border: 1px solid #d1dcea;
+    color: #202d40;
+    background: #f2f5fa;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-stock {
+    color: #5d7089;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-stock strong {
+    color: #906114;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-muted {
+    color: #5d7089;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-lock,
+html[data-theme="light"] #autoWash2ModePanel .w2-target {
+    border: 1px solid #d1dcea;
+    background: #f2f5fa;
+    color: #202d40;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-lock span {
+    color: #5d7089;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-target small {
+    color: #5d7089;
+}
+html[data-theme="light"] #autoWash2ModePanel .is-selected {
+    background: #eee7f8;
+    border-color: #a58ac6;
+    color: #694294;
+}
+html[data-theme="light"] #autoWash2ModePanel button:focus-visible {
+    outline: 2px solid #137c69;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-requirements {
+    color: #7752aa;
+}
+html[data-theme="light"] #autoWash2ModePanel #w2Status {
+    color: #5d7089;
+}
+html[data-theme="light"] #autoWash2ModePanel #w2Status.w2-error {
+    color: #b7352c;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-route {
+    border: 1px solid #d1dcea;
+    background: #ffffff;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-route summary > span {
+    color: #137c69;
+}
+html[data-theme="light"] #autoWash2ModePanel .w2-route > p {
+    color: #435a76;
+}
+html[data-theme="light"] #autoWash2ModePanel th,
+html[data-theme="light"] #autoWash2ModePanel td {
+    border-bottom: 1px solid #d1dcea;
+}
+html[data-theme="light"] #autoWash2ModePanel td small {
+    color: #7752aa;
+}
+

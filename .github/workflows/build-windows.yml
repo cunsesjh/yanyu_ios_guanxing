@@ -1,0 +1,100 @@
+name: Build Windows desktop
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-desktop.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements-desktop.txt "pyinstaller>=6.10,<7"
+      - name: Offline tests including Windows credential encryption
+        run: python -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Improved wash engine and legacy route replay
+        run: node tests/test_auto_wash2.cjs
+      - name: Embedded page smoke test
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+          IOSGUANXING_SCREENSHOTS: build/screenshots
+        run: python dev/smoke_desktop.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-test-report
+          path: |
+            build/smoke.json
+            build/screenshots/*.png
+          if-no-files-found: ignore
+      - name: All module layouts at minimum and default window sizes
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+        run: python dev/check_desktop_layout.py
+      - name: Dropdown confirmation
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+        run: python dev/check_desktop_controls.py
+      - name: History deletion and active page cleanup
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+        run: python dev/check_history_delete.py
+      - name: Independent improved wash module
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+        run: python dev/check_auto_wash2.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-layout-report
+          path: |
+            build/layout/
+            build/wash2/
+          if-no-files-found: ignore
+      - name: Build executable
+        run: python -m PyInstaller --noconfirm --clean iosGuanxing.spec
+      - name: Packaged executable startup and embedded page test
+        shell: pwsh
+        run: |
+          $env:IOSGUANXING_SMOKE_REPORT = "$env:RUNNER_TEMP\packaged-smoke.json"
+          $env:QTWEBENGINE_CHROMIUM_FLAGS = '--disable-gpu'
+          $process = Start-Process dist/iosGuanxing.exe -PassThru
+          if (-not $process.WaitForExit(120000)) { $process.Kill(); throw 'Packaged startup timed out' }
+          if (-not (Test-Path $env:IOSGUANXING_SMOKE_REPORT)) { throw 'Packaged smoke report missing' }
+          $report = Get-Content $env:IOSGUANXING_SMOKE_REPORT -Raw | ConvertFrom-Json
+          if (-not $report.ok) { throw 'Packaged embedded page failed' }
+          Get-Content $env:IOSGUANXING_SMOKE_REPORT
+      - name: Hash executable
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist/iosGuanxing.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  iosGuanxing.exe" | Set-Content dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iosGuanxing-Windows-x64
+          path: |
+            dist/iosGuanxing.exe
+            dist/SHA256SUMS.txt
+          retention-days: 14
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: iosGuanxing ${{ github.ref_name }}
+          prerelease: false
+          body: |
+            Windows 10/11 x64 正式版：原生窗口、HAR 导入、主动下载、内置观星网页、历史存档。
+            登录会话由 Windows 当前用户加密保存；启动仅恢复本地存档，点击下载才访问游戏服务器。
+            下载 iosGuanxing.exe 直接运行。程序暂未进行代码签名。
+          files: |
+            dist/iosGuanxing.exe
+            dist/SHA256SUMS.txt

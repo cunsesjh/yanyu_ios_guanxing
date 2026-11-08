@@ -1,6 +1,11 @@
 __pycache__/
 *.pyc
 .DS_Store
-# v2.6-版本号对齐
+.venv/
+build/
+dist/
+output/
+*.har
+*.dpapi
 keys.local.json
-output/ios*
+keys.user.json

@@ -11,7 +11,7 @@
         const {raw,anchors,options={}}=request;
         const automatic=request.mode==='auto';
         const sources=automatic?planner.usableSources(raw,anchors,request.purples||[]):[request.source];
-        const stages=automatic?STAGES:[{limit:request.pads.length,depth:options.depth}];
+        const stages=automatic?(options.stages||STAGES):[{limit:request.pads.length,depth:options.depth}];
         const routes=[],reports=[],stats=[],fixedSources=new Set();
         let checked=0,expanded=0;
         function meta(){return {automatic,checked,expanded,sourceCount:sources.length,stages:stats.map(s=>({...s})),reportCount:checked};}
@@ -33,6 +33,7 @@
                 filtered:0,bounded:0,failed:0,fixedSkipped:0,expanded:0,found:0};
             stats.push(stat);packet('stage',{stage,depth:scope.depth,limit:scope.limit});
             for(const source of sources)for(const pad of pads){
+                if(options.shouldCancel?.()) { packet('done',{cancelled:true}); return {routes,reports,meta:meta(),cancelled:true}; }
                 const job={stage,depth:scope.depth,limit:scope.limit,source,pad,index:stat.checked,total:stat.total};
                 let result;
                 if(automatic&&pad>0&&fixedSources.has(source.key)){
@@ -42,7 +43,10 @@
                 }
                 emit({type:'progress',...job,expanded:0,meta:meta()});
                 try{
-                    result=planner.search(raw,anchors,source,pad,{...options,depth:scope.depth},p=>{
+                    const jobStarted=Date.now();
+                    const searchOptions={...options,depth:scope.depth};
+                    if(options.perJobMs)searchOptions.shouldCancel=()=>options.shouldCancel?.()||Date.now()-jobStarted>=options.perJobMs;
+                    result=planner.search(raw,anchors,source,pad,searchOptions,p=>{
                         if(p.candidate){
                             if(add(p.candidate))packet('candidate',{...job,candidate:p.candidate});
                         }else emit({type:'progress',...job,expanded:p.expanded,meta:meta()});

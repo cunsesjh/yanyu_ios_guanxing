@@ -6,6 +6,7 @@
     <title>烟雨江湖 · 自动模拟</title>
     <meta name="description" content="烟雨江湖洗髓模拟器 - 模拟天赋洗髓概率，支持锁定、保底、统计分析">
     <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="../shared/auto_wash2.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script src="./app.js"></script>
 </head>
@@ -166,6 +167,7 @@
                     <button id="btnAutoEquipMode" class="auto-mode-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="autoEquipModePanel">装备模拟</button>
                     <button id="btnAutoJianwangMode" class="auto-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="autoJianwangModePanel">剑王阁</button>
                     <button id="btnAutoWashMode" class="auto-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="autoWashModePanel">自动洗脉</button>
+                    <button id="btnAutoWash2Mode" class="auto-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="autoWash2ModePanel">自动洗脉(改进)</button>
                 </div>
             </section>
 
@@ -180,6 +182,7 @@
                 <p class="ai-prediction-intro">选择地点、图纸、属性和首次打造材料。系统将每个材料分支从同一份存档快照独立起跑，筛选紫装并分析精炼；后续芒晶洗练在单件装备详情中手动模拟。</p>
 
                 <div id="autoWashModePanel" class="auto-mode-panel anchor-auto-mode-panel" role="tabpanel" aria-labelledby="btnAutoWashMode" hidden></div>
+                <div id="autoWash2ModePanel" class="auto-mode-panel" role="tabpanel" aria-labelledby="btnAutoWash2Mode" hidden></div>
 
                 <div id="autoEquipModePanel" class="auto-mode-panel equip-auto-panel" role="tabpanel" aria-labelledby="btnAutoEquipMode">
                     <div class="equip-auto-snapshot-note">
@@ -437,6 +440,8 @@
     <script src="../shared/save_decrypt.js"></script>
     <script src="../shared/archive_state.js"></script>
     <script src="../shared/simulator.js?v=20260930fix1"></script>
+    <script src="../shared/auto_wash2_model.js"></script>
+    <script src="../shared/auto_wash2.js"></script>
     <script>
     (function () {
         function diagnose() {

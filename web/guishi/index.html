@@ -67,57 +67,10 @@
 
 <main>
 
-  <section class="page active" id="page-home">
-    <div class="section-head">
-      <h2>选一个商店开始 <span class="tag">先导入存档</span></h2>
-      <p class="sub">点任意一张卡片开始：还没导入存档时先粘贴/选择存档，导入后直接进入模拟页。</p>
-    </div>
 
-    <div class="home-cards">
-      <button type="button" class="home-card ghost" id="btnGoGhost">
-        <span class="hc-icon" aria-hidden="true">
-          <svg width="33" height="33" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2.6v2.2"></path>
-            <path d="M8.6 4.8h6.8"></path>
-            <ellipse cx="12" cy="12" rx="4.6" ry="6.2"></ellipse>
-            <path d="M9.6 18.2h4.8"></path>
-            <path d="M12 18.2v3.2"></path>
-          </svg>
-        </span>
-        <span class="hc-title">鬼市</span>
-        <span class="hc-desc">每天 <b>08:00 / 20:00</b> 自动刷新两次 · 手动 20 元宝一次（次数随 VIP） · 商品栏 3~6 格。</span>
-        <span class="hc-go">开始</span>
-      </button>
-
-      <button type="button" class="home-card hs" id="btnGoHs">
-        <span class="hc-icon" aria-hidden="true">
-          <svg width="33" height="33" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2.8 19.4h18.4"></path>
-            <path d="M4 19.4 10.2 6.6l3.1 5.2 2.5-3.7L20.4 19.4"></path>
-            <path d="M10.2 6.6 8.6 4.4"></path>
-          </svg>
-        </span>
-        <span class="hc-title">恒山游货郎</span>
-        <span class="hc-desc">每天 <b>05:00</b> 自动刷新一次 · 手动 20 元宝一次（<b>每天固定 3 次</b>） · 恒 6 格。</span>
-        <span class="hc-go">开始</span>
-      </button>
-    </div>
-
-    <div class="paste-zone" id="pasteZone">
-      <button type="button" class="paste-toggle" id="btnPasteToggle">手机上不方便选文件？或者只拿到了 JSON 文本？点这里粘贴导入（也可以先载入示例存档试手）</button>
-      <div class="paste-body" id="pasteBody" hidden>
-        <textarea id="pasteArea" spellcheck="false" placeholder="把存档 JSON 全文粘到这里（记事本/微信里打开 .json → 全选 → 复制），然后点右边「解析并导入」。&#10;全程在本机浏览器里解析，不会上传任何东西。"></textarea>
-        <div class="paste-actions">
-          <button type="button" class="btn btn-primary" id="btnPasteApply">解析并导入</button>
-          <button type="button" class="btn" id="btnPasteExample">载入示例存档</button>
-          <span id="pasteMsg"></span>
-        </div>
-      </div>
-    </div>
-
-    <div class="section-head" style="border-top:1px solid var(--line-soft)">
-      <h2>一个必须知道的事 <span class="tag">必读</span></h2>
-    </div>
+  <section class="page active" id="page-ghost">
+    <details class="ghost-guide" open>
+      <summary>一个必须知道的事 <span class="tag">必读</span></summary>
     <div class="guide-body">
       <div class="guide-block care">
         <ul>
@@ -129,9 +82,7 @@
         </ul>
       </div>
     </div>
-  </section>
-
-  <section class="page" id="page-ghost">
+    </details>
     <div class="section-head">
       <div class="back-row"><button type="button" class="btn btn-back" id="btnGhostBack">← 返回首页</button></div>
       <h2>鬼市 <span class="tag">08:00 / 20:00</span></h2>
@@ -225,14 +176,6 @@
   </div>
   <div id="selfTestOut" class="selftest" hidden></div>
 
-  <div class="foot-row" style="border-top:1px solid var(--line,#c5dbf4);margin-top:10px;padding-top:10px;font-size:12px;color:var(--muted,#8194ad);line-height:1.7;flex-direction:column;align-items:flex-start;">
-    <span>免责声明：</span>
-    <span>1. 本工具为个人开发的第三方辅助工具，与《烟雨江湖》开发商、发行商及任何官方渠道均无关联，未获其授权或背书。</span>
-    <span>2. 工具仅提供本机数据读取与模拟计算，不含游戏本体，不提供任何破解、外挂或自动操作功能；导出过程中的临时改动会自动还原。</span>
-    <span>3. 工具不上传、不存储、不分享任何用户数据。</span>
-    <span>4. 使用本工具所产生的一切后果均由使用者自行承担。</span>
-    <span>5. 本软件由皮神开发，侵权必究，如有侵权请联系本人。</span>
-  </div>
 </footer>
 
 <script>

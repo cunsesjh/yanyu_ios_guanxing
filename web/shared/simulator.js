@@ -6454,19 +6454,22 @@ let jianwangAutoResultPage = 1;
 const JIANWANG_AUTO_RESULT_PAGE_SIZE = 10;
 
 function setAutoSimulatorMode(mode) {
-    autoSimulatorMode = mode === 'jianwang' ? 'jianwang' : mode === 'wash' ? 'wash' : 'equip';
+    autoSimulatorMode = mode === 'jianwang' ? 'jianwang' : mode === 'wash' ? 'wash' : mode === 'wash2' ? 'wash2' : 'equip';
     const isEquip = autoSimulatorMode === 'equip';
     const isJianwang = autoSimulatorMode === 'jianwang';
     const isWash = autoSimulatorMode === 'wash';
+    const isWash2 = autoSimulatorMode === 'wash2';
     const equipButton = document.getElementById('btnAutoEquipMode');
     const jianwangButton = document.getElementById('btnAutoJianwangMode');
     const washButton = document.getElementById('btnAutoWashMode');
+    const wash2Button = document.getElementById('btnAutoWash2Mode');
     const equipPanel = document.getElementById('autoEquipModePanel');
     const jianwangPanel = document.getElementById('autoJianwangModePanel');
     const washPanel = document.getElementById('autoWashModePanel');
+    const wash2Panel = document.getElementById('autoWash2ModePanel');
     const title = document.getElementById('aiPredictionTitle');
     const intro = document.querySelector('#aiPredictionPanel > .ai-prediction-intro');
-    [[equipButton, isEquip], [jianwangButton, isJianwang], [washButton, isWash]].forEach(([button, active]) => {
+    [[equipButton, isEquip], [jianwangButton, isJianwang], [washButton, isWash], [wash2Button, isWash2]].forEach(([button, active]) => {
         if (!button) return;
         button.classList.toggle('is-active', active);
         button.setAttribute('aria-selected', String(active));
@@ -6474,19 +6477,22 @@ function setAutoSimulatorMode(mode) {
     if (equipPanel) equipPanel.hidden = !isEquip;
     if (jianwangPanel) jianwangPanel.hidden = !isJianwang;
     if (washPanel) washPanel.hidden = !isWash;
+    if (wash2Panel) wash2Panel.hidden = !isWash2;
     if (title) {
-        title.textContent = isEquip ? '自动模拟 · 装备批量预测' : isJianwang ? '自动模拟 · 剑王阁同词条' : '自动模拟 · 洗脉路线';
+        title.textContent = isEquip ? '自动模拟 · 装备批量预测' : isJianwang ? '自动模拟 · 剑王阁同词条' : isWash2 ? '自动模拟 · 自动洗脉(改进)' : '自动模拟 · 洗脉路线';
     }
     if (intro) {
         intro.textContent = isEquip
             ? '选择地点、图纸、属性和首次打造材料。系统将每个材料分支从同一份存档快照独立起跑，筛选紫装并分析精炼；后续芒晶洗练在单件装备详情中手动模拟。'
             : isJianwang
                 ? '选择存档中的起始剑、90级镇派路线和一个目标词条，可筛选词条2/3/4相同或任意3个词条相同。系统会自动保留已有目标词条，并搜索符合条件的成品。'
+                : isWash2 ? '选择人物和最终目标，在耗丹上限内自动搜索洗脉、锁脉与置换路线。支持必选脉与兼容组，所有计算均在本地完成。'
                 : '从原始紫锚点和目标紫脉开始搜索可执行路线，按实际背包丹数显示每一步完成后的剩余数量。';
     }
     const kicker = document.querySelector('#aiPredictionPanel .ai-kicker');
     if (kicker) kicker.textContent = isEquip ? 'LOCAL EQUIPMENT OPTIMIZER' : isJianwang ? 'LOCAL JIANWANG OPTIMIZER' : 'LOCAL WASH ROUTE PLANNER';
     if (isJianwang) refreshJianwangAutoSwords(true);
+    if (isWash2) window.AutoWash2?.refresh();
 }
 
 function invalidateEquipAutoPrediction(message) {
@@ -8452,6 +8458,7 @@ async function initApp() {
     document.getElementById('btnAutoEquipMode')?.addEventListener('click', () => setAutoSimulatorMode('equip'));
     document.getElementById('btnAutoJianwangMode')?.addEventListener('click', () => setAutoSimulatorMode('jianwang'));
     document.getElementById('btnAutoWashMode')?.addEventListener('click', () => setAutoSimulatorMode('wash'));
+    document.getElementById('btnAutoWash2Mode')?.addEventListener('click', () => setAutoSimulatorMode('wash2'));
     document.getElementById('autoJianwangStartSword')?.addEventListener('change', () => {
         invalidateJianwangAutoPrediction('起始剑已变化，请重新开始剑王阁自动模拟。');
         updateJianwangAutoStartHint();
