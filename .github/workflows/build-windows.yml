@@ -93,6 +93,7 @@ jobs:
           prerelease: false
           body: |
             Windows 10/11 x64 正式版：原生窗口、HAR 导入、主动下载、内置观星网页、历史存档。
+            适配国际服 73680。
             登录会话由 Windows 当前用户加密保存；启动仅恢复本地存档，点击下载才访问游戏服务器。
             下载 iosGuanxing.exe 直接运行。程序暂未进行代码签名。
           files: |
@@ -121,14 +122,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: iosGuanxing-Windows-x64
-          path: dist
-      - name: Sync release files to Gitee
+      - name: Publish Gitee release metadata (binary remains on GitHub)
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
           GITEE_REPO: ${{ secrets.GITEE_REPO || 'cunses/yanyu_ios_guanxing' }}
-        run: |
-          python .github/scripts/gitee_release.py dist/iosGuanxing.exe "${{ github.ref_name }}"
-          python .github/scripts/gitee_release.py dist/SHA256SUMS.txt "${{ github.ref_name }}"
+        run: python .github/scripts/gitee_release.py "${{ github.ref_name }}" "https://github.com/cunsesjh/yanyu_ios_guanxing/releases/tag/${{ github.ref_name }}"

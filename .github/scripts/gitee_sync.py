@@ -24,7 +24,7 @@ def main():
         if ref.startswith('refs/tags/'):
             subprocess.run(['git', 'check-ref-format', ref], check=True)
             specs.append(ref + ':' + ref)
-        result = subprocess.run(['git', '-c', 'credential.helper=', 'push', '--atomic',
+        result = subprocess.run(['git', '-c', 'credential.helper=', 'push', '--force', '--atomic',
                                  'https://gitee.com/' + repo + '.git', *specs],
                                 env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 text=True, timeout=180)
