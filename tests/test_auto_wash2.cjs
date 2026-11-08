@@ -12,6 +12,9 @@ const context = vm.createContext(sandbox);
 sandbox.importScripts = (...files) => files.forEach(file => vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, {filename: file}));
 vm.runInContext(fs.readFileSync(path.join(root, 'auto_wash2_worker.js'), 'utf8'), context);
 const model = sandbox.AutoWash2Model;
+assert.deepEqual(Array.from(sandbox.AutoWash2SearchPolicy.capsForBudget(5000)), [2000, 3500, 5000]);
+assert.deepEqual(Array.from(sandbox.AutoWash2SearchPolicy.capsForBudget(3000)), [2000, 3000]);
+assert.deepEqual(Array.from(sandbox.AutoWash2SearchPolicy.capsForBudget(1000)), [1000]);
 const save = {CenterID: 1278440, Items: [{ID: 2601, Num: 100}], globalVariable: {test: 1}};
 const role = {ID: 10044, Name: '测试', ZiZhi: 154, BornTalent: {S: 12345, RC: 7},
     Talents: [{ID: 271, Lock: true}], Str: 100, BornStr: 10, StrGift: 1000};
@@ -113,6 +116,9 @@ async function send(type, payload) {
     assert.equal(migrated.inventory.remaining, 3975);
     assert.equal(sandbox.AutoWash2Anchor.convert(anchorRaw, anchors, legacy, targetIds,
         {...settings, options:{maxTotalPills:1024}}), null, 'respect pill ceiling');
+    assert.doesNotThrow(() => planner.search(anchorRaw, anchors.slice(0, 2), source, 0,
+        {targets: targetIds.slice(0, 2), maxNodes: 10, depth: 2, maxCost: 10000,
+            sequenceBasis: 'theory2'}), 'two-target anchor planning must be supported');
     const broken = JSON.parse(JSON.stringify(legacy));
     broken.steps[0].after.cost++;
     assert.throws(() => sandbox.AutoWash2Anchor.convert(anchorRaw, anchors, broken, targetIds, settings), /回放/);

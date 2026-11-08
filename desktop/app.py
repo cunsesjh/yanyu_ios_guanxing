@@ -17,10 +17,8 @@ from . import VERSION
 from .server import LocalSite
 from .service import DownloadService
 from .storage import Store
+from .update import check_update
 from yyjh.capture import retrieve
-
-# GUI 提示只给安全文本；完整诊断在数据目录 last_error.log（仅本机）。
-_LOG_HINT = '  详细诊断已写入数据目录 last_error.log，可发给维护者定位。'
 
 
 STYLE = '''
@@ -30,6 +28,8 @@ QFrame#sidebar { background: #111925; border-right: 1px solid #243145; }
 QLabel#brand { font-size: 21px; font-weight: 700; color: #f5f8ff; }
 QLabel#eyebrow { color: #67dbc1; font-size: 11px; font-weight: 700; }
 QLabel#muted { color: #91a2ba; }
+QLabel#supportedVersions { background: #151f2e; color: #a9bdd5; border: 1px solid #263850;
+                           border-radius: 7px; padding: 8px; font-size: 12px; }
 QLabel#author { background: #193c40; color: #b7f6e5; border: 1px solid #4a9f8c;
                 border-radius: 10px; padding: 12px 8px; font-family: "Microsoft YaHei", "Segoe UI";
                 font-size: 13px; font-weight: 700; line-height: 1.6; }
@@ -64,6 +64,7 @@ QFrame#sidebar, QFrame#header { background: #ffffff; border-color: #d4deeb; }
 QFrame#status { background: #e9eff7; border-color: #d4deeb; }
 QLabel#brand, QLabel#headline { color: #1c2b40; }
 QLabel#muted { color: #596d86; }
+QLabel#supportedVersions { background: #f1f5fa; color: #50657e; border-color: #cbd7e5; }
 QLabel#author { background: #e0f4ec; color: #105d4b; border-color: #71b49e; }
 QLabel#eyebrow { color: #147b69; }
 QLabel#drop { background: #f4f7fc; color: #4b627d; border-color: #9cacc0; }
@@ -147,7 +148,6 @@ class DownloadThread(QThread):
         self.store, self.session, self.har = store, session, har
 
     def run(self):
-        session = None
         try:
             if self.har:
                 self.progress.emit('正在读取 HAR 登录会话…')
@@ -157,69 +157,23 @@ class DownloadThread(QThread):
             result = DownloadService(self.store).download(session, self.progress.emit)
             self.completed.emit(result)
         except (ValueError, OSError, RuntimeError) as error:
-            # GUI 文本保持安全：不展示请求头、响应体、账号、堆栈、OS 文件路径。
-            # 完整诊断写进数据目录 last_error.log（仅本机），用户可主动发给维护者。
+            # Domain errors are user-readable. Never expose headers, raw responses,
+            # account IDs, tracebacks, or OS file paths in the GUI.
             message = str(error) if isinstance(error, ValueError) else '文件读取或保存失败，请检查文件和磁盘权限。'
-            if self._passive_fallback(error, session, message):
-                return
-            self._log_failure(error)
-            self.failed.emit(message + _LOG_HINT)
-        except Exception as error:
-            if self._passive_fallback(error, session, '下载或解码未完成。'):
-                return
-            self._log_failure(error)
-            self.failed.emit('下载或解码未完成，请重新导入 HAR 后重试。之前的存档已保留。'
-                             + _LOG_HINT)
-
-    def _passive_fallback(self, error, session, reason):
-        """主动下载失败（常见：会话过期/断网）→ 若 HAR 里带了完整存档
-        （旧式明文 download 响应），离线导入，不浪费这次抓包。"""
-        if not self.har:
-            return False
-        try:
-            self.progress.emit('主动下载未成功，正在离线导入抓包里的存档…')
-            result = DownloadService(self.store).import_passive(
-                self.har, session, self.progress.emit)
+            self.failed.emit(message)
         except Exception:
-            return False                     # 离线也解不开 → 走正常报错
-        result['warning'] = (
-            '主动下载未成功（%s）已改为离线导入：这是抓包时下载到的存档快照；'
-            '需要服务器最新进度时，请重抓 HAR 或修复网络后点「下载最新云存档」。'
-            % reason)
-        self._log_failure(error, note='已离线导入抓包里的存档快照')
-        self.completed.emit(result)
-        return True
+            self.failed.emit('下载或解码未完成，请重新导入 HAR 后重试。之前的存档已保留。')
 
-    def _log_failure(self, error, note=''):
-        """把完整诊断（含堆栈/响应片段）写到本机数据目录，供排障。"""
+
+class UpdateThread(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def run(self):
         try:
-            import traceback
-            from datetime import datetime
-            lines = [
-                'iosGuanxing 下载失败诊断',
-                'time: ' + datetime.now().astimezone().isoformat(timespec='seconds'),
-                'app: iosGuanxing ' + VERSION,
-                'error: %s: %s' % (type(error).__name__, error),
-            ]
-            detail = getattr(error, 'detail', '')
-            if detail:
-                lines.append('detail:\n' + str(detail))
-            if note:
-                lines.append('note: ' + note)
-            session = self.session
-            if session:
-                acc = str(session.get('account') or '')
-                masked = (acc[:3] + '*' * max(0, len(acc) - 5) + acc[-2:]) if len(acc) > 5 else '***'
-                lines.append('context: host=%s platform=%s area=%s account=%s'
-                             % (session.get('url', '').split('/')[2] if '://' in session.get('url', '') else '?',
-                                session.get('platform'), session.get('area'), masked))
-            if self.har:
-                lines.append('har: ' + os.path.basename(str(self.har)))
-            lines.append('traceback:\n' + ''.join(
-                traceback.format_exception(type(error), error, error.__traceback__)))
-            self.store.write_error_log('\n'.join(lines))
-        except Exception:
-            pass                                   # 日志失败绝不影响错误提示本身
+            self.completed.emit(check_update(VERSION))
+        except (RuntimeError, ValueError) as error:
+            self.failed.emit(str(error))
 
 
 class Welcome(QWidget):
@@ -285,6 +239,7 @@ class MainWindow(QMainWindow):
         self.session = None
         self.current = None
         self.worker = None
+        self.update_worker = None
         self.closing_after_download = False
         self.setAcceptDrops(True)
         self.setWindowTitle('iosGuanxing')
@@ -327,6 +282,11 @@ class MainWindow(QMainWindow):
         self.session_label.setObjectName('muted')
         self.session_label.setWordWrap(True)
         sidebar.addWidget(self.session_label)
+        supported = QLabel('当前支持版本\n国服 73576 · 先行服 73580\n国际服 73680')
+        supported.setTextFormat(Qt.PlainText)
+        supported.setObjectName('supportedVersions')
+        supported.setWordWrap(True)
+        sidebar.addWidget(supported)
         sidebar.addStretch()
         author = QLabel('作者：B站 / 贴吧 / 抖音\n辣笔小勋    欢迎关注')
         author.setObjectName('author')
@@ -337,6 +297,8 @@ class MainWindow(QMainWindow):
         footer = QLabel('本地解码 · 内置观星\n\nv' + VERSION + '  /  正式版')
         footer.setObjectName('muted')
         sidebar.addWidget(footer)
+        self.update_button = self.button('↻  检查更新', self.check_for_updates)
+        sidebar.addWidget(self.update_button)
         main.addWidget(side)
 
         content = QVBoxLayout()
@@ -429,6 +391,7 @@ class MainWindow(QMainWindow):
         self.welcome.select_button.setEnabled(not busy)
         self.home_button.setEnabled(self.current is not None)
         self.back_button.setEnabled(self.view.history().canGoBack())
+        self.update_button.setEnabled(self.update_worker is None)
         if self.session:
             platform = 'iOS' if self.session['platform'] == 'ios' else 'Android'
             self.session_label.setText('当前下载会话\n%s · %s 区\n有效期由游戏服务器决定' % (platform, self.session['area']))
@@ -522,6 +485,50 @@ class MainWindow(QMainWindow):
         theme = 'light' if self.site.theme == 'dark' else 'dark'
         self.store.set_theme(theme)
         self.apply_theme(theme)
+
+    def check_for_updates(self):
+        if self.update_worker:
+            return
+        self.update_worker = UpdateThread(self)
+        self.update_worker.completed.connect(self.update_check_complete)
+        self.update_worker.failed.connect(self.update_check_failed)
+        self.update_worker.finished.connect(self.update_check_finished)
+        self.update_button.setText('↻  正在检查…')
+        self.show_status('正在检查 iosGuanxing 更新…')
+        self.update_buttons()
+        self.update_worker.start()
+
+    def update_check_complete(self, result):
+        if not result['available']:
+            QMessageBox.information(self, '检查更新', '当前已是最新版本 v%s。' % VERSION)
+            self.show_status('当前已是最新版本 v%s' % VERSION)
+            return
+        detail = ('发现新版本 v%s。\n\n%s\n\n请选择下载页面：'
+                  % (result['version'], result['body'] or '请前往发布页面查看更新说明。'))
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle('发现新版本')
+        dialog.setText(detail)
+        github = dialog.addButton('前往 GitHub', QMessageBox.ActionRole)
+        gitee = dialog.addButton('前往 Gitee', QMessageBox.ActionRole)
+        dialog.addButton('取消', QMessageBox.RejectRole)
+        dialog.exec()
+        if dialog.clickedButton() == github:
+            QDesktopServices.openUrl(QUrl(result['github_url']))
+        elif dialog.clickedButton() == gitee:
+            QDesktopServices.openUrl(QUrl(result['gitee_url']))
+        self.show_status('发现新版本 v%s' % result['version'])
+
+    def update_check_failed(self, message):
+        QMessageBox.warning(self, '检查更新失败', message)
+        self.show_status(message, True)
+
+    def update_check_finished(self):
+        worker = self.update_worker
+        self.update_worker = None
+        if worker:
+            worker.deleteLater()
+        self.update_button.setText('↻  检查更新')
+        self.update_buttons()
 
     def apply_theme(self, theme):
         self.site.theme = theme

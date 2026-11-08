@@ -93,8 +93,10 @@ jobs:
           prerelease: false
           body: |
             Windows 10/11 x64 正式版：原生窗口、HAR 导入、主动下载、内置观星网页、历史存档。
-            适配国际服 73680。
-            修复自动洗脉（改进）中 Talents 格式不兼容导致的报错。
+            自动洗脉（改进）默认上限调整为 5000 丹，按低丹耗区间分阶段搜索并延长优化时间。
+            自动洗脉锚点路线支持 1–4 个目标，修复双目标低耗路线被跳过的问题。
+            新增正式版更新检查，可选择前往 GitHub 或 Gitee Release 页面。
+            侧栏新增国服、先行服和国际服支持版本提示。
             登录会话由 Windows 当前用户加密保存；启动仅恢复本地存档，点击下载才访问游戏服务器。
             下载 iosGuanxing.exe 直接运行。程序暂未进行代码签名。
           files: |
@@ -102,6 +104,7 @@ jobs:
             dist/SHA256SUMS.txt
 
   sync-gitee-code:
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     concurrency:
       group: gitee-code
@@ -117,14 +120,3 @@ jobs:
           GITEE_REPO: ${{ secrets.GITEE_REPO || 'cunses/yanyu_ios_guanxing' }}
         run: python .github/scripts/gitee_sync.py
 
-  sync-gitee-release:
-    needs: [windows, sync-gitee-code]
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Publish Gitee release metadata (binary remains on GitHub)
-        env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_REPO: ${{ secrets.GITEE_REPO || 'cunses/yanyu_ios_guanxing' }}
-        run: python .github/scripts/gitee_release.py "${{ github.ref_name }}" "https://github.com/cunsesjh/yanyu_ios_guanxing/releases/tag/${{ github.ref_name }}"

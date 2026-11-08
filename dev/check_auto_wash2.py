@@ -126,7 +126,7 @@ pending = False
 def tick():
     global ticks, pending
     ticks += 1
-    if ticks > 180:
+    if ticks > 420:
         return fail('Desktop verification timed out at stage %d: %s' %
                     (stage, json.dumps(last_observation, ensure_ascii=True)))
     if pending:

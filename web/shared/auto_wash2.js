@@ -15,7 +15,7 @@
             <div class="w2-fields">
                 <label>存档人物<select id="w2Role"><option value="">请先导入存档</option></select></label>
                 <label>VIP<select id="w2Vip"><option value="0">无 VIP</option><option value="1" selected>VIP 1+</option><option value="2">VIP 2+</option></select></label>
-                <label>最大耗丹数量<input id="w2Budget" type="number" min="0" max="20000" step="100" value="10000"></label>
+                <label>最大耗丹数量<input id="w2Budget" type="number" min="0" max="20000" step="100" value="5000"></label>
                 <div class="w2-stock">背包洗髓丹<strong id="w2Bag">—</strong></div>
             </div>
             <p id="w2Summary" class="w2-muted">请先在首页导入存档，再选择人物。</p>
@@ -33,7 +33,7 @@
                 <button id="w2Preset" type="button" class="btn btn-reset">金顶混</button>
                 <button id="w2Clear" type="button" class="btn btn-reset">清空选择</button>
             </div>
-            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。整轮最多计算约 60 秒；会继续比较更省丹的路线，达到上限或停止时保留已找到的候选。</p>
+            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。先按 2000、3500 丹逐步搜索，再扩展至本次上限；整轮最多约 3 分钟，找到候选后继续搜索更省丹的路线。</p>
             <div id="w2Targets" class="w2-targets"></div>
             <p id="w2Requirements" class="w2-requirements"></p>
         </section>

@@ -620,7 +620,7 @@
         if (anchors.some(a => a.fromPity && (!Number.isInteger(a.pityNo) || a.pityNo < 1 || a.key !== eventKey(a))))
             throw new Error('保底锚点信息已过期，请重新读取原始紫。');
         if (source.fromPity) throw new Error('保底紫可以作为锚点；它已固定欧气，不能用来初始化新的无限置换序列。请选更早的自然紫起点。');
-        if (!anchors.length || anchors.length !== opts.targets.length || ![3,4].includes(anchors.length)) throw new Error('请选取数量相同的三／四个目标和原始紫锚点。');
+        if (!anchors.length || anchors.length !== opts.targets.length || anchors.length < 1 || anchors.length > 4) throw new Error('请选取数量相同的目标和原始紫锚点（1–4 个）。');
         if (new Set(anchors.map(a=>a.key)).size !== anchors.length || new Set(opts.targets).size!==anchors.length) throw new Error('锚点和目标不能重复。');
         if (source.bornRC > Math.min(...anchors.map(a=>a.bornRC))) throw new Error('第一版的置换起点需在首个锚点或它之前。');
         const ctx=prepared?prepared.ctx:makeContext(raw,anchors), targets=opts.targets.map(Number), initial=prepared?prepared.node:initialize(ctx,source,pad);
