@@ -40,11 +40,9 @@ def main():
         release = next((row for row in rows if row.get('tag_name') == tag), None)
         if release or len(rows) < 100:
             break
-    body = ('Windows 正式版，适配国际服 73680。
-
-'
-            '由于 Gitee 附件大小限制，EXE 和 SHA256 校验文件请从 GitHub Release 下载：
-'
+    body = ('Windows 正式版，适配国际服 73680。\n'
+            '修复自动洗脉（改进）中 Talents 格式不兼容导致的报错。\n\n'
+            '由于 Gitee 附件大小限制，EXE 和 SHA256 校验文件请从 GitHub Release 下载：\n'
             + download_url)
     if release:
         print('Gitee release already exists; leaving its metadata unchanged.')

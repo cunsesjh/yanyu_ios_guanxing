@@ -19,6 +19,11 @@ const before = JSON.stringify({save, role});
 const raw = model.snapshot(save, role, {vip: 2});
 assert.equal(raw.role_stats.str_val, 116);
 assert.equal(raw.salt, 278440);
+const objectTalentRole = {...role, Talents: {'0': {ID: 271, Lock: true}, '1': {id: 272, locked: false}}};
+assert.deepEqual(JSON.parse(JSON.stringify(model.snapshot(save, objectTalentRole).talents)),
+    [{id: 271, locked: true}, {id: 272, locked: false}], 'accept object-shaped role talents');
+assert.deepEqual(JSON.parse(JSON.stringify(model.snapshot(save, {...role, Talents: 'invalid'}).talents)), [],
+    'ignore malformed non-collection talent data without crashing');
 raw.talents[0].locked = false;
 raw.global_vars.test = 9;
 assert.equal(JSON.stringify({save, role}), before, 'adapter must not mutate imported save');

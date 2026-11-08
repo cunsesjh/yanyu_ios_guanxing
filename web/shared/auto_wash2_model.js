@@ -7,6 +7,8 @@
         }
         const attr = key => Math.floor((Number(role[key] || 0) + Number(role['Born' + key] || 0))
             * (1 + 0.00006 * Number(role[key + 'Gift'] || 0)));
+        const talentRows = Array.isArray(role.Talents) ? role.Talents
+            : role.Talents && typeof role.Talents === 'object' ? Object.values(role.Talents) : [];
         return {
             seed: Number(role.BornTalent.S), born_talent_rc: Number(role.BornTalent.RC) || 0,
             luck_seed: Number(role.LuckTalent?.S) || 0, luck_seed_inited: role.LuckTalent?.S != null,
@@ -16,7 +18,9 @@
             role_stats: {str_val: attr('Str'), con: attr('Con'), dex: attr('Dex'), int_val: attr('Int')},
             global_vars: JSON.parse(JSON.stringify(save.globalVariable || {})),
             save_channel: context.channel || '',
-            talents: (role.Talents || []).map(t => ({id: Number(t.ID ?? t.id), locked: !!(t.Lock ?? t.locked ?? t.lock)})).filter(t => t.id > 0),
+            talents: talentRows.filter(t => t && typeof t === 'object')
+                .map(t => ({id: Number(t.ID ?? t.id), locked: !!(t.Lock ?? t.locked ?? t.lock)}))
+                .filter(t => t.id > 0),
         };
     }
     function targets(raw, assignments, data) {
