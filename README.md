@@ -1,7 +1,8 @@
-# ios观星工具iosGuanxingv3.0.0震撼发布
+# ios观星工具iosGuanxingv3.0.0正式发布
 ### 已适配ios国服73576--ios国际服--ios先行服73580
 
 烟雨观星 Windows 桌面预览版。基于 gx2.8 的存档解析与网页功能，使用 PySide6 / Qt WebEngine 内置显示网页，不再打开 CMD 或外部浏览器。
+<img width="1382" height="932" alt="QQ_1794104039633" src="https://github.com/user-attachments/assets/f217df74-db5f-401a-98de-385a44064c8b" />
 
 ## 使用
 
@@ -12,6 +13,8 @@ Windows 10/11 x64 下载 Release 中的 `iosGuanxing.exe`，直接运行。
 3. 后续点击“下载最新云存档”；登录会话失效后重新导入 HAR。有效期以服务器响应为准，与游戏版本号无直接对应关系。
 
 启动只恢复上次选中的本地存档，不自动联网。历史存档可离线查看。下载只读取服务器已保存的进度，不会上传或覆盖游戏存档。
+<img width="1382" height="932" alt="QQ20261108-101424" src="https://github.com/user-attachments/assets/defbd3b7-8997-47bc-a04f-f9243ef885d7" />
+
 
 ## iOS抓包
 
