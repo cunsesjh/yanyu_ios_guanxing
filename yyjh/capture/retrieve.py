@@ -127,7 +127,10 @@ def decode_response(payload, key, session):
     if not isinstance(payload, dict) or payload.get('code') != 0:
         if isinstance(payload, dict) and payload.get('code') == 6:
             raise ValueError('登录会话已失效，请重新进入角色并导出新的 HAR')
-        raise ValueError('游戏服务器未返回成功的 download3 响应')
+        code = payload.get('code') if isinstance(payload, dict) else None
+        msg = payload.get('msg') if isinstance(payload, dict) else None
+        raise ValueError('游戏服务器未返回成功的 download3 响应'
+                         f'（code={code} msg={msg!r}）')
     try:
         cipher = base64.b64decode(payload['data'], validate=True)
     except (ValueError, KeyError, TypeError):
@@ -162,8 +165,23 @@ def fetch(session):
     try:
         with opener.open(request, timeout=30) as response:
             raw = response.read(envelope.MAX_SAVE_BYTES + 1)
-    except (urllib.error.URLError, OSError):
-        raise ValueError('游戏服务器请求失败（未重试，未转发到其他服务）') from None
+    except urllib.error.HTTPError as e:
+        # 非 2xx（NoRedirect 下 3xx 也走到这）—— 多半是 WAF/网关拦截或服务临时不可用。
+        # HTTPError 是 URLError 子类，必须放在前面，否则真实状态码又被吞掉。
+        loc = (e.headers or {}).get('Location')
+        detail = f'HTTP {e.code}' + (f' → {loc}' if loc else '')
+        raise ValueError(
+            f'游戏服务器请求失败（{detail}；未重试，未转发到其他服务）—— '
+            '服务端拒绝或被防火墙/WAF 拦截，原存档未改动；稍后重试或换网络（如手机热点）再试') from None
+    except (urllib.error.URLError, OSError) as e:
+        # DNS 失败 / 连接被拒或重置 / 30 秒超时等网络层错误 —— 把真实原因带出去，
+        # 否则单看这句话无法区分是断网、被墙还是服务器挂了。
+        reason = getattr(e, 'reason', None) or e
+        raise ValueError(
+            f'游戏服务器请求失败（{url.hostname} 网络错误：{reason!r}；'
+            '未重试，未转发到其他服务）—— 多为本机网络不通'
+            '（DNS 解析失败、代理/防火墙/杀软拦截、网络超时），'
+            '原存档未改动；换网络或稍后重试') from None
     if len(raw) > envelope.MAX_SAVE_BYTES:
         raise ValueError('游戏服务器响应超过大小限制')
     try:
