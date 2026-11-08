@@ -1,5 +1,5 @@
 # ios观星工具iosGuanxingv3.0.0正式发布
-### 已适配ios国服73576--ios国际服--ios先行服73580
+### 已适配ios国服73576--ios国际服73680--ios先行服73580
 
 烟雨观星 Windows 桌面预览版。基于 gx2.8 的存档解析与网页功能，使用 PySide6 / Qt WebEngine 内置显示网页，不再打开 CMD 或外部浏览器。
 <img width="1382" height="932" alt="QQ_1794104039633" src="https://github.com/user-attachments/assets/f217df74-db5f-401a-98de-385a44064c8b" />
