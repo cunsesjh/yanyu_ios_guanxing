@@ -89,7 +89,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: iosGuanxing ${{ github.ref_name }}
+          name: iosGuanxing ${{ github.ref_name }}（正式版）
           prerelease: false
           body: |
             Windows 10/11 x64 正式版：原生窗口、HAR 导入、主动下载、内置观星网页、历史存档。
@@ -98,3 +98,37 @@ jobs:
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
+
+  sync-gitee-code:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: gitee-code
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Sync main and release tag to Gitee
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO || 'cunses/yanyu_ios_guanxing' }}
+        run: python .github/scripts/gitee_sync.py
+
+  sync-gitee-release:
+    needs: [windows, sync-gitee-code]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: iosGuanxing-Windows-x64
+          path: dist
+      - name: Sync release files to Gitee
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO || 'cunses/yanyu_ios_guanxing' }}
+        run: |
+          python .github/scripts/gitee_release.py dist/iosGuanxing.exe "${{ github.ref_name }}"
+          python .github/scripts/gitee_release.py dist/SHA256SUMS.txt "${{ github.ref_name }}"
