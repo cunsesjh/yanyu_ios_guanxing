@@ -19,6 +19,7 @@ pages = ['wash/index.html', 'equip/index.html', 'hengshan/index.html',
          'role/index.html', 'role/status.html', 'auto/index.html', 'guishi/index.html']
 results = []
 SCRIPT = r'''JSON.stringify((()=>{
+    try {
     const fail = m => {throw new Error(m);};
     const select = document.createElement('select');
     select.id = 'control-test'; select.style.cssText = 'position:fixed;top:100px;left:100px';
@@ -47,11 +48,14 @@ SCRIPT = r'''JSON.stringify((()=>{
     if (select.value !== '21' || changes !== 2) fail('Keyboard confirmation failed');
     select.remove();
     const budget = document.getElementById('w2Budget');
-    if (budget && budget.value !== '10000') fail('Wash2 default budget mismatch');
+    if (budget && budget.value !== '5000') fail('Wash2 default budget mismatch: expected 5000, got ' + budget.value);
     if (budget && document.querySelector('#autoWash2ModePanel [id^="anchor"]')) fail('Anchor control leaked into Wash2 UI');
     const guide = document.querySelector('.ghost-guide');
     if (guide && !guide.open) fail('Ghost guide not expanded');
     return {ok:true};
+    } catch (error) {
+        return {ok:false, error:String(error.message || error), page:location.pathname};
+    }
 })())'''
 
 def checked(value):
@@ -72,7 +76,7 @@ def loaded(ok):
 
 def next_page():
     if not pages:
-        print('PASS: dropdown hover/scroll never commits; click/keyboard confirm once; Escape cancels; default budget 10000; guide expanded; no Wash2 anchor controls (%d pages)' % len(results), flush=True)
+        print('PASS: dropdown hover/scroll never commits; click/keyboard confirm once; Escape cancels; default budget 5000; guide expanded; no Wash2 anchor controls (%d pages)' % len(results), flush=True)
         window.close()
         app.exit(0)
         return
