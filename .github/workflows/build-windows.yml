@@ -89,41 +89,16 @@ jobs:
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: iosGuanxing ${{ github.ref_name }}（正式版）
-          prerelease: false
+          name: iosGuanxing ${{ github.ref_name }}（测试版）
+          prerelease: true
           body: |
-            Windows 10/11 x64 正式版：原生窗口、HAR 导入、主动下载、内置观星网页、历史存档。
+            Windows 10/11 x64 测试版：原生窗口、HAR 导入、主动下载、内置观星网页、历史存档。
+            自动洗脉（改进）先寻找可执行路线，再用剩余时间按当前最低丹耗持续优化，整轮最多 5 分钟。
+            自动洗脉锚点路线支持 1–4 个目标，修复双目标低耗路线被跳过的问题。
+            更新检查改用 Gitee 公开接口；启动后台检查，单次运行最多自动提醒一次。
+            侧栏新增国服、先行服和国际服支持版本提示。
             登录会话由 Windows 当前用户加密保存；启动仅恢复本地存档，点击下载才访问游戏服务器。
             下载 iosGuanxing.exe 直接运行。程序暂未进行代码签名。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
-
-  sync-gitee-code:
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    concurrency:
-      group: gitee-code
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Sync main and release tag to Gitee
-        env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_REPO: ${{ secrets.GITEE_REPO || 'cunses/yanyu_ios_guanxing' }}
-        run: python .github/scripts/gitee_sync.py
-
-  sync-gitee-release:
-    needs: [windows, sync-gitee-code]
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Publish Gitee release metadata
-        env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_REPO: ${{ secrets.GITEE_REPO || 'cunses/yanyu_ios_guanxing' }}
-        run: python .github/scripts/gitee_release.py "${{ github.ref_name }}"

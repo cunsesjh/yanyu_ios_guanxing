@@ -62,7 +62,7 @@
                 reports.push({...result,routes:undefined});if(reports.length>60)reports.shift();
                 stat.checked++;checked++;
                 if(stat.checked%5===0||result.routes?.length||stat.checked===stat.total)packet('partial',job);
-                if(routes.length>=MAX_ROUTES)break searchStages;
+                if(routes.length>=MAX_ROUTES&&!options.exhaustive)break searchStages;
             }
             packet('stageDone',{stage,depth:scope.depth,limit:scope.limit});
             if(automatic&&routes.length&&!options.exhaustive)break;
