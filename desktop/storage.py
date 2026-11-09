@@ -152,17 +152,37 @@ class Store:
             os.replace(destination, folder)
             raise
 
-    def theme(self):
+    def preferences(self):
         try:
-            value = json.loads((self.root / 'preferences.json').read_text()).get('theme')
-            return value if value in ('dark', 'light') else 'dark'
+            value = json.loads((self.root / 'preferences.json').read_text(encoding='utf-8'))
+            return value if isinstance(value, dict) else {}
         except (OSError, ValueError, AttributeError):
+            return {}
+
+    def update_preferences(self, **changes):
+        value = self.preferences()
+        value.update(changes)
+        atomic_write(self.root / 'preferences.json',
+                     json.dumps(value, ensure_ascii=False, sort_keys=True).encode('utf-8'))
+
+    def theme(self):
+        value = self.preferences().get('theme')
+        if value not in ('dark', 'light'):
             return 'dark'
+        return value
 
     def set_theme(self, theme):
         if theme not in ('dark', 'light'):
             raise ValueError('Unknown theme')
-        atomic_write(self.root / 'preferences.json', json.dumps(dict(theme=theme)).encode())
+        self.update_preferences(theme=theme)
+
+    def release_notes_seen(self, version):
+        return self.preferences().get('release_notes_seen') == str(version)
+
+    def mark_release_notes_seen(self, version):
+        if not str(version).strip():
+            raise ValueError('Unknown release notes version')
+        self.update_preferences(release_notes_seen=str(version))
 
     def selected(self):
         rows = self.list_snapshots()

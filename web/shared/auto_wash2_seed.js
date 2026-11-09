@@ -79,10 +79,7 @@
     }
     function search(input, targets, collect, progress, options = {}) {
         const raw = input.initialState || {};
-        const channel = String(raw.save_channel || '').toLowerCase();
-        if (input.dlcMode || ['international', 'oversea', 'korea', 'japan', '国际服', '國際服'].includes(channel)) {
-            return {skipped: true, reason: '欧气种子路线第一版仅对国服启用'};
-        }
+        if (input.dlcMode) return {skipped: true, reason: 'DLC 路线暂不使用欧气种子引擎'};
         if (Number(input.options?.maxTotalPills) <= 0) return {skipped: true};
         progress({message: '欧气种子路线：正在比较保底落点与置换队列'});
         const intensity = Math.max(1, Math.min(4, Number(options.intensity) || 1));

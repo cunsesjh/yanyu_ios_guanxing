@@ -1,7 +1,7 @@
 // 欧气种子路线规划器
 // ==============
 //
-// 特别鸣谢 B站大佬「庸、人」提供欧气种子路线、吞脉/跳脉及统一路线构造的研究方案。
+// 特别鸣谢 B站大佬「庸丶人」提供欧气种子路线、吞脉/跳脉及统一路线构造的研究方案。
 // 本文件从获授权的研究实现中抽取为独立候选引擎；最终路线仍由 iosGuanxing
 // 自己的 AutoWash2Seed 适配层和当前 WashSourceEngine 重新回放验证。
 //
@@ -31,7 +31,7 @@
         const r = ruleFor(zizhi);
         return new root.AutoWash2Engine.Engine(root.TALENT_DATA, Object.assign({}, raw, { zizhi }), {
             slotCount: r.slots, pity: r.pity, eat: r.eat, eligibleZi: Number(zizhi),
-            advancePerDraw: true, international: false,
+            advancePerDraw: true,
         });
     }
     const positionsOf = (s, ids) => ids.map(id => s.talents.indexOf(id)).filter(i => i >= 0);
@@ -321,6 +321,12 @@
      */
     function solve(raw, targetIds, opts) {
         opts = opts || {};
+        // The budget covers every part of solve(), including seed sweeping.
+        // Previously it started after sweepSeeds(), allowing a nominal 1s
+        // search to block the worker for tens of seconds.
+        const timeBudget = Math.max(50, Number(opts.timeBudgetMs) || 8000);
+        const startedAt = Date.now();
+        const deadline = startedAt + timeBudget;
         // 目标是 4 槽时，规则必须按资质 154 算（阈值 900、吃丹 5、4 槽），
         // 所以分析/生成/回放统一用 154；计划开头再补一步「开启第4槽」。
         const wantSlots = Number(opts.slots) || 0;
@@ -379,17 +385,20 @@
         let seedCandidates = [];
         if (opts.sweep) {
             try {
-                const sweep = sweepSeeds(raw, targets, { zizhi: info.zizhi, maxSwitch: Number(opts.maxSwitch) || 320 });
+                const sweep = sweepSeeds(raw, targets, { zizhi: info.zizhi,
+                    maxSwitch: Number(opts.maxSwitch) || 320, deadline });
                 seedCandidates = (sweep.candidates || []).slice(0, Number(opts.seedCandidates) || 6);
             } catch (error) { seedCandidates = []; }
         }
         // 时间预算：种子候选是逐个真做计划再回放的，越多越慢。超预算就用已评出的最省收尾，
         // 避免把调用方（浏览器主线程）卡住几十秒。
-        const timeBudget = Number(opts.timeBudgetMs) || 8000;
-        const startedAt = Date.now();
-        const evals = hits.slice(0, 3).map(h => evaluate(h.arch));
+        const evals = [];
+        for (const hit of hits.slice(0, 3)) {
+            if (Date.now() >= deadline && evals.length) break;
+            evals.push(evaluate(hit.arch));
+        }
         for (const sc of seedCandidates) {
-            if (Date.now() - startedAt > timeBudget) break;          // 超预算：用已评结果收尾
+            if (Date.now() >= deadline) break;          // 超预算：用已评结果收尾
             const arch = { jumps: 0, jumpsTo: [], seed: sc.seed, first: sc.first, wash: sc.wash, queue: sc.queue };
             const prelude = { switchAt: sc.switchAt, lockCount: sc.lockCount, lockPick: sc.lockPick || 0 };
             // 落点对了，队首才可能是目标 —— 所以「垫保底换目标」要在落点候选上一起开，
@@ -399,7 +408,7 @@
             plain.seedCandidate = sc;
             evals.push(plain);
             if (opts.padForTarget) {
-                if (Date.now() - startedAt > timeBudget) break;
+                if (Date.now() >= deadline) break;
                 const padded = evaluateOne(arch, prelude, true);
                 padded.archIndex = '锁脉落点+垫';
                 padded.seedCandidate = sc;
@@ -414,7 +423,7 @@
             : (feasible.length ? Math.min.apply(null, feasible.map(x => x.minPills).filter(v => v != null)) : null);
         return Object.assign({}, info, { hits, evals, winner, seedCandidates, maxPills,
             overBudget: !within.length && !!feasible.length, minPills,
-            timedOut: Date.now() - startedAt > timeBudget, noSolution: false });
+            timedOut: Date.now() >= deadline, noSolution: false });
     }
 
     /**
@@ -722,6 +731,8 @@
         const targets = (targetIds || []).map(Number);
         const maxSwitch = Number(opts.maxSwitch) || 400;
         const step = Math.max(1, Number(opts.step) || 1);
+        const deadline = Math.max(0, Number(opts.deadline) || 0);
+        const expired = () => deadline > 0 && Date.now() >= deadline;
         // 同一个欧气种子可能有多条走法（洗 a 次后锁 m 条，a/m 不同但落到同一个 born 位置）。
         // 它们的**种子相同、后续路线完全相同**，但前奏段的丹耗可能差很多：
         //   前奏花费 = a × 吃丹 + (保底紫洗髓数 − a) × (吃丹 + 2m − 1)
@@ -729,8 +740,11 @@
         const bestBySeed = new Map();
         const lockPicks = Math.max(1, Number(opts.lockPicks) || 3);      // 锁哪一条也要遍历
         for (let m = 1; m < rule.slots; m++) {
+            if (expired()) break;
             for (let lp = 0; lp < lockPicks; lp++) {
+                if (expired()) break;
                 for (let a = 0; a <= maxSwitch; a += step) {
+                    if (expired()) break;
                     // 第一遍：只跑到首条保底紫（不收集自然紫，便宜得多）
                     const r = simulateFirstPityWithLock(raw, zizhi, a, m, { naturalLimit: 0, lockPick: lp });
                     if (!r) continue;
@@ -744,6 +758,7 @@
         }
         const candidates = [];
         for (const e of bestBySeed.values()) {
+            if (expired()) break;
             const { a, m, r, preludeCost } = e;
             const lp = e.lp || 0;
             const queue = queueOf(raw, zizhi, r.seed, 20);
@@ -781,7 +796,7 @@
         // 按**估算总丹耗**排（前奏花费 + 后续洗髓），不再只看「最后一条目标到手时间」
         candidates.sort((x, y) => x.estCost - y.estCost || x.lastArrival - y.lastArrival
             || x.missCount - y.missCount || x.events - y.events || x.wash - y.wash);
-        return { zizhi, rule, candidates, scanned: bestBySeed.size };
+        return { zizhi, rule, candidates, scanned: bestBySeed.size, timedOut: expired() };
     }
 
     /**

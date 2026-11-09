@@ -1,10 +1,12 @@
 """Exercise new/legacy tabs in the actual desktop Chromium with synthetic saves."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+os.environ.setdefault('IOSGUANXING_DISABLE_AUTO_UPDATE', '1')
 sys.path.insert(0, str(ROOT))
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtWidgets import QApplication

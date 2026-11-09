@@ -14,6 +14,8 @@ vm.runInContext(fs.readFileSync(path.join(root, 'auto_wash2_worker.js'), 'utf8')
 const model = sandbox.AutoWash2Model;
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(), 120000);
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(1000), 400);
+assert.deepEqual(JSON.parse(JSON.stringify(sandbox.AutoWash2SearchPolicy.stages.map(s => [s.fraction, s.intensity]))),
+    [[0.2, 1], [0.3, 2], [0.3, 3], [0.2, 4]], 'four progressive stages must consume the full shared deadline');
 const save = {CenterID: 1278440, Items: [{ID: 2601, Num: 100}], globalVariable: {test: 1}};
 const role = {ID: 10044, Name: '测试', ZiZhi: 154, BornTalent: {S: 12345, RC: 7},
     Talents: [{ID: 271, Lock: true}], Str: 100, BornStr: 10, StrGift: 1000};
@@ -87,6 +89,60 @@ async function send(type, payload) {
             expected = a.state; actual = b.state;
         }
     }
+    // Preview/early-access uses the domestic table order and must remain
+    // bit-for-bit identical to the current domestic engine.
+    {
+        const base = {...converted, zizhi:154, talents:[], tal_lucky:0};
+        const domestic = new sandbox.AutoWash2Engine.Engine(sandbox.TALENT_DATA, base);
+        const preview = new sandbox.AutoWash2Engine.Engine(sandbox.TALENT_DATA,
+            {...base, save_channel:'先行服'});
+        let a = domestic.initialState(base), b = preview.initialState(base);
+        for (let i = 0; i < 30; i++) {
+            a = domestic.wash(a, []).state; b = preview.wash(b, []).state;
+            assert.equal(JSON.stringify(a), JSON.stringify(b), 'preview channel must share domestic wash rules');
+        }
+    }
+    // International uses the same RNG transition but a different talent table
+    // order. Cross-check the AutoWash2 adapter against the existing dedicated
+    // international simulator for unlocked and locked washes.
+    vm.runInContext(fs.readFileSync(path.join(root, 'international_wash.js'), 'utf8'), context,
+        {filename:'international_wash.js'});
+    {
+        const intlRaw = {...converted, save_channel:'international', zizhi:154,
+            talents:[], tal_lucky:0, luck_seed:0, luck_seed_inited:false};
+        const adapter = new sandbox.AutoWash2Engine.Engine(sandbox.TALENT_DATA, intlRaw);
+        let actual = adapter.initialState(intlRaw);
+        const reference = {saveChannel:'international', zizhi:154, sex:intlRaw.sex, vip:intlRaw.vip,
+            seed:intlRaw.seed, luckSeed:0, luckSeedInited:false, roleId:intlRaw.role_id,
+            salt:intlRaw.salt, talents:[], talLucky:0, bornTalentRC:intlRaw.born_talent_rc,
+            roleLevel:intlRaw.role_level, roleStats:intlRaw.role_stats, globalVars:intlRaw.global_vars,
+            totalWash:0,totalTalentBars:0,totalPills:0,bagPills:0,hasBagPills:false,
+            goldCount:0,pityCount:0,qualityCounts:{1:0,2:0,3:0,4:0},exchangeCount:0};
+        for (let i = 0; i < 60; i++) {
+            const keep = i % 4 === 0 && actual.talents.length ? [0] : [];
+            reference.talents = actual.talents.map((id, index) => ({id, locked:keep.includes(index)}));
+            const expected = sandbox.internationalWashCore(reference, adapter.allowed, true);
+            const result = adapter.wash(actual, keep); actual = result.state;
+            assert.ok(expected, 'international reference wash must advance');
+            assert.equal(result.cost, expected.pills_used);
+            assert.deepEqual(JSON.parse(JSON.stringify(actual.talents)),
+                JSON.parse(JSON.stringify(reference.talents.map(t => t.id))));
+            assert.equal(actual.bornSeed, reference.seed);
+            assert.equal(actual.bornRC, reference.bornTalentRC);
+            assert.equal(actual.luckSeed, reference.luckSeedInited ? reference.luckSeed : null);
+            assert.equal(actual.talLucky, reference.talLucky);
+        }
+        const intlStart = {...intlRaw, talents:[], tal_lucky:900};
+        const intlEngine = new sandbox.AutoWash2Engine.Engine(sandbox.TALENT_DATA, intlStart);
+        const intlFirst = intlEngine.wash(intlEngine.initialState(intlStart), []);
+        const intlTarget = intlFirst.state.talents.find(id => sandbox.TALENT_DATA[id].weight === 4);
+        const intlCandidate = {ok:true, kind:'international-test', cost:intlFirst.cost,
+            steps:[{type:'wash', washes:1, cost:intlFirst.cost, locks:[], field:intlFirst.state.talents}]};
+        const intlUnified = sandbox.AutoWash2Unified.convert({initialState:intlStart,
+            options:{maxTotalPills:intlFirst.cost},bagPills:100,hasBagPills:true}, [intlTarget], intlCandidate);
+        assert.ok(intlUnified?.verified, 'international unified route must replay with the international table order');
+        assert.equal(intlUnified.channelEngine, '国际服');
+    }
     // A real nonzero-cost route must reproduce the current engine's first pity purple.
     const initial = {...converted, talents: [], tal_lucky: 900};
     const engine = new sandbox.AutoWash2Engine.Engine(sandbox.TALENT_DATA, initial);
@@ -147,5 +203,20 @@ async function send(type, payload) {
     firstWash.lockIds = [999999];
     assert.throws(() => sandbox.AutoWash2Seed.replay(anchorRaw, seedTargets,
         tamperedSeedSteps, seedResult.zizhi), /回放失败/);
-    console.log('PASS: immutable adapter, target groups, inventory, 120 engine parity checks, wash replay, exact legacy anchor route, verified luck-seed route and tamper/budget rejection');
+    // The full unified constructor is namespace-isolated and its adapter must
+    // independently replay even a mechanically supplied candidate.
+    const oneWash = new sandbox.AutoWash2Engine.Engine(sandbox.TALENT_DATA, anchorRaw)
+        .wash(new sandbox.AutoWash2Engine.Engine(sandbox.TALENT_DATA, anchorRaw).initialState(anchorRaw), []);
+    const oneTarget = oneWash.state.talents.find(id => sandbox.TALENT_DATA[id].weight === 4);
+    if (oneTarget) {
+        const candidate = {ok:true, kind:'test', cost:oneWash.cost,
+            steps:[{type:'wash', washes:1, cost:oneWash.cost, locks:[], field:oneWash.state.talents}]};
+        const unified = sandbox.AutoWash2Unified.convert({...settings, initialState:anchorRaw}, [oneTarget], candidate);
+        assert.ok(unified && unified.verified, 'unified candidate must pass independent replay');
+        candidate.steps[0].field = [999999];
+        // Recorded fields are display-only; corrupting the executable target is rejected instead.
+        candidate.steps[0].locks = [999999];
+        assert.equal(sandbox.AutoWash2Unified.convert({...settings, initialState:anchorRaw}, [oneTarget], candidate), null);
+    }
+    console.log('PASS: four-stage policy, domestic/preview parity, international 60-wash parity, immutable adapter, target groups, inventory, 120 engine parity checks, wash replay, exact legacy anchor route, verified seed/unified routes and tamper/budget rejection');
 })().catch(error => { console.error(error); process.exitCode = 1; });

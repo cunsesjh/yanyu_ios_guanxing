@@ -15,6 +15,22 @@
         290, 297, 298, 291, 299, 300, 292, 295, 296, 293, 301, 302, 294,
         ...range(303, 317), 332, ...range(318, 331), ...range(333, 370),
     ].map(String));
+    // The international client uses the same RNG and wash rules, but its Lua
+    // talent table has a different deterministic pairs() order. That changes
+    // every weighted draw, so it must be selected before pools are built.
+    const INTERNATIONAL_TALENT_ORDER = Object.freeze([
+        401,418,408,264,192,245,400,267,193,207,407,244,189,190,406,243,188,206,191,278,
+        178,268,405,242,196,404,260,179,241,258,263,197,240,412,259,230,262,413,256,195,
+        274,231,209,257,210,410,183,419,275,208,211,182,254,176,276,174,416,255,232,201,
+        234,277,177,198,417,280,199,270,170,248,269,414,236,253,185,204,181,171,415,271,
+        249,411,186,250,200,194,237,180,252,272,203,403,279,172,266,251,175,202,238,205,
+        187,273,173,233,402,247,235,184,261,420,265,409,246,239,
+    ].map(String));
+
+    function isInternationalChannel(value) {
+        return ['国际服', '國際服', 'oversea', 'international', 'korea', 'japan']
+            .includes(String(value || '').trim().toLowerCase());
+    }
 
     function range(start, end) {
         const result = [];
@@ -256,7 +272,10 @@
                 roleStats: initialState.role_stats || {},
                 globalVars: initialState.global_vars || {},
             };
-            const ordered = apkPairsOrder()
+            const channel = String(options.saveChannel || initialState.save_channel || initialState.channel || '').trim().toLowerCase();
+            this.international = options.international != null
+                ? !!options.international : isInternationalChannel(channel);
+            const ordered = (this.international ? INTERNATIONAL_TALENT_ORDER : apkPairsOrder())
                 .map(key => talentData[String(key)])
                 .filter(item => item && numeric(item.weight));
             if (ordered.length !== 114) {
@@ -298,10 +317,6 @@
                 talLuckyAfter: hooks.talLuckyAfter || defaultTalLuckyAfter,
             };
             this.dlcMode = !!options.dlcMode;
-            const channel = String(options.saveChannel || initialState.save_channel || initialState.channel || '').trim().toLowerCase();
-            this.international = options.international != null
-                ? !!options.international
-                : (channel === '国际服' || channel === '國際服' || channel === 'oversea' || channel === 'international');
         }
 
         initialState(raw) {
@@ -502,10 +517,12 @@
 
     root.WashSourceEngine = Object.freeze({
         APK_TALENT_INSERTION_ORDER,
+        INTERNATIONAL_TALENT_ORDER,
         QUALITY_WEIGHT,
         PITY,
         SLOT_COUNT,
         apkPairsOrder,
+        isInternationalChannel,
         luaRandom,
         weightedDraw,
         cloneState,
