@@ -7,6 +7,7 @@ function initialSearchWindow(totalSearchMs = 300000) {
 self.AutoWash2SearchPolicy = Object.freeze({initialSearchWindow});
 importScripts('data.js', 'wash_source_engine.js', 'auto_wash2_source_cache.js', 'auto_wash2_engine.js', 'auto_wash2_optimizer.js', 'auto_wash2_model.js');
 importScripts('anchor_route_planner.js', 'anchor_route_search.js', 'auto_wash2_anchor.js');
+importScripts('auto_wash2_seed_planner.js', 'auto_wash2_seed.js');
 self.onmessage = async ({data: message}) => {
     const send = (type, payload) => self.postMessage({type, requestId: message.requestId, ...payload});
     try {
@@ -45,7 +46,23 @@ self.onmessage = async ({data: message}) => {
             ? Math.max(100, Math.min(300000, requestedSearchMs)) : 300000;
         const totalDeadline = searchStarted + totalSearchMs;
         const userBudget = Math.max(0, Math.trunc(Number(input.options?.maxTotalPills ?? 5000)));
-        async function runPass(stageCap, stageDeadline, purpose, stopWhenFound = false, stopWhenImproved = false) {
+        // This third engine searches seed-changing actions that do not exist in
+        // the tactical graph. Existing tactical and anchor searches remain intact.
+        for (let branch = 0; branch < branches.length && Date.now() < totalDeadline; branch++) {
+            const remaining = totalDeadline - Date.now();
+            const perBranch = Math.min(20000,
+                Math.max(1000, remaining / Math.max(1, branches.length - branch) * 0.2));
+            try {
+                AutoWash2Seed.search(input, branches[branch], collect,
+                    value => send('progress', {progress: {...value,
+                        message: `目标组合 ${branch + 1}/${branches.length} · ${value.message}`}}),
+                    {intensity: 2, timeBudgetMs: perBranch});
+            } catch (error) {
+                send('progress', {progress: {message: '欧气种子路线未形成可执行候选，继续现有搜索'}});
+            }
+        }
+        async function runPass(stageCap, stageDeadline, purpose, stopWhenFound = false,
+                stopWhenImproved = false, searchIntensity = 1) {
             const startingBest = combined().routes[0]?.totalPills ?? null;
             send('progress', {progress: {message: `${purpose}：耗丹上限 ${stageCap.toLocaleString()}`}});
             for (let branch = 0; branch < branches.length; branch++) {
@@ -64,7 +81,7 @@ self.onmessage = async ({data: message}) => {
                 const tacticalDeadline = now + Math.max(1, (branchDeadline - now) * 0.4);
                 const result = await AutoWash2Optimizer.searchWashRoutes({
                     ...input, talentData: TALENT_DATA, targetIds: branches[branch],
-                    options: {...input.options, maxTotalPills: ceiling},
+                    options: {...input.options, maxTotalPills: ceiling, searchIntensity},
                     onProgress: progress, onCandidate: collect,
                     shouldCancel: () => Date.now() >= tacticalDeadline || Date.now() >= stageDeadline
                         || Date.now() >= totalDeadline || (waitingForFirst && found.size > 0)
@@ -87,7 +104,8 @@ self.onmessage = async ({data: message}) => {
                 const anchorCeiling = Math.min(ceiling,
                     bestAfterTactical == null ? ceiling : Math.max(0, bestAfterTactical - 1));
                 if (anchorCeiling === 0 && bestAfterTactical != null) continue;
-                const anchorInput = {...input, options: {...input.options, maxTotalPills: anchorCeiling}};
+                const anchorInput = {...input, options: {...input.options,
+                    maxTotalPills: anchorCeiling, searchIntensity}};
                 const anchorLimited = !!AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
                     () => Date.now() >= branchDeadline || Date.now() >= stageDeadline
                         || Date.now() >= totalDeadline || (waitingForFirst && found.size > 0)
@@ -108,8 +126,11 @@ self.onmessage = async ({data: message}) => {
         // time "optimizing" a route that does not yet exist.
         await runPass(userBudget, Math.min(totalDeadline, searchStarted + initialSearchWindow(totalSearchMs)),
             '优先寻找可执行路线', true);
-        if (!found.size && Date.now() < totalDeadline) {
-            await runPass(userBudget, totalDeadline, '继续扩大可执行路线搜索', true);
+        let searchIntensity = 1;
+        while (!found.size && Date.now() < totalDeadline && searchIntensity < 4) {
+            searchIntensity += 1;
+            await runPass(userBudget, totalDeadline,
+                `扩大可执行路线搜索（强度 ${searchIntensity}/4）`, true, false, searchIntensity);
         }
 
         // Keep tightening to best - 1. Whenever a lower verified route is
@@ -118,7 +139,8 @@ self.onmessage = async ({data: message}) => {
             const best = combined().routes[0].totalPills;
             if (best <= 0) break;
             const improved = await runPass(best - 1, totalDeadline,
-                `继续压低丹耗（当前最好 ${best.toLocaleString()} 丹）`, false, true);
+                `继续压低丹耗（当前最好 ${best.toLocaleString()} 丹）`,
+                false, true, searchIntensity);
             if (!improved) break;
         }
         send('result', {result: {...combined(), limited}});

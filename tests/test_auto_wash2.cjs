@@ -48,6 +48,12 @@ async function send(type, payload) {
 (async () => {
     let rows = await send('inspect', {raw: converted});
     assert.ok(rows.find(r => r.type === 'summary').summary.allowed.includes(271));
+    const expandedScope = await sandbox.AutoWash2Optimizer.searchWashRoutes({
+        initialState: converted, talentData: sandbox.TALENT_DATA, targetIds: [271],
+        options: {maxTotalPills: 0, searchIntensity: 3}});
+    assert.equal(expandedScope.searchScope.searchIntensity, 3);
+    assert.equal(expandedScope.searchScope.maxEventNodes, 900000);
+    assert.equal(expandedScope.searchScope.maxEventDepth, 128);
     const input = {initialState: converted, targetIds: [271], compatibleGroups: [], bagPills: 100,
         hasBagPills: true, options: {maxTotalPills: 0}};
     rows = await send('search', {input});
@@ -123,5 +129,23 @@ async function send(type, payload) {
     broken.steps[0].after.cost++;
     assert.throws(() => sandbox.AutoWash2Anchor.convert(anchorRaw, anchors, broken, targetIds, settings), /回放/);
     assert.equal(JSON.stringify(anchorRaw), anchorBefore);
-    console.log('PASS: immutable adapter, target groups, inventory, 120 uncached-engine parity checks, wash replay, exact 1025-pill legacy route migration and tamper/budget rejection');
+    // The third engine changes the first luck-seed landing, then hands its
+    // candidate to our independent replay adapter before it can be displayed.
+    const seedTargets = [276, 268];
+    const seedResult = sandbox.AutoWash2SeedPlanner.solve(anchorRaw, seedTargets, {
+        slots: 3, maxPills: 10000, maxJump: 12, queueLength: 20,
+        sweep: false, padForTarget: true, timeBudgetMs: 5000,
+    });
+    const seedRoute = sandbox.AutoWash2Seed.convert({...settings, initialState: anchorRaw}, seedTargets, seedResult);
+    assert.ok(seedRoute, 'seed engine must produce an independently replayed route');
+    assert.equal(seedRoute.kind, 'luck-seed-replay');
+    assert.equal(seedRoute.verified, true);
+    assert.ok(seedRoute.totalPills <= 10000);
+    assert.ok(seedTargets.every(id => seedRoute.finalTalents.some(t => t.id === id)));
+    const tamperedSeedSteps = JSON.parse(JSON.stringify(seedResult.winner.pick.plan.steps));
+    const firstWash = tamperedSeedSteps.find(step => step.type === 'wash');
+    firstWash.lockIds = [999999];
+    assert.throws(() => sandbox.AutoWash2Seed.replay(anchorRaw, seedTargets,
+        tamperedSeedSteps, seedResult.zizhi), /回放失败/);
+    console.log('PASS: immutable adapter, target groups, inventory, 120 engine parity checks, wash replay, exact legacy anchor route, verified luck-seed route and tamper/budget rejection');
 })().catch(error => { console.error(error); process.exitCode = 1; });

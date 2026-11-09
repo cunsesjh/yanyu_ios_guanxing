@@ -33,7 +33,8 @@
                 <button id="w2Preset" type="button" class="btn btn-reset">金顶混</button>
                 <button id="w2Clear" type="button" class="btn btn-reset">清空选择</button>
             </div>
-            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。先在本次上限内寻找可执行路线，找到后持续按当前最低丹耗优化；整轮最多约 5 分钟，验证通过的候选会立即显示。</p>
+            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。欧气种子路线、锚点路线与分级战术搜索共同比较，找到后持续按当前最低丹耗优化；整轮最多约 5 分钟，只有回放验证通过的候选才会显示。</p>
+            <p class="w2-credit">特别鸣谢 B站大佬「庸、人」提供欧气种子路线、吞脉/跳脉及统一路线构造的研究方案</p>
             <div id="w2Targets" class="w2-targets"></div>
             <p id="w2Requirements" class="w2-requirements"></p>
         </section>
@@ -132,7 +133,9 @@
         $('Export').disabled = !routes.length;
         $('Results').innerHTML = routes.length ? `<p class="w2-muted">已找到 ${routes.length} 条候选，按总丹耗排序。候选经过内核回放校验，不保证全局最优。</p>` + routes.slice(0, 20).map((r, i) => {
             const remaining = bag - Number(r.totalPills || 0);
-            return `<details class="w2-route" ${i === 0 ? 'open' : ''}><summary><strong>路线 ${i + 1} · ${Number(r.totalPills).toLocaleString()} 丹</strong><span>${Number(r.totalWashes)} 次洗脉 · ${remaining < 0 ? '缺' + -remaining : '余' + remaining} 丹</span></summary><p>最终天赋：${esc((r.finalTalents || []).map(t => t.name || name(t.id)).join('、'))}</p><div class="w2-table"><table><thead><tr><th>步骤</th><th>操作与核对</th><th>本步丹耗</th><th>累计丹耗</th><th>剩余丹数</th></tr></thead><tbody>${(r.steps || []).map((step, n) => `<tr><td>${n + 1}</td><td><strong>${esc(step.label)}</strong><p>${esc(step.detail)}</p><small>${esc((step.after?.talents || []).map(t => (t.name || name(t.id)) + (t.locked ? '（锁）' : '')).join('、'))}</small></td><td>${Number(step.pills || 0)}</td><td>${Number(step.cumulativePills || 0)}</td><td>${bag - Number(step.cumulativePills || 0)}</td></tr>`).join('')}</tbody></table></div></details>`;
+            const method = r.kind === 'luck-seed-replay' ? `欧气种子路线 · ${r.seedMethod || '种子优化'}`
+                : r.kind === 'anchor-replay' ? '锚点路线' : '分级战术搜索';
+            return `<details class="w2-route" ${i === 0 ? 'open' : ''}><summary><strong>路线 ${i + 1} · ${Number(r.totalPills).toLocaleString()} 丹</strong><span>${esc(method)} · ${Number(r.totalWashes)} 次洗脉 · ${remaining < 0 ? '缺' + -remaining : '余' + remaining} 丹</span></summary><p>最终天赋：${esc((r.finalTalents || []).map(t => t.name || name(t.id)).join('、'))}</p><div class="w2-table"><table><thead><tr><th>步骤</th><th>操作与核对</th><th>本步丹耗</th><th>累计丹耗</th><th>剩余丹数</th></tr></thead><tbody>${(r.steps || []).map((step, n) => `<tr><td>${n + 1}</td><td><strong>${esc(step.label)}</strong><p>${esc(step.detail)}</p><small>${esc((step.after?.talents || []).map(t => (t.name || name(t.id)) + (t.locked ? '（锁）' : '')).join('、'))}</small></td><td>${Number(step.pills || 0)}</td><td>${Number(step.cumulativePills || 0)}</td><td>${bag - Number(step.cumulativePills || 0)}</td></tr>`).join('')}</tbody></table></div></details>`;
         }).join('') : `<div class="ai-result-empty">${esc(result.noResultReason || '本轮搜索暂未找到路线，可以增加耗丹上限或调整目标。')}</div>`;
     }
     function run() {
