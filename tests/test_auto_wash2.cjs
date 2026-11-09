@@ -12,9 +12,8 @@ const context = vm.createContext(sandbox);
 sandbox.importScripts = (...files) => files.forEach(file => vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, {filename: file}));
 vm.runInContext(fs.readFileSync(path.join(root, 'auto_wash2_worker.js'), 'utf8'), context);
 const model = sandbox.AutoWash2Model;
-assert.deepEqual(Array.from(sandbox.AutoWash2SearchPolicy.capsForBudget(5000)), [2000, 3500, 5000]);
-assert.deepEqual(Array.from(sandbox.AutoWash2SearchPolicy.capsForBudget(3000)), [2000, 3000]);
-assert.deepEqual(Array.from(sandbox.AutoWash2SearchPolicy.capsForBudget(1000)), [1000]);
+assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(), 120000);
+assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(1000), 400);
 const save = {CenterID: 1278440, Items: [{ID: 2601, Num: 100}], globalVariable: {test: 1}};
 const role = {ID: 10044, Name: '测试', ZiZhi: 154, BornTalent: {S: 12345, RC: 7},
     Talents: [{ID: 271, Lock: true}], Str: 100, BornStr: 10, StrGift: 1000};
@@ -40,7 +39,8 @@ assert.throws(() => model.targets(converted, new Map([[272, -1], [250, -1], [249
 
 async function send(type, payload) {
     messages.length = 0;
-    await sandbox.onmessage({data: {type, requestId: 'test', ...payload}});
+    await sandbox.onmessage({data: {type, requestId: 'test',
+        ...(type === 'search' ? {searchTimeMs: 1000} : {}), ...payload}});
     const error = messages.find(m => m.type === 'error');
     assert.equal(error, undefined, error?.error);
     return messages;
@@ -48,6 +48,12 @@ async function send(type, payload) {
 (async () => {
     let rows = await send('inspect', {raw: converted});
     assert.ok(rows.find(r => r.type === 'summary').summary.allowed.includes(271));
+    const expandedScope = await sandbox.AutoWash2Optimizer.searchWashRoutes({
+        initialState: converted, talentData: sandbox.TALENT_DATA, targetIds: [271],
+        options: {maxTotalPills: 0, searchIntensity: 3}});
+    assert.equal(expandedScope.searchScope.searchIntensity, 3);
+    assert.equal(expandedScope.searchScope.maxEventNodes, 900000);
+    assert.equal(expandedScope.searchScope.maxEventDepth, 128);
     const input = {initialState: converted, targetIds: [271], compatibleGroups: [], bagPills: 100,
         hasBagPills: true, options: {maxTotalPills: 0}};
     rows = await send('search', {input});

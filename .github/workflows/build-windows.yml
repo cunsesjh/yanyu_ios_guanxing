@@ -8,6 +8,8 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      IOSGUANXING_DISABLE_AUTO_UPDATE: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -93,9 +95,10 @@ jobs:
           prerelease: false
           body: |
             Windows 10/11 x64 正式版：原生窗口、HAR 导入、主动下载、内置观星网页、历史存档。
-            自动洗脉（改进）默认上限调整为 5000 丹，按低丹耗区间分阶段搜索并延长优化时间。
-            自动洗脉锚点路线支持 1–4 个目标，修复双目标低耗路线被跳过的问题。
-            新增正式版更新检查，可选择前往 GitHub 或 Gitee Release 页面。
+            自动洗脉（改进）默认 5000 丹、最长约 5 分钟：先寻找可执行路线，无候选时逐级扩大节点、深度和锚点脉序范围，找到后继续压低丹耗。
+            自动洗脉锚点路线支持 1–4 个目标；候选均经过本地状态机回放校验，但不承诺全局最优。
+            更新检查改用 Gitee 公开接口；每次启动后台检查一次、单次运行最多自动提醒一次，也可手动检查并选择 GitHub 或 Gitee 下载页。
+            新增 Q&A 页面，集中说明下载拦截、存档完整性、版本适配、功能限制与问题反馈方式。
             侧栏新增国服、先行服和国际服支持版本提示。
             登录会话由 Windows 当前用户加密保存；启动仅恢复本地存档，点击下载才访问游戏服务器。
             下载 iosGuanxing.exe 直接运行。程序暂未进行代码签名。

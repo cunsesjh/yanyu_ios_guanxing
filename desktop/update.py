@@ -4,7 +4,7 @@ import re
 import urllib.request
 
 
-LATEST_RELEASE = 'https://api.github.com/repos/cunsesjh/yanyu_ios_guanxing/releases/latest'
+LATEST_RELEASE = 'https://gitee.com/api/v5/repos/cunses/yanyu_ios_guanxing/releases/latest'
 GITHUB_RELEASE_PAGE = 'https://github.com/cunsesjh/yanyu_ios_guanxing/releases/tag/'
 GITEE_RELEASE_PAGE = 'https://gitee.com/cunses/yanyu_ios_guanxing/releases/tag/'
 
@@ -32,11 +32,11 @@ def parse_release(payload, current):
 
 def check_update(current, opener=urllib.request.urlopen):
     request = urllib.request.Request(LATEST_RELEASE, headers={
-        'Accept': 'application/vnd.github+json',
+        'Accept': 'application/json',
         'User-Agent': 'iosGuanxing-update-check/' + str(current),
     })
     try:
-        with opener(request, timeout=15) as response:
+        with opener(request, timeout=10) as response:
             payload = json.loads(response.read().decode('utf-8'))
     except (OSError, ValueError, json.JSONDecodeError) as error:
         raise RuntimeError('暂时无法连接更新服务器，请稍后重试。') from error

@@ -1,11 +1,10 @@
 /* Dedicated runtime: does not install or replace any legacy page/worker globals. */
 'use strict';
 self.window = self;
-function searchCapsForBudget(budget) {
-    const ceiling = Math.max(0, Math.trunc(Number(budget) || 0));
-    return [...new Set([Math.min(2000, ceiling), Math.min(3500, ceiling), ceiling])];
+function initialSearchWindow(totalSearchMs = 300000) {
+    return Math.min(120000, totalSearchMs * 0.4);
 }
-self.AutoWash2SearchPolicy = Object.freeze({capsForBudget: searchCapsForBudget});
+self.AutoWash2SearchPolicy = Object.freeze({initialSearchWindow});
 importScripts('data.js', 'wash_source_engine.js', 'auto_wash2_source_cache.js', 'auto_wash2_engine.js', 'auto_wash2_optimizer.js', 'auto_wash2_model.js');
 importScripts('anchor_route_planner.js', 'anchor_route_search.js', 'auto_wash2_anchor.js');
 self.onmessage = async ({data: message}) => {
@@ -37,22 +36,22 @@ self.onmessage = async ({data: message}) => {
             if (found.size) send('candidate', {result: combined()});
         }
         let limited = false;
-        // The planner first searches useful lower-cost bands, then spends the
-        // remaining budget comparing routes below the user's current best.
+        // First obtain a verified route. As soon as one is found, recompute the
+        // remaining schedule around the current best cost instead of waiting
+        // for a fixed feasibility phase to expire.
         const searchStarted = Date.now();
-        const totalSearchMs = 180000;
+        const requestedSearchMs = Number(message.searchTimeMs);
+        const totalSearchMs = Number.isFinite(requestedSearchMs)
+            ? Math.max(100, Math.min(300000, requestedSearchMs)) : 300000;
+        const totalDeadline = searchStarted + totalSearchMs;
         const userBudget = Math.max(0, Math.trunc(Number(input.options?.maxTotalPills ?? 5000)));
-        const caps = searchCapsForBudget(userBudget);
-        const stageDeadlines = caps.length === 1 ? [totalSearchMs]
-            : caps.length === 2 ? [45000, totalSearchMs]
-            : [30000, 75000, totalSearchMs];
-        for (let stage = 0; stage < caps.length; stage++) {
-            const stageCap = caps[stage];
-            const stageDeadline = searchStarted + stageDeadlines[stage];
-            send('progress', {progress: {message: `分阶段搜索：耗丹上限 ${stageCap.toLocaleString()}，共 ${caps.length} 阶段`}});
+        async function runPass(stageCap, stageDeadline, purpose, stopWhenFound = false,
+                stopWhenImproved = false, searchIntensity = 1) {
+            const startingBest = combined().routes[0]?.totalPills ?? null;
+            send('progress', {progress: {message: `${purpose}：耗丹上限 ${stageCap.toLocaleString()}`}});
             for (let branch = 0; branch < branches.length; branch++) {
                 const now = Date.now();
-                if (now >= stageDeadline || now - searchStarted >= totalSearchMs) { limited = true; break; }
+                if (now >= stageDeadline || now >= totalDeadline) { limited = true; break; }
                 const branchesLeft = branches.length - branch;
                 const branchDeadline = Math.min(stageDeadline, now + (stageDeadline - now) / branchesLeft);
                 const progress = value => send('progress', {progress: {...value,
@@ -60,17 +59,28 @@ self.onmessage = async ({data: message}) => {
                 const bestBefore = combined().routes[0]?.totalPills;
                 const ceiling = Math.min(stageCap, bestBefore == null ? stageCap : Math.max(0, bestBefore - 1));
                 if (bestBefore === 0) break;
+                const waitingForFirst = stopWhenFound && bestBefore == null;
+                const improvedBefore = startingBest != null && bestBefore < startingBest;
+                if (stopWhenImproved && improvedBefore) return true;
                 const tacticalDeadline = now + Math.max(1, (branchDeadline - now) * 0.4);
                 const result = await AutoWash2Optimizer.searchWashRoutes({
                     ...input, talentData: TALENT_DATA, targetIds: branches[branch],
-                    options: {...input.options, maxTotalPills: ceiling},
+                    options: {...input.options, maxTotalPills: ceiling, searchIntensity},
                     onProgress: progress, onCandidate: collect,
                     shouldCancel: () => Date.now() >= tacticalDeadline || Date.now() >= stageDeadline
-                        || Date.now() - searchStarted >= totalSearchMs,
+                        || Date.now() >= totalDeadline || (waitingForFirst && found.size > 0)
+                        || (stopWhenImproved && startingBest != null
+                            && (combined().routes[0]?.totalPills ?? Infinity) < startingBest),
                 });
-                limited ||= !!result.cancelled || !!result.searchScope?.safetyLimitReached;
                 collect(result);
-                if (Date.now() >= branchDeadline || Date.now() - searchStarted >= totalSearchMs) {
+                const foundFirstTactical = waitingForFirst && found.size > 0;
+                const improvedTactical = stopWhenImproved && startingBest != null
+                    && (combined().routes[0]?.totalPills ?? Infinity) < startingBest;
+                limited ||= (!foundFirstTactical && !improvedTactical && !!result.cancelled)
+                    || !!result.searchScope?.safetyLimitReached;
+                if (foundFirstTactical) return true;
+                if (improvedTactical) return true;
+                if (Date.now() >= branchDeadline || Date.now() >= totalDeadline) {
                     limited = true;
                     continue;
                 }
@@ -78,12 +88,44 @@ self.onmessage = async ({data: message}) => {
                 const anchorCeiling = Math.min(ceiling,
                     bestAfterTactical == null ? ceiling : Math.max(0, bestAfterTactical - 1));
                 if (anchorCeiling === 0 && bestAfterTactical != null) continue;
-                const anchorInput = {...input, options: {...input.options, maxTotalPills: anchorCeiling}};
-                limited = !!AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
+                const anchorInput = {...input, options: {...input.options,
+                    maxTotalPills: anchorCeiling, searchIntensity}};
+                const anchorLimited = !!AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
                     () => Date.now() >= branchDeadline || Date.now() >= stageDeadline
-                        || Date.now() - searchStarted >= totalSearchMs) || limited;
+                        || Date.now() >= totalDeadline || (waitingForFirst && found.size > 0)
+                        || (stopWhenImproved && startingBest != null
+                            && (combined().routes[0]?.totalPills ?? Infinity) < startingBest));
+                const foundFirstAnchor = waitingForFirst && found.size > 0;
+                const improvedAnchor = stopWhenImproved && startingBest != null
+                    && (combined().routes[0]?.totalPills ?? Infinity) < startingBest;
+                limited ||= !foundFirstAnchor && !improvedAnchor && anchorLimited;
+                if (foundFirstAnchor) return true;
+                if (improvedAnchor) return true;
             }
-            if (Date.now() - searchStarted >= totalSearchMs) { limited = true; break; }
+            return false;
+        }
+
+        // Give the first attempt up to two minutes. If it still finds nothing,
+        // keep the full user ceiling for the remainder rather than spending
+        // time "optimizing" a route that does not yet exist.
+        await runPass(userBudget, Math.min(totalDeadline, searchStarted + initialSearchWindow(totalSearchMs)),
+            '优先寻找可执行路线', true);
+        let searchIntensity = 1;
+        while (!found.size && Date.now() < totalDeadline && searchIntensity < 4) {
+            searchIntensity += 1;
+            await runPass(userBudget, totalDeadline,
+                `扩大可执行路线搜索（强度 ${searchIntensity}/4）`, true, false, searchIntensity);
+        }
+
+        // Keep tightening to best - 1. Whenever a lower verified route is
+        // found, stop that pass immediately and restart under the new bound.
+        while (found.size && Date.now() < totalDeadline) {
+            const best = combined().routes[0].totalPills;
+            if (best <= 0) break;
+            const improved = await runPass(best - 1, totalDeadline,
+                `继续压低丹耗（当前最好 ${best.toLocaleString()} 丹）`,
+                false, true, searchIntensity);
+            if (!improved) break;
         }
         send('result', {result: {...combined(), limited}});
     } catch (error) {

@@ -23,7 +23,7 @@ out = ROOT / 'build' / 'layout'
 out.mkdir(parents=True, exist_ok=True)
 pages = ['index.html', 'wash/index.html', 'equip/index.html', 'hengshan/index.html',
          'role/index.html', 'role/status.html', 'auto/index.html',
-         'guishi/index.html', 'guishi/index.html?page=hs']
+         'guishi/index.html', 'guishi/index.html?page=hs', 'qna/index.html']
 queue = [(theme, size, page) for theme in ['dark', 'light']
          for size in [(1000, 680), (1380, 900)] for page in pages]
 results = []
@@ -81,9 +81,9 @@ def next_page():
             if row['page'] == 'index.html':
                 if row['scrollHeight'] > row['height'] + 1 or row['homeBottom'] > row['height'] + 1:
                     failures.append((row['size'], row['page'], 'homepage overflow'))
-                if row['importPanel'] or row['modules'] != 8:
+                if row['importPanel'] or row['modules'] != 9:
                     failures.append((row['size'], row['page'], 'homepage features'))
-            elif len(row['links']) != 9 or row['nav']['top'] < 0 or any(link['left'] < 0 or link['right'] > row['width'] + 1
+            elif len(row['links']) != 10 or row['nav']['top'] < 0 or any(link['left'] < 0 or link['right'] > row['width'] + 1
                                               or link['bottom'] > row['nav']['bottom'] + 1
                                               or link['scrollWidth'] > link['clientWidth'] + 1
                                               for link in row['links']):

@@ -240,6 +240,8 @@ class MainWindow(QMainWindow):
         self.current = None
         self.worker = None
         self.update_worker = None
+        self.update_check_automatic = False
+        self.auto_update_prompted = False
         self.closing_after_download = False
         self.setAcceptDrops(True)
         self.setWindowTitle('iosGuanxing')
@@ -356,6 +358,9 @@ class MainWindow(QMainWindow):
         self.apply_theme(self.store.theme())
         self.update_buttons()
         QTimer.singleShot(0, self.restore)
+        if not (os.environ.get('IOSGUANXING_SMOKE_REPORT')
+                or os.environ.get('IOSGUANXING_DISABLE_AUTO_UPDATE')):
+            QTimer.singleShot(3000, self.check_for_updates_automatically)
 
     def button(self, text, handler, object_name=''):
         button = QPushButton(text)
@@ -486,23 +491,34 @@ class MainWindow(QMainWindow):
         self.store.set_theme(theme)
         self.apply_theme(theme)
 
-    def check_for_updates(self):
+    def check_for_updates_automatically(self):
+        if not self.auto_update_prompted:
+            self.check_for_updates(True)
+
+    def check_for_updates(self, automatic=False):
         if self.update_worker:
             return
+        self.update_check_automatic = bool(automatic)
         self.update_worker = UpdateThread(self)
         self.update_worker.completed.connect(self.update_check_complete)
         self.update_worker.failed.connect(self.update_check_failed)
         self.update_worker.finished.connect(self.update_check_finished)
-        self.update_button.setText('↻  正在检查…')
-        self.show_status('正在检查 iosGuanxing 更新…')
+        if not self.update_check_automatic:
+            self.update_button.setText('↻  正在检查…')
+            self.show_status('正在检查 iosGuanxing 更新…')
         self.update_buttons()
         self.update_worker.start()
 
     def update_check_complete(self, result):
         if not result['available']:
-            QMessageBox.information(self, '检查更新', '当前已是最新版本 v%s。' % VERSION)
-            self.show_status('当前已是最新版本 v%s' % VERSION)
+            if not self.update_check_automatic:
+                QMessageBox.information(self, '检查更新', '当前已是最新版本 v%s。' % VERSION)
+                self.show_status('当前已是最新版本 v%s' % VERSION)
             return
+        if self.update_check_automatic:
+            if self.auto_update_prompted:
+                return
+            self.auto_update_prompted = True
         detail = ('发现新版本 v%s。\n\n%s\n\n请选择下载页面：'
                   % (result['version'], result['body'] or '请前往发布页面查看更新说明。'))
         dialog = QMessageBox(self)
@@ -519,14 +535,16 @@ class MainWindow(QMainWindow):
         self.show_status('发现新版本 v%s' % result['version'])
 
     def update_check_failed(self, message):
-        QMessageBox.warning(self, '检查更新失败', message)
-        self.show_status(message, True)
+        if not self.update_check_automatic:
+            QMessageBox.warning(self, '检查更新失败', message)
+            self.show_status(message, True)
 
     def update_check_finished(self):
         worker = self.update_worker
         self.update_worker = None
         if worker:
             worker.deleteLater()
+        self.update_check_automatic = False
         self.update_button.setText('↻  检查更新')
         self.update_buttons()
 
@@ -633,6 +651,13 @@ class MainWindow(QMainWindow):
             if response == QMessageBox.Yes:
                 self.closing_after_download = True
                 self.show_status('正在等待本次请求结束，随后自动退出…')
+            event.ignore()
+            return
+        if self.update_worker and self.update_worker.isRunning():
+            # urllib cannot be safely interrupted mid-request. Hide immediately,
+            # then close after the bounded update request has returned.
+            self.update_worker.finished.connect(self.close)
+            self.hide()
             event.ignore()
             return
         self.view.stop()

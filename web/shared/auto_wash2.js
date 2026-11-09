@@ -33,7 +33,7 @@
                 <button id="w2Preset" type="button" class="btn btn-reset">金顶混</button>
                 <button id="w2Clear" type="button" class="btn btn-reset">清空选择</button>
             </div>
-            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。先按 2000、3500 丹逐步搜索，再扩展至本次上限；整轮最多约 3 分钟，找到候选后继续搜索更省丹的路线。</p>
+            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。先在本次上限内寻找可执行路线，未找到会逐级扩大节点与脉序范围，找到后持续按当前最低丹耗优化；整轮最多约 5 分钟，验证通过的候选会立即显示。</p>
             <div id="w2Targets" class="w2-targets"></div>
             <p id="w2Requirements" class="w2-requirements"></p>
         </section>

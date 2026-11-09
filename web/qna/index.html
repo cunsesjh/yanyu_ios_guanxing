@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iosGuanxing · Q&amp;A</title>
+    <meta name="description" content="iosGuanxing 常见问题与反馈说明">
+    <link rel="stylesheet" href="../shared/simulator.css">
+    <link rel="stylesheet" href="./qna.css">
+</head>
+<body>
+    <div class="app-container qna-app">
+        <header class="app-header qna-header">
+            <h1>Q&amp;A</h1>
+            <p class="subtitle">下载、存档、自动洗脉、版本更新与问题反馈</p>
+            <nav class="sim-nav" aria-label="观星功能导航"></nav>
+        </header>
+
+        <main class="qna-main">
+            <section class="qna-intro" aria-labelledby="qnaTitle">
+                <span>使用说明</span>
+                <h2 id="qnaTitle">常见问题</h2>
+                <p>遇到问题时，先确认程序和游戏版本，再按对应条目排查。</p>
+            </section>
+
+            <div class="qna-list">
+                <section class="qna-item"><h3><span>01</span>为什么用 Edge 下载时会提示文件不常见、不安全？</h3><p>这是因为程序目前没有购买 Windows 代码签名证书，而且每个新版 EXE 的文件哈希都会变化。Edge 和 Windows SmartScreen 会把下载量少、没有数字签名的新 EXE 标记为“不常见文件”，从而不信任、拦截，这是正常现象，建议更换浏览器下载。</p></section>
+
+                <section class="qna-item"><h3><span>02</span>为什么导入 HAR 后提示存档不完整？</h3><p>HAR 不是存档本体，它主要提供登录会话。程序会使用这个会话向游戏服务器下载当前云存档，然后在本地解码。如果抓包缺少同一账号的登录握手、会话或区服信息，会提示 HAR 不完整，需要从登录前重新抓取。</p><p>某些单独功能还需要 MakeRnd 或特定随机种子。如果缺少这些字段，普通角色数据可能仍能查看，但装备、剑王阁或其他随机推演功能会单独提示不可用，一般发生在版本更新未适配的情况下。</p></section>
+
+                <section class="qna-item"><h3><span>03</span>自动洗脉这次具体改了什么？</h3><p>自动洗脉改进版默认上限是 5000 丹，整轮最多搜索 5 分钟。</p><p>以前的策略会先搜索固定的低丹耗区间，2000/3000/5000，但搜索时间最多 180 秒，所以会出现存在真实可行脉序却找不到的情况。</p><p>现在会先在完整耗丹上限内寻找一条经过回放验证的路线。第一条路线一旦找到，会立刻显示，不需要等五分钟结束。找到路线以后，程序会把新的搜索上限设置为“当前最好丹耗减一”。比如先找到 4200 丹路线，就继续搜索 4199 丹以内。如果前两分钟没有找到任何路线，剩余时间也会继续寻找可执行路线。</p></section>
+
+                <section class="qna-item"><h3><span>04</span>那么可以说自动洗脉一定准确了吗？</h3><p>不，作者手里的真实存档样本有限，虽然我手里的样本数据都已校对成功，但不同角色、资质、初始紫脉和极端脉序的组合非常多，确实有出现不准或漏掉低耗路线的可能。</p><p>如果遇到这种情况，大家反馈时可以提供洗脉前的现存脉、目标脉、锁脉设置、程序结果截图，以及游戏里的实际路线和丹耗。</p></section>
+
+                <section class="qna-item"><h3><span>05</span>检查更新为什么改了？</h3><p>之前程序通过 GitHub API 检查更新，部分网络在 VPN 规则模式下访问不到，只有全局代理才能正常检测。</p><p>现在改为使用 Gitee 的公开发行版接口。程序启动几秒后会在后台检查一次，同一次运行期间最多自动提醒一次。下次启动如果仍然没有更新，还会再次提醒。</p><p>自动检查失败不会弹错误打扰使用；也可以随时点击左下角“检查更新”手动检查。发现新版本后，可以选择前往 GitHub 或 Gitee Release 页面。</p></section>
+
+                <section class="qna-item"><h3><span>06</span>为什么游戏转盘在程序里看不了？</h3><p>游戏活动转盘属于在线内容，活动状态、次数、奖励池或页面资源可能由游戏服务器实时下发，并不完整保存在角色存档里。</p></section>
+
+                <section class="qna-item"><h3><span>07</span>版本不适配时会出现什么情况？</h3><p>游戏更新后，如果传输协议、加密流程、密钥或数据结构发生变化，旧版程序可能提示内层解码校验失败、下载或解码未完成，或者缺少当前版本所需的数据。</p><p>这通常不是重复导出 HAR 就能解决的。先看程序左侧的支持版本，再到 Release 检查有没有新版。如果游戏版本已经超过程序标注的支持范围，请等待适配，不建议反复主动下载或不断重新抓包。</p></section>
+
+                <section class="qna-item"><h3><span>08</span>遇到 Bug 应该怎么反馈？</h3><p>反馈之前，第一步先到 GitHub 或 Gitee Release 确认自己使用的是最新版本。</p><p>如果是程序无法启动、存档数据明显错误、程序崩溃，或者可能影响存档的严重问题，可以在 GitHub 提 Issues 或私信反馈，带上完整报错截图、程序版本、游戏版本和复现步骤。</p><p>如果是某个页面显示异常、按钮无反应或计算结果有疑问，可以在评论区带截图反馈，最好说明下角色、功能、选择条件和预期结果。</p><p>截图和复现步骤越完整，修复速度越快。</p></section>
+
+                <section class="qna-item"><h3><span>09</span>可以随便找个主页视频的评论区反馈吗？</h3><p>每次更新都会出对应版本 v x.x.x 的视频，Bug 可在最新视频下反馈。</p></section>
+
+                <section class="qna-item"><h3><span>10</span>新功能会根据评论和点赞开发吗？</h3><p>可以在评论区或 Issues 提出新功能。点赞多、需求明确、样本足够的功能会优先考虑。</p><p>但高点赞不代表一定能做出来。有些功能依赖服务器实时数据，有些缺少游戏规则和足够样本，还有些可能带来账号风险或维护成本。最终是否开发，要看可行性、准确性和安全性。</p><p>建议大家留言时可以写清楚功能用途、使用场景、期望输入和输出。</p></section>
+
+                <section class="qna-item"><h3><span>11</span>更新频率？</h3><p>现在还在项目起步阶段，所以更的会频繁一些，这次版本之后打开程序会自动检测更新，也省的大家紧盯 GitHub 或者 Gitee。项目平稳后，会改为一周一次或一个版本一次。</p></section>
+
+                <section class="qna-item"><h3><span>12</span>可以传播吗？</h3><p>当然可以，本就是开源项目。如果大家身边或者群聊中有需要 iOS 观星的都可以互相分享：EXE 程序本体、GitHub 链接、百度网盘链接（这个在 Gitee 最新发行版本的描述中）。</p></section>
+            </div>
+        </main>
+    </div>
+    <script src="../desktop-ui.js"></script>
+</body>
+</html>

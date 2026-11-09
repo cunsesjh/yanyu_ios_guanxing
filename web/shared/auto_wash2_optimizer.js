@@ -380,6 +380,19 @@
 
         const startState = engine.initialState(input.initialState || {});
         const initialSlotCount = Math.max(0, Math.min(4, numeric(startState.zizhi, numeric(input.initialState?.zizhi, 154)) - 150));
+        const searchIntensity = Math.max(1, Math.min(4,
+            Math.trunc(numeric(input?.options?.searchIntensity, 1))));
+        const limits = {
+            ...SEARCH_LIMITS,
+            maxEventNodes: SEARCH_LIMITS.maxEventNodes + (searchIntensity - 1) * 250000,
+            maxMainRawWashes: SEARCH_LIMITS.maxMainRawWashes + (searchIntensity - 1) * 1000000,
+            maxTailRawWashes: SEARCH_LIMITS.maxTailRawWashes + (searchIntensity - 1) * 1000000,
+            maxEventDepth: SEARCH_LIMITS.maxEventDepth + (searchIntensity - 1) * 16,
+            maxFinalTailExchangeDepth: SEARCH_LIMITS.maxFinalTailExchangeDepth + (searchIntensity - 1) * 8,
+            maxExchangePreviewDepth: SEARCH_LIMITS.maxExchangePreviewDepth + (searchIntensity - 1) * 2,
+            maxSparseTargetGap: SEARCH_LIMITS.maxSparseTargetGap + (searchIntensity - 1) * 4,
+            maxSparseRawDraws: SEARCH_LIMITS.maxSparseRawDraws + (searchIntensity - 1) * 24,
+        };
         const {
             maxEventNodes,
             maxMainRawWashes,
@@ -391,10 +404,11 @@
             maxSparseTargetGap,
             maxSparseRawDraws,
             deferredInterleaveEvery,
-        } = SEARCH_LIMITS;
+        } = limits;
         const scope = {
             algorithm: 'source-complete-window-destroy-tail-v025',
             implementationRevision: 'v0.2.5-complete-window-destroy',
+            searchIntensity,
             strategyGraph: '三槽真实起手、最近冲突脉反查、全部置换窗口保留、稀疏目标桥、毁脉临时支点、三四紫尾段独立预算',
             maxTotalPills,
             activePillCeiling: maxTotalPills,

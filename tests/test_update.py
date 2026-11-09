@@ -2,7 +2,7 @@ import io
 import json
 import unittest
 
-from desktop.update import check_update, parse_release, version_tuple
+from desktop.update import LATEST_RELEASE, check_update, parse_release, version_tuple
 
 
 class Response(io.BytesIO):
@@ -28,6 +28,18 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(result['gitee_url'],
                          'https://gitee.com/cunses/yanyu_ios_guanxing/releases/tag/v3.1.0')
         self.assertEqual(result['body'], '修复内容')
+
+    def test_update_check_uses_public_gitee_release_api(self):
+        captured = {}
+        def open_release(request, timeout):
+            captured['url'] = request.full_url
+            captured['accept'] = request.get_header('Accept')
+            captured['timeout'] = timeout
+            return Response(json.dumps({'tag_name': 'v3.0.3'}).encode())
+        check_update('3.0.3', open_release)
+        self.assertEqual(LATEST_RELEASE,
+                         'https://gitee.com/api/v5/repos/cunses/yanyu_ios_guanxing/releases/latest')
+        self.assertEqual(captured, {'url': LATEST_RELEASE, 'accept': 'application/json', 'timeout': 10})
 
     def test_invalid_version_is_rejected(self):
         with self.assertRaises(ValueError):
