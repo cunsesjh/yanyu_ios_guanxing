@@ -358,7 +358,8 @@ class MainWindow(QMainWindow):
         self.apply_theme(self.store.theme())
         self.update_buttons()
         QTimer.singleShot(0, self.restore)
-        if not os.environ.get('IOSGUANXING_SMOKE_REPORT'):
+        if not (os.environ.get('IOSGUANXING_SMOKE_REPORT')
+                or os.environ.get('IOSGUANXING_DISABLE_AUTO_UPDATE')):
             QTimer.singleShot(3000, self.check_for_updates_automatically)
 
     def button(self, text, handler, object_name=''):

@@ -8,6 +8,8 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      IOSGUANXING_DISABLE_AUTO_UPDATE: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
