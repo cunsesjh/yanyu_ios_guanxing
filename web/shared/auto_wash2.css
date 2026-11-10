@@ -37,3 +37,4 @@
     #autoWash2ModePanel .w2-section { padding: 14px; }
     #autoWash2ModePanel .w2-targets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+.w2-credit{margin:8px 0 0;padding:7px 10px;border-left:3px solid #b88a42;background:rgba(184,138,66,.09);color:var(--muted,#6f685f);font-size:12px;line-height:1.5}

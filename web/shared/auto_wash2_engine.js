@@ -18,7 +18,8 @@
                 this.levels.set(zizhi, new source.Engine(this.data, this.raw, {
                     ...this.options, eligibleZi: zizhi, slotCount: Number(config.num_talent),
                     pity: Number(config.bd_zz), eat: Number(config.eat_xisui),
-                    advancePerDraw: true, international: false,
+                    advancePerDraw: true,
+                    international: source.isInternationalChannel(this.raw.save_channel || this.raw.channel),
                 }));
             }
             return this.levels.get(zizhi);
@@ -36,6 +37,7 @@
             result.state.zizhi = state.zizhi;
             return result;
         }
+        upgradeToThree(state) { return {...cloneState(state), zizhi: 153}; }
         upgradeToFour(state) { return {...cloneState(state), zizhi: 154}; }
     }
     root.AutoWash2Engine = Object.freeze({...source, Engine, cloneState,

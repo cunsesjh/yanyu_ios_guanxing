@@ -55,6 +55,21 @@ class DesktopTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.store.set_theme('invalid')
 
+    def test_release_notes_are_shown_once_per_version_and_preserve_theme(self):
+        self.assertFalse(self.store.release_notes_seen('3.0.5'))
+        self.store.mark_release_notes_seen('3.0.5')
+        self.assertTrue(Store(self.tmp.name).release_notes_seen('3.0.5'))
+        self.assertFalse(self.store.release_notes_seen('3.0.6'))
+        self.store.set_theme('light')
+        reopened = Store(self.tmp.name)
+        self.assertEqual(reopened.theme(), 'light')
+        self.assertTrue(reopened.release_notes_seen('3.0.5'))
+        reopened.mark_release_notes_seen('3.0.6')
+        reopened.set_theme('dark')
+        self.assertTrue(Store(self.tmp.name).release_notes_seen('3.0.6'))
+        with self.assertRaises(ValueError):
+            self.store.mark_release_notes_seen('')
+
     def test_failed_refresh_keeps_previous_snapshot_and_session(self):
         self.store.save_session(SESSION)
         row = self.store.save_snapshot(DATA, 'ios', '1', '73576')

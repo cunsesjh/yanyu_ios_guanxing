@@ -91,23 +91,24 @@ jobs:
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: iosGuanxing ${{ github.ref_name }}（正式版）
-          prerelease: false
+          name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
+          prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            Windows 10/11 x64 正式版：原生窗口、HAR 导入、主动下载、内置观星网页、历史存档。
-            自动洗脉（改进）默认 5000 丹、最长约 5 分钟：先寻找可执行路线，无候选时逐级扩大节点、深度和锚点脉序范围，找到后继续压低丹耗。
-            自动洗脉锚点路线支持 1–4 个目标；候选均经过本地状态机回放校验，但不承诺全局最优。
-            更新检查改用 Gitee 公开接口；每次启动后台检查一次、单次运行最多自动提醒一次，也可手动检查并选择 GitHub 或 Gitee 下载页。
-            新增 Q&A 页面，集中说明下载拦截、存档完整性、版本适配、功能限制与问题反馈方式。
-            侧栏新增国服、先行服和国际服支持版本提示。
-            登录会话由 Windows 当前用户加密保存；启动仅恢复本地存档，点击下载才访问游戏服务器。
-            下载 iosGuanxing.exe 直接运行。程序暂未进行代码签名。
+            ## v3.0.5 正式版更新公告
+
+            本次结合了 B 站大佬「庸丶人」分享的欧气种子路线思路，对「自动洗脉（改进）」的搜索逻辑进行了重写与整合。
+
+            新版搜索不再只依赖单一路线，而是分阶段尝试多类搜索方法，包括欧气种子路线、锁脉定种子、连续置换、跳脉及目标脉序搜索等。程序会先寻找可行路线，再利用剩余时间继续扩展搜索、比较丹耗，尝试找到更省丹的方案。默认丹耗上限为 5000 丹，搜索时间通常最长约 10 分钟；四目标路线在符合条件时可延长至约 15 分钟。
+
+            需要注意，搜索结果受角色存档、脉序及搜索范围影响，程序找到的是当前搜索范围内通过回放校验的方案，不保证一定找到路线，也不保证达到理论上的全局最低丹耗。
+
+            感谢抖音大佬「江南晚来客」提供洗脉样本数据并协助校对，帮助提升了数据准确性。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
 
   sync-gitee-code:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') && github.repository == 'cunsesjh/yanyu_ios_guanxing'
     runs-on: ubuntu-latest
     concurrency:
       group: gitee-code

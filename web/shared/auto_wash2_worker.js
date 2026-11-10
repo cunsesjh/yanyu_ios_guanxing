@@ -1,12 +1,24 @@
 /* Dedicated runtime: does not install or replace any legacy page/worker globals. */
 'use strict';
 self.window = self;
-function initialSearchWindow(totalSearchMs = 300000) {
+function initialSearchWindow(totalSearchMs = 600000) {
     return Math.min(120000, totalSearchMs * 0.4);
 }
-self.AutoWash2SearchPolicy = Object.freeze({initialSearchWindow});
+function searchTimeLimit(targetCount) {
+    return Number(targetCount) === 4 ? 900000 : 600000;
+}
+const SEARCH_STAGES = Object.freeze([
+    {fraction: 0.20, intensity: 1, label: '快速找路'},
+    {fraction: 0.30, intensity: 2, label: '扩展种子与脉序'},
+    {fraction: 0.30, intensity: 3, label: '扩大锚点与战术图'},
+    {fraction: 0.20, intensity: 4, label: '全强度压低丹耗'},
+]);
+self.AutoWash2SearchPolicy = Object.freeze({initialSearchWindow, searchTimeLimit, stages: SEARCH_STAGES});
 importScripts('data.js', 'wash_source_engine.js', 'auto_wash2_source_cache.js', 'auto_wash2_engine.js', 'auto_wash2_optimizer.js', 'auto_wash2_model.js');
 importScripts('anchor_route_planner.js', 'anchor_route_search.js', 'auto_wash2_anchor.js');
+importScripts('auto_wash2_seed_planner.js', 'auto_wash2_seed.js');
+importScripts('auto_wash2_unified_anchor.js', 'auto_wash2_route_constructor.js',
+    'auto_wash2_unified_route_constructor.js', 'auto_wash2_unified.js');
 self.onmessage = async ({data: message}) => {
     const send = (type, payload) => self.postMessage({type, requestId: message.requestId, ...payload});
     try {
@@ -41,10 +53,54 @@ self.onmessage = async ({data: message}) => {
         // for a fixed feasibility phase to expire.
         const searchStarted = Date.now();
         const requestedSearchMs = Number(message.searchTimeMs);
+        // Four-target routes have a much larger combinatorial search space;
+        // only those runs may use the additional five-minute allowance.
+        const maxSearchMs = searchTimeLimit(branches[0]?.length || 0);
         const totalSearchMs = Number.isFinite(requestedSearchMs)
-            ? Math.max(100, Math.min(300000, requestedSearchMs)) : 300000;
+            ? Math.max(100, Math.min(maxSearchMs, requestedSearchMs)) : maxSearchMs;
         const totalDeadline = searchStarted + totalSearchMs;
         const userBudget = Math.max(0, Math.trunc(Number(input.options?.maxTotalPills ?? 5000)));
+        const isInternational = WashSourceEngine.isInternationalChannel(
+            input.initialState?.save_channel || input.initialState?.channel);
+        const progressFor = (branch, stage, value) => send('progress', {progress: {...value,
+            message: `阶段 ${stage.intensity}/4 · 目标组合 ${branch + 1}/${branches.length} · ${value.message}`}});
+        function stageInput(ceiling) {
+            return {...input, options: {...input.options, maxTotalPills: ceiling}};
+        }
+        function runSeedStage(stage, stageDeadline, engineFraction) {
+            for (let branch = 0; branch < branches.length && Date.now() < stageDeadline; branch++) {
+                const best = combined().routes[0]?.totalPills;
+                if (best === 0) return;
+                const ceiling = Math.min(userBudget, best == null ? userBudget : Math.max(0, best - 1));
+                const branchesLeft = branches.length - branch;
+                const branchWindow = Math.max(0, (stageDeadline - Date.now()) / branchesLeft * engineFraction);
+                if (branchWindow < 250) return;
+                const quickBudget = Math.max(250, branchWindow * 0.30);
+                try {
+                    AutoWash2Seed.search(stageInput(ceiling), branches[branch], collect,
+                        value => progressFor(branch, stage, value),
+                        {intensity: stage.intensity, timeBudgetMs: quickBudget});
+                } catch (_) {
+                    progressFor(branch, stage, {message: '欧气种子快搜未形成候选，转入统一构造'});
+                }
+                if (Date.now() >= stageDeadline) return;
+                const unifiedBudget = Math.max(500, Math.min(stageDeadline - Date.now(), branchWindow * 0.70));
+                // Unified construction has a few indivisible sequence scans.
+                // Starting it with a tiny slice can overrun that stage and
+                // starve stages 3/4; return the slice to tactical search.
+                if (unifiedBudget < 8000) {
+                    progressFor(branch, stage, {message: '本阶段剩余时间不足以启动统一构造，转入可中断搜索'});
+                    continue;
+                }
+                try {
+                    AutoWash2Unified.search(stageInput(ceiling), branches[branch], collect,
+                        value => progressFor(branch, stage, value),
+                        {intensity: stage.intensity, timeBudgetMs: unifiedBudget});
+                } catch (_) {
+                    progressFor(branch, stage, {message: '统一路线构造未形成候选，继续战术搜索'});
+                }
+            }
+        }
         async function runPass(stageCap, stageDeadline, purpose, stopWhenFound = false,
                 stopWhenImproved = false, searchIntensity = 1) {
             const startingBest = combined().routes[0]?.totalPills ?? null;
@@ -88,9 +144,16 @@ self.onmessage = async ({data: message}) => {
                 const anchorCeiling = Math.min(ceiling,
                     bestAfterTactical == null ? ceiling : Math.max(0, bestAfterTactical - 1));
                 if (anchorCeiling === 0 && bestAfterTactical != null) continue;
+                const anchorMinimumMs = 10000 + (searchIntensity - 1) * 5000;
+                if (!isInternational && branchDeadline - Date.now() < anchorMinimumMs) {
+                    progress({message: '本阶段剩余时间不足以启动锚点整轮，转入下一阶段'});
+                    continue;
+                }
                 const anchorInput = {...input, options: {...input.options,
                     maxTotalPills: anchorCeiling, searchIntensity}};
-                const anchorLimited = !!AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
+                // The legacy anchor planner is tied to the domestic table order.
+                // International saves use the channel-aware unified constructor above.
+                const anchorLimited = isInternational ? false : !!AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
                     () => Date.now() >= branchDeadline || Date.now() >= stageDeadline
                         || Date.now() >= totalDeadline || (waitingForFirst && found.size > 0)
                         || (stopWhenImproved && startingBest != null
@@ -105,27 +168,24 @@ self.onmessage = async ({data: message}) => {
             return false;
         }
 
-        // Give the first attempt up to two minutes. If it still finds nothing,
-        // keep the full user ceiling for the remainder rather than spending
-        // time "optimizing" a route that does not yet exist.
-        await runPass(userBudget, Math.min(totalDeadline, searchStarted + initialSearchWindow(totalSearchMs)),
-            '优先寻找可执行路线', true);
-        let searchIntensity = 1;
-        while (!found.size && Date.now() < totalDeadline && searchIntensity < 4) {
-            searchIntensity += 1;
-            await runPass(userBudget, totalDeadline,
-                `扩大可执行路线搜索（强度 ${searchIntensity}/4）`, true, false, searchIntensity);
-        }
-
-        // Keep tightening to best - 1. Whenever a lower verified route is
-        // found, stop that pass immediately and restart under the new bound.
-        while (found.size && Date.now() < totalDeadline) {
-            const best = combined().routes[0].totalPills;
-            if (best <= 0) break;
-            const improved = await runPass(best - 1, totalDeadline,
-                `继续压低丹耗（当前最好 ${best.toLocaleString()} 丹）`,
-                false, true, searchIntensity);
-            if (!improved) break;
+        // Four progressive stages share one hard deadline. Engines receive a
+        // larger share while no route exists; once feasible, unused time flows
+        // to tactical/anchor refinement under best-1 instead of sitting idle.
+        let cumulative = 0;
+        for (const stage of SEARCH_STAGES) {
+            if (Date.now() >= totalDeadline || combined().routes[0]?.totalPills === 0) break;
+            cumulative += stage.fraction;
+            const stageDeadline = Math.min(totalDeadline,
+                searchStarted + Math.round(totalSearchMs * cumulative));
+            const hadRoute = found.size > 0;
+            send('progress', {progress: {message: `阶段 ${stage.intensity}/4 · ${stage.label}`}});
+            runSeedStage(stage, stageDeadline, hadRoute ? 0.40 : 0.55);
+            if (Date.now() >= stageDeadline) { limited = true; continue; }
+            const best = combined().routes[0]?.totalPills;
+            const ceiling = best == null ? userBudget : Math.max(0, best - 1);
+            await runPass(ceiling, stageDeadline,
+                best == null ? stage.label : `${stage.label}（当前最好 ${best.toLocaleString()} 丹）`,
+                best == null, best != null, stage.intensity);
         }
         send('result', {result: {...combined(), limited}});
     } catch (error) {

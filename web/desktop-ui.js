@@ -114,8 +114,7 @@
         ['角色状态', 'role/status.html'],
         ['自动模拟', 'auto/index.html'],
         ['鬼市千宝阁', 'guishi/index.html'],
-        ['恒山游货郎', 'guishi/index.html?page=hs'],
-        ['Q&A', 'qna/index.html']
+        ['恒山游货郎', 'guishi/index.html?page=hs']
     ];
     document.querySelectorAll('.sim-nav').forEach(function (nav) {
         nav.replaceChildren();

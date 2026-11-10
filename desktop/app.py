@@ -15,6 +15,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 
 from . import VERSION
 from .server import LocalSite
+from .release_notes import ITEMS as RELEASE_NOTE_ITEMS, TITLE as RELEASE_NOTE_TITLE
 from .service import DownloadService
 from .storage import Store
 from .update import check_update
@@ -360,7 +361,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self.restore)
         if not (os.environ.get('IOSGUANXING_SMOKE_REPORT')
                 or os.environ.get('IOSGUANXING_DISABLE_AUTO_UPDATE')):
-            QTimer.singleShot(3000, self.check_for_updates_automatically)
+            QTimer.singleShot(900, self.run_startup_prompts)
 
     def button(self, text, handler, object_name=''):
         button = QPushButton(text)
@@ -387,6 +388,45 @@ class MainWindow(QMainWindow):
     def show_status(self, text, error=False):
         self.status_label.setText(text)
         self.status_label.setStyleSheet('color: #ffb4a6;' if error else 'color: #a9c4d8;')
+
+    def show_release_notes_once(self):
+        if self.store.release_notes_seen(VERSION) or not RELEASE_NOTE_ITEMS:
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle('iosGuanxing 已更新')
+        dialog.setModal(True)
+        dialog.setMinimumWidth(500)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(14)
+
+        version = QLabel('v%s  更新内容' % VERSION)
+        version.setObjectName('eyebrow')
+        layout.addWidget(version)
+        title = QLabel(RELEASE_NOTE_TITLE)
+        title.setObjectName('pageTitle')
+        title.setWordWrap(True)
+        layout.addWidget(title)
+        for text in RELEASE_NOTE_ITEMS:
+            item = QLabel('•  ' + text)
+            item.setObjectName('muted')
+            item.setWordWrap(True)
+            item.setTextFormat(Qt.PlainText)
+            layout.addWidget(item)
+        layout.addSpacing(4)
+        confirm = QPushButton('我知道了')
+        confirm.setObjectName('primary')
+        confirm.setMinimumHeight(42)
+        confirm.clicked.connect(dialog.accept)
+        layout.addWidget(confirm)
+        dialog.exec()
+        self.store.mark_release_notes_seen(VERSION)
+
+    def run_startup_prompts(self):
+        self.show_release_notes_once()
+        # The release notes dialog owns the event loop while visible. Start the
+        # network update check only after it closes, never as a nested dialog.
+        QTimer.singleShot(1500, self.check_for_updates_automatically)
 
     def update_buttons(self):
         busy = self.worker is not None
