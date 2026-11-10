@@ -135,6 +135,10 @@
         let segLocks = [];
         const pushStep = step => {
             step.locks = segLocks.slice();
+            step.field = (step.field || s.talents).slice();
+            step.lockedIds = [...new Set(held.concat(
+                conflict == null ? [] : [conflict],
+                carrier == null ? [] : [carrier]))];
             steps.push(step);
             segLocks = keepIds();
         };

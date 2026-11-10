@@ -187,6 +187,12 @@ async function send(type, payload) {
     assert.equal(upstreamUnified.sourceFamily, 'U');
     assert.equal(upstreamUnified.seedMethod, 'exchange');
     assert.equal(upstreamUnified.postSeedMode, 'exchange-chain');
+    assert.ok(upstreamUnified.steps.every(step => step.after.talents.length > 0),
+        'unified route steps must include their post-action field snapshot');
+    assert.equal(upstreamUnified.steps.reduce((sum, step) => sum + step.washes, 0),
+        upstreamUnified.totalWashes, 'displayed wash counts must add up to the verified total');
+    assert.ok(upstreamUnified.steps.some(step => step.detail.includes('本段洗髓')),
+        'wash segments must be called out in the step details');
     const legacy = planner.search(anchorRaw, anchors, source, 0,
         {targets:targetIds, maxNodes:500, depth:10, maxCost:10000, sequenceBasis:'theory2'}).routes[0];
     assert.equal(legacy.cost, 1025);

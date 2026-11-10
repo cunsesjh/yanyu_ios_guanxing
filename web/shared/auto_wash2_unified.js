@@ -45,11 +45,22 @@
         const steps = candidate.steps.map(step => {
             const cumulativePills = Math.max(priorCost, Number(step.cost) || priorCost);
             const washes = Math.max(priorWashes, Number(step.washes) || priorWashes);
-            const [label, detail] = stepLabel(step);
-            const row = {type: step.type || 'wash', label, detail,
+            const washDelta = washes - priorWashes;
+            const [label, baseDetail] = stepLabel(step);
+            const segmentLocks = (step.locks || step.washLocks || []).map(Number);
+            const detailParts = [];
+            if (washDelta > 0) {
+                detailParts.push(`本段洗髓 ${washDelta} 次`);
+                detailParts.push(segmentLocks.length
+                    ? `洗髓时保留：${segmentLocks.map(name).join('、')}`
+                    : '洗髓时不锁脉');
+            }
+            if (baseDetail) detailParts.push(baseDetail);
+            const row = {type: step.type || 'wash', label, detail: detailParts.join('；'),
                 pills: cumulativePills - priorCost, cumulativePills,
-                washes: washes - priorWashes,
-                after: {talents: (step.field || []).map(id => ({id: Number(id), name: name(id)}))}};
+                washes: washDelta,
+                after: {talents: (step.field || []).map(id => ({id: Number(id), name: name(id),
+                    locked: (step.lockedIds || []).map(Number).includes(Number(id))}))}};
             priorCost = cumulativePills; priorWashes = washes;
             return row;
         });
