@@ -14,6 +14,10 @@ vm.runInContext(fs.readFileSync(path.join(root, 'auto_wash2_worker.js'), 'utf8')
 const model = sandbox.AutoWash2Model;
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(), 120000);
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(1000), 400);
+assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(4), 900000,
+    'four-target searches may run for up to fifteen minutes');
+assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(3), 600000,
+    'searches with fewer than four targets stay capped at ten minutes');
 assert.deepEqual(JSON.parse(JSON.stringify(sandbox.AutoWash2SearchPolicy.stages.map(s => [s.fraction, s.intensity]))),
     [[0.2, 1], [0.3, 2], [0.3, 3], [0.2, 4]], 'four progressive stages must consume the full shared deadline');
 const save = {CenterID: 1278440, Items: [{ID: 2601, Num: 100}], globalVariable: {test: 1}};
@@ -37,6 +41,11 @@ const data = {271: {weight: 4}, 272: {weight: 4}, 250: {weight: 4}};
 const selection = model.targets(converted, new Map([[272, 0], [250, 0]]), data);
 assert.equal(selection.targetIds[0], 271, 'preserved purple is required');
 assert.equal(model.combinations(selection).length, 2);
+const fourTargetSelection = model.targets(converted,
+    new Map([[272, 0], [250, 1], [249, 2]]), data);
+assert.ok(model.combinations(fourTargetSelection).every(branch => branch.length === 4),
+    'required talents plus three compatible groups form four-target branches');
+assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(model.combinations(fourTargetSelection)[0].length), 900000);
 assert.throws(() => model.targets(converted, new Map([[272, -1], [250, -1], [249, -1], [248, -1]]), data), /1–4/);
 
 async function send(type, payload) {

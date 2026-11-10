@@ -4,13 +4,16 @@ self.window = self;
 function initialSearchWindow(totalSearchMs = 600000) {
     return Math.min(120000, totalSearchMs * 0.4);
 }
+function searchTimeLimit(targetCount) {
+    return Number(targetCount) === 4 ? 900000 : 600000;
+}
 const SEARCH_STAGES = Object.freeze([
     {fraction: 0.20, intensity: 1, label: '快速找路'},
     {fraction: 0.30, intensity: 2, label: '扩展种子与脉序'},
     {fraction: 0.30, intensity: 3, label: '扩大锚点与战术图'},
     {fraction: 0.20, intensity: 4, label: '全强度压低丹耗'},
 ]);
-self.AutoWash2SearchPolicy = Object.freeze({initialSearchWindow, stages: SEARCH_STAGES});
+self.AutoWash2SearchPolicy = Object.freeze({initialSearchWindow, searchTimeLimit, stages: SEARCH_STAGES});
 importScripts('data.js', 'wash_source_engine.js', 'auto_wash2_source_cache.js', 'auto_wash2_engine.js', 'auto_wash2_optimizer.js', 'auto_wash2_model.js');
 importScripts('anchor_route_planner.js', 'anchor_route_search.js', 'auto_wash2_anchor.js');
 importScripts('auto_wash2_seed_planner.js', 'auto_wash2_seed.js');
@@ -49,8 +52,11 @@ self.onmessage = async ({data: message}) => {
         // for a fixed feasibility phase to expire.
         const searchStarted = Date.now();
         const requestedSearchMs = Number(message.searchTimeMs);
+        // Four-target routes have a much larger combinatorial search space;
+        // only those runs may use the additional five-minute allowance.
+        const maxSearchMs = searchTimeLimit(branches[0]?.length || 0);
         const totalSearchMs = Number.isFinite(requestedSearchMs)
-            ? Math.max(100, Math.min(600000, requestedSearchMs)) : 600000;
+            ? Math.max(100, Math.min(maxSearchMs, requestedSearchMs)) : maxSearchMs;
         const totalDeadline = searchStarted + totalSearchMs;
         const userBudget = Math.max(0, Math.trunc(Number(input.options?.maxTotalPills ?? 5000)));
         const isInternational = WashSourceEngine.isInternationalChannel(
