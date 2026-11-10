@@ -727,8 +727,25 @@
             const afterTargetCount = targetsIn(exchanged.state, targetSet).length;
             const addedTarget = targetSet.has(exchanged.action.addedId);
             const removedTarget = targetSet.has(exchanged.action.removedId);
-            const nextLocks = idsInStateOrder(exchanged.state,
-                (lockedIds || []).filter(id => id !== exchanged.action.removedId));
+            const addedId = Number(exchanged.action.addedId);
+            const nextLockSet = new Set(targetsIn(exchanged.state, targetSet));
+            if (engine.isShenmai(addedId)) {
+                nextLockSet.add(addedId);
+                const otherShenmai = exchanged.state.talents.find(id => id !== addedId && engine.isShenmai(id));
+                if (otherShenmai != null) nextLockSet.add(otherShenmai);
+            } else if (engine.quality(addedId) === 4) {
+                const position = exchanged.state.talents.indexOf(addedId);
+                const blocker = exchanged.state.talents.slice(0, position).find(id =>
+                    engine.quality(id) < 4 && engine.talentType(id) === engine.talentType(addedId));
+                if (blocker != null) {
+                    nextLockSet.add(blocker);
+                    nextLockSet.add(addedId);
+                }
+            }
+            // Carry the next purple's actual blocker, not stale locks from the
+            // previous exchange. This preserves legal multi-step relay chains
+            // without unnecessarily freezing the old pivot.
+            const nextLocks = idsInStateOrder(exchanged.state, [...nextLockSet]);
             const chainCanReachTarget = previewExchangeChainForTarget(exchanged.state, nextLocks);
             if (chainCanReachTarget) scope.exchangePreviewTargetHits += 1;
 
@@ -1036,7 +1053,7 @@
                 }
 
                 enqueue(node.state, node.cost, node.trace, 'baseline', {
-                    protectedIds: currentTargets,
+                    protectedIds: carryLocks.length ? carryLocks : currentTargets,
                     eventDepth: node.eventDepth,
                     importance: node.importance,
                 });
@@ -1048,7 +1065,7 @@
                 let cost = node.cost;
                 let trace = node.trace;
                 let scanStep = 0;
-                const startingTargetCount = node.protectedIds.length;
+                const startingTargetCount = targetsIn(node.state, targetSet).length;
                 const nearestBlockers = new Map();
 
                 // 里程碑本身可能是「目标紫 + 有价值冲突脉」同屏；先把当前槽面作为第 0 步检查点。
@@ -1317,6 +1334,91 @@
             }
         }
 
+        async function seedLongPrefixCarriers() {
+            const prefixLimit = Math.min(maxMainRawWashes, Math.floor(maxTotalPills / 3),
+                350 + searchIntensity * 350);
+            const lockWindow = 80 + searchIntensity * 20;
+            const checkpoints = new Map();
+            let state = startState;
+            let cost = 0;
+            let trace = null;
+            for (let washNo = 1; washNo <= prefixLimit; washNo++) {
+                if (!mainWashBudgetAvailable() || !canWash(state, [])) break;
+                const previousIds = new Set(state.talents.map(Number));
+                const prefix = actionWash(engine, state, [], 'long-prefix-scan');
+                if (!canContinueAt(cost + prefix.action.cost)) break;
+                state = prefix.state;
+                cost += prefix.action.cost;
+                trace = traceAppend(trace, prefix.action);
+                noteWash('main');
+                scope.unlockedWashesScanned += 1;
+
+                const anchors = new Set(state.talents.map(Number)
+                    .filter(id => !previousIds.has(id) && engine.quality(id) < 4 && !engine.isShenmai(id)
+                        && engine.hasOrdinaryPurpleSuccessor(id)));
+                for (const anchorId of anchors) {
+                    let branchState = root.AutoWash2Engine.cloneState(state);
+                    let branchCost = cost;
+                    let branchTrace = trace;
+                    for (let offset = 1; offset <= lockWindow; offset++) {
+                        if (!branchState.talents.includes(anchorId) || !canWash(branchState, [anchorId])) break;
+                        const locked = actionWash(engine, branchState, [anchorId], 'long-prefix-lock');
+                        if (!canContinueAt(branchCost + locked.action.cost)) break;
+                        branchState = locked.state;
+                        branchCost += locked.action.cost;
+                        branchTrace = traceAppend(branchTrace, locked.action);
+                        noteWash('main');
+                        scope.lockedWashesScanned += 1;
+
+                        const carrierPosition = engine.replaceablePositions(branchState, [anchorId])
+                            .find(position => engine.quality(branchState.talents[position]) === 4
+                                && !engine.isShenmai(branchState.talents[position])
+                                && engine.talentType(branchState.talents[position]) === engine.talentType(anchorId));
+                        if (carrierPosition == null) continue;
+
+                        const carrierId = Number(branchState.talents[carrierPosition]);
+                        let ready = branchState;
+                        let readyCost = branchCost;
+                        let readyTrace = branchTrace;
+                        if (slotCountOf(ready) < 4) {
+                            const upgraded = actionUpgrade(engine, ready);
+                            ready = upgraded.state;
+                            readyTrace = traceAppend(readyTrace, upgraded.action);
+                            scope.upgradeBranches += 1;
+                        }
+                        if (!canWash(ready, [anchorId, carrierId])) break;
+                        const prepare = actionWash(engine, ready, [anchorId, carrierId], 'long-prefix-carrier-setup');
+                        if (!canContinueAt(readyCost + prepare.action.cost)) break;
+                        ready = prepare.state;
+                        readyCost += prepare.action.cost;
+                        readyTrace = traceAppend(readyTrace, prepare.action);
+                        noteWash('main');
+                        scope.lockedWashesScanned += 1;
+
+                        const bucket = `${Math.floor((washNo - 1) / 25)}|${engine.talentType(anchorId)}`;
+                        const previous = checkpoints.get(bucket);
+                        if (!previous || offset < previous.offset
+                            || (offset === previous.offset && washNo < previous.washNo)) {
+                            checkpoints.set(bucket, {washNo, offset, anchorId, state: ready,
+                                cost: readyCost, trace: readyTrace, carrierId});
+                        }
+                        break;
+                    }
+                    if (!(await checkpoint('正在扫描长前缀冲突脉与载体紫', 'main'))) return;
+                }
+                if (washNo % 16 === 0
+                    && !(await checkpoint('正在保留长前缀候选检查点', 'main'))) return;
+            }
+            for (const item of checkpoints.values()) {
+                enqueue(item.state, item.cost, item.trace, 'milestone', {
+                    eventDepth: 1,
+                    importance: 3600,
+                    carryLockedIds: [item.anchorId, item.carrierId],
+                    longPrefixStart: item.washNo,
+                });
+            }
+        }
+
         function buildResult() {
             const routes = Array.from(candidateNodes.values())
                 .map(node => routeFromNode(ctx, node))
@@ -1357,6 +1459,7 @@
                     importance: 2600,
                 });
                 seedImmediateFourSlotCarriers(upgraded.state, upgradeTrace);
+                await seedLongPrefixCarriers();
             }
             report(`最大耗丹 ${maxTotalPills.toLocaleString()}：从当前 ${initialSlotCount} 槽状态开始完整前推`, true);
             while ((queue.size || deferredQueue.size) && scope.expandedNodes < maxEventNodes) {
