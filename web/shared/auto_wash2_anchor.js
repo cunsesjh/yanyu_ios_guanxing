@@ -33,6 +33,8 @@
     }
     function search(input, targets, collect, progress, shouldCancel) {
         const raw = input.initialState, planner = root.AnchorRoutePlanner;
+        const intensity = Math.max(1, Math.min(4,
+            Math.trunc(Number(input.options?.searchIntensity) || 1)));
         // Locks describe the initial game state, not a permanent restriction.
         // Model.targets already adds every preserved purple to the final targets,
         // matching the tactical planner's unlock-and-reacquire semantics.
@@ -61,15 +63,20 @@
             const choiceStarted = Date.now();
             root.AnchorRouteSearch.run({mode: 'auto', raw, anchors, purples,
                 options: {targets, maxCost: Number(input.options?.maxTotalPills ?? 10000),
-                    maxNodes: 3000, sequenceBasis: 'theory2', exhaustive: true, perJobMs: 1000,
-                    stages: [{limit:150,depth:24},{limit:450,depth:36},{limit:900,depth:48}],
-                    shouldCancel: () => shouldCancel() || Date.now() - choiceStarted > 20000}}, packet => {
+                    maxNodes: 3000 + (intensity - 1) * 2500,
+                    sequenceBasis: 'theory2', exhaustive: true,
+                    perJobMs: 1000 + (intensity - 1) * 350,
+                    stages: [{limit:150 * intensity,depth:24 + (intensity - 1) * 8},
+                        {limit:450 * intensity,depth:36 + (intensity - 1) * 12},
+                        {limit:900 * intensity,depth:48 + (intensity - 1) * 16}],
+                    shouldCancel: () => shouldCancel()
+                        || Date.now() - choiceStarted > 20000 + (intensity - 1) * 10000}}, packet => {
                 if (packet.type === 'progress') progress({message: `置换路线比较 · 序列 ${packet.pad} · 深度 ${packet.depth}`});
                 if (packet.candidate || packet.routes?.length) {
                     (packet.candidate ? [packet.candidate] : packet.routes).forEach(route => accept(route, anchors));
                 }
             });
-            bounded ||= Date.now() - choiceStarted > 20000;
+            bounded ||= Date.now() - choiceStarted > 20000 + (intensity - 1) * 10000;
         }
         // Fast sequence comparison must not skip the legacy late-lock and slot
         // optimizations. Refine the best verified sequence with a separate budget.
@@ -78,7 +85,8 @@
             progress({message: '继续优化已找到路线的锁脉时机与开槽步骤…'});
             const result = planner.search(raw, bestAnchors, source, best.pad,
                 {targets, maxCost: Math.min(Number(input.options?.maxTotalPills ?? 10000), best.cost + 1),
-                    depth: best.sequence.pool.length, maxNodes: 500, sequenceBasis: 'theory2', shouldCancel},
+                    depth: best.sequence.pool.length, maxNodes: 500 * intensity,
+                    sequenceBasis: 'theory2', shouldCancel},
                 packet => { if (packet.candidate) accept(packet.candidate, bestAnchors); });
             result.routes.forEach(route => accept(route, bestAnchors));
         }

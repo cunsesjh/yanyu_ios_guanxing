@@ -17,7 +17,8 @@ self.AutoWash2SearchPolicy = Object.freeze({initialSearchWindow, searchTimeLimit
 importScripts('data.js', 'wash_source_engine.js', 'auto_wash2_source_cache.js', 'auto_wash2_engine.js', 'auto_wash2_optimizer.js', 'auto_wash2_model.js');
 importScripts('anchor_route_planner.js', 'anchor_route_search.js', 'auto_wash2_anchor.js');
 importScripts('auto_wash2_seed_planner.js', 'auto_wash2_seed.js');
-importScripts('auto_wash2_unified_anchor.js', 'auto_wash2_route_constructor.js', 'auto_wash2_unified.js');
+importScripts('auto_wash2_unified_anchor.js', 'auto_wash2_route_constructor.js',
+    'auto_wash2_unified_route_constructor.js', 'auto_wash2_unified.js');
 self.onmessage = async ({data: message}) => {
     const send = (type, payload) => self.postMessage({type, requestId: message.requestId, ...payload});
     try {

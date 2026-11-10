@@ -3901,7 +3901,7 @@
                 continue;
             }
             if (dw > 0) {
-                const lockIds = (st.locks || []).slice();
+                    const lockIds = (st.washLocks || st.locks || []).slice();
                 for (let k = 0; k < dw; k++) {
                     const keep = lockIds.map(id => s.talents.indexOf(id)).filter(i => i >= 0);
                     if (keep.length !== lockIds.length) {
@@ -4020,24 +4020,83 @@
 
     function verifyJumpManual(raw, targets, steps, zi0) {
         const TG = (targets || []).map(Number);
-        // searchJumpManualRoute 自己就是逐洗执行器，返回的 step.field 是引擎操作后的真实快照。
-        // 这里校验最终快照、累计洗数和丹耗是否自洽；完整逐手规则另由
-        // dev/check_xlc_manual.js（用户实测 7687/1505）独立守卫。
         const list = steps || [];
-        const last = list.length ? list[list.length - 1] : null;
-        if (!last) return { ok: false, reason: '连续置换路线没有步骤' };
-        if (Number(last.washes) < Number(list[0].washes)) {
-            return { ok: false, reason: '连续置换路线洗数倒退' };
+        if (!list.length) return { ok: false, reason: '连续置换路线没有步骤' };
+        let zi = Number(zi0) >= 150 ? Number(zi0) : 153;
+        let e;
+        try { e = engineOf(raw, zi); } catch (err) { return { ok: false, reason: '起始资质不可用' }; }
+        let s = e.initialState(Object.assign({}, raw, { zizhi: zi }));
+        let cost = 0, washes = 0, previousWash = 0, lastWashLocks = [];
+        let activeLocks = [];
+        const fail = reason => ({ ok: false, cost, washes, field: s.talents.slice(), reason });
+        for (const step of list) {
+            const targetWash = Number(step.washes) || 0;
+            const delta = targetWash - previousWash;
+            const isLockAction = step.type === 'lock' || step.type === 'lockConflict'
+                || step.type === 'lockCarrier' || step.type === 'seedLock'
+                || step.type === 'seedLockWash';
+            if (delta < 0) return fail('连续置换路线洗数倒退');
+            if (delta > 0) {
+                const washLockIds = (step.washLocks || (isLockAction
+                    ? (step.locks || []).filter(id => Number(id) !== Number(step.id))
+                    : activeLocks)).map(Number);
+                lastWashLocks = washLockIds;
+                for (let i = 0; i < delta; i++) {
+                    const positions = washLockIds.map(id => s.talents.indexOf(id))
+                        .filter(position => position >= 0);
+                    let result;
+                    try { result = e.wash(s, positions); }
+                    catch (err) { return fail('连续置换路线洗髓回放失败'); }
+                    s = result.state;
+                    cost += Number(result.cost) || 0;
+                    washes++;
+                }
+            }
+            if (step.type === 'upgrade' && zi === 153 && Number(step.toZi) >= 154) {
+                zi = 154;
+                try {
+                    e = engineOf(raw, zi);
+                    s = e.upgradeToFour(Object.assign({}, s, { zizhi: zi }));
+                } catch (err) { return fail('第 4 槽升级回放失败'); }
+            } else if (step.type === 'exchange' || step.type === 'burn') {
+                const from = Number(step.from), to = Number(step.to);
+                const position = s.talents.indexOf(from);
+                const replaceLocks = (step.replaceLocks || step.locks || []).map(Number);
+                if (position < 0) return fail(`第 ${targetWash} 洗：置换源脉不在场`);
+                if (!usesNearestConflict(e, s, from, replaceLocks)
+                    || !e.replaceablePositions(s, replaceLocks).includes(position)) {
+                    return fail(`第 ${targetWash} 洗：置换条件不成立`);
+                }
+                let result;
+                try { result = e.replace(s, position, replaceLocks); }
+                catch (err) { return fail('连续置换路线置换回放失败'); }
+                if (Number(result.addedId) !== to) return fail(`第 ${targetWash} 洗：置换结果不匹配`);
+                s = result.state;
+            } else if (isLockAction) {
+                if (!s.talents.includes(Number(step.id))) {
+                    return fail(`第 ${targetWash} 洗：锁定目标不在场`);
+                }
+            }
+            if (step.type === 'unlockAll') activeLocks = [];
+            else if (isLockAction) {
+                activeLocks = Array.from(new Set((step.locks || activeLocks)
+                    .map(Number).concat(Number(step.id) || [])));
+            } else if (Array.isArray(step.locks)) activeLocks = step.locks.map(Number);
+            if (Array.isArray(step.field) && step.field.length) {
+                const actual = s.talents.map(Number).slice().sort((a, b) => a - b).join(',');
+                const expected = step.field.map(Number).slice().sort((a, b) => a - b).join(',');
+                if (actual !== expected) return fail(
+                    `第 ${targetWash} 洗：回放场上脉与记录不符（锁 ${lastWashLocks.join(',')}；${actual} ≠ ${expected}）`);
+            }
+            if (Number.isFinite(Number(step.cost)) && Number(step.cost) !== cost) {
+                return fail(`第 ${targetWash} 洗：累计丹耗与记录不符`);
+            }
+            previousWash = targetWash;
         }
-        const field = (last.field || []).map(Number);
+        const field = s.talents.map(Number);
         const missing = TG.filter(id => !field.includes(id));
-        return {
-            ok: missing.length === 0,
-            cost: Number(last.cost) || 0,
-            washes: Number(last.washes) || 0,
-            field,
-            reason: missing.length ? '终态缺目标：' + missing.map(nameOf).join('、') : '',
-        };
+        return { ok: missing.length === 0, cost, washes, field, state: s, zizhi: zi,
+            reason: missing.length ? '终态缺目标：' + missing.map(nameOf).join('、') : '' };
     }
 
     // 于小雪 12309：3# 毁一段，其余六段集中在 6# 保底锚点。
@@ -4756,10 +4815,16 @@
                 ? [{ bars: 250, openFour: false }]
                 // 两种都是 3 槽起手；先试“3 槽开 4 槽”，通常更早拿到可用保底种子。
                 : [{ bars: 200, openFour: true }, { bars: 250, openFour: false }];
-            const bCandidateGroups = new Map();   // seed -> 前置路径，按丹耗升序
+            // A luck seed alone is not a complete candidate identity: opening
+            // the fourth slot at different born-stream positions can reach the
+            // same pity seed with different fields, wash counts and replay cost.
+            const bCandidateGroups = new Map();
             const evaluatedBSeed = new Set();
-            const bSeedKey = item =>
-                String(Number(item && item.r && item.r.seed) || 0);
+            const bSeedKey = item => {
+                const route = item && item.r || {};
+                return [Number(route.seed) || 0, Number(!!route.openFour),
+                    Number(route.openFourAt) || 0].join(':');
+            };
             const passesChainCheck = (r, chain) => {
                 const seedOpt = {
                     kind: 'exchange', zi: zi0, n: 0, lead, carrier: 0, chain,
@@ -4810,13 +4875,36 @@
             };
             const rankBCandidates = items => {
                 items.sort((a, b) =>
-                    (Number(!!a.r.openFour) - Number(!!b.r.openFour))
-                    || ((Number(a.r.preludePills) || 0) - (Number(b.r.preludePills) || 0))
+                    // The 4-slot branch can preserve a cheaper carrier path.
+                    // Evaluate it before no-upgrade variants so it is not starved
+                    // by long per-seed tail construction.
+                    (Number(!!b.r.openFour) - Number(!!a.r.openFour))
+                    || (Number(a.r.openFourAt) - Number(b.r.openFourAt))
                     || (b.firstTarget - a.firstTarget)
                     || (b.targetHits - a.targetHits)
+                    || ((Number(a.r.preludePills) || 0) - (Number(b.r.preludePills) || 0))
                     || ((Number(a.r.firstPityWash) || 0) - (Number(b.r.firstPityWash) || 0))
                     || ((Number(a.r.seed) || 0) - (Number(b.r.seed) || 0)));
                 return items;
+            };
+            const evaluateBCandidateGroups = () => {
+                // Evaluate each seed batch immediately. Scanning every open-slot
+                // offset before route construction used to leave no deadline for
+                // the exact lock seed that had just been discovered.
+                const bCandidatesFinal = [];
+                for (const group of bCandidateGroups.values()) {
+                    group.sort((a, b) =>
+                        (Number(a.r.preludePills) || 0) - (Number(b.r.preludePills) || 0));
+                    for (const item of group) {
+                        if (!passesChainCheck(item.r, item.chain)) continue;
+                        bCandidatesFinal.push(item);
+                        break;
+                    }
+                }
+                for (const item of rankBCandidates(bCandidatesFinal)) {
+                    if (Date.now() > deadline) break;
+                    evaluateBCandidate(item);
+                }
             };
             const evaluateBCandidate = item => {
                 if (!item || evaluatedBSeed.has(bSeedKey(item))) return;
@@ -4830,7 +4918,10 @@
                 let ex = null;
                 let usedSeedOpt = null;
                 let usedKind = '';
-                for (const seedKind of ['pity', 'exchange']) {
+                // Rebuild the post-open-four sequence before trying the legacy
+                // static pity interpretation; otherwise that branch can spend
+                // the seed's entire route budget against the wrong O# ordering.
+                for (const seedKind of ['exchange', 'pity']) {
                     const seedOpt = {
                         kind: seedKind, zi: zi0, n: 0, lead, carrier: 0, chain: item.chain,
                         first: Number(r.firstPurple), seed: Number(r.seed), steps: [],
@@ -4878,7 +4969,7 @@
             // · 三槽开四槽：bornSeed 对开槽点敏感，保留 217..221 五个边界；
             // · 直接洗 / 天然四槽：只从一个基准点开始，后续锁点沿 born 流覆盖。
             const aList = br.openFour
-                ? [baseA, baseA + 1, baseA + 2, baseA + 3, baseA + 4]
+                ? [baseA + 4, baseA + 3, baseA + 2, baseA + 1, baseA]
                 : [baseA];
             for (const aFix of aList) {
             if (Date.now() > deadline) break;
@@ -4890,7 +4981,8 @@
                     openFourAt: br.openFour && aFix > baseA + 10 ? baseA : undefined,
                     headBudget,
                     bestCost,
-                    timeMs: Math.min(30000, Math.max(2000, deadline - Date.now())),
+                    timeMs: Math.min(Math.max(4000, Math.min(10000, methodMs * 0.25)),
+                        Math.max(1000, deadline - Date.now())),
                     threshold: 820, budget: Math.max(0, Number(o.budget) || 0),
                     progressCb: progress => reportThrottled({
                         note: '吞脉法扫描低阶脉', aFix, openFour: br.openFour,
@@ -4910,24 +5002,10 @@
                     targetHits: TG.filter(id => chain.includes(id)).length,
                 });
             }
+            evaluateBCandidateGroups();
             }
             }
-            // 每个种子只喂一条路线给后续收尾执行：取能通过链校验的
-            // 最低前置丹耗路径；更贵但无效的同种子路径不会进入执行器。
-            const bCandidatesFinal = [];
-            for (const group of bCandidateGroups.values()) {
-                group.sort((a, b) =>
-                    (Number(a.r.preludePills) || 0) - (Number(b.r.preludePills) || 0));
-                for (const item of group) {
-                    if (!passesChainCheck(item.r, item.chain)) continue;
-                    bCandidatesFinal.push(item);
-                    break;
-                }
-            }
-            for (const item of rankBCandidates(bCandidatesFinal)) {
-                if (Date.now() > deadline) break;
-                evaluateBCandidate(item);
-            }
+            evaluateBCandidateGroups();
         }
 
         // （路径C「跳脉法·旧生成器」已删除：改用路径D「跳脉：runToFirstPity → 统一后续」）

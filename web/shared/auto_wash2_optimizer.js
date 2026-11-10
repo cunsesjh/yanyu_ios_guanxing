@@ -1208,6 +1208,115 @@
             }
         }
 
+        function seedImmediateFourSlotCarriers(upgradedState, upgradeTrace) {
+            // The general graph keeps only the nearest unlocked blocker of each
+            // type. That is an effective global bound, but an earlier blocker can
+            // produce a different locked RNG stream. Cover the cheap opening
+            // window directly before entering the shared priority queue.
+            const unlockedLimit = 48 + (searchIntensity - 1) * 16;
+            const lockedLimit = 80 + (searchIntensity - 1) * 24;
+            let state = upgradedState;
+            let cost = 0;
+            let trace = upgradeTrace;
+            const seenStarts = new Set();
+            for (let outer = 0; outer < unlockedLimit; outer++) {
+                if (!canWash(state, [])) break;
+                const next = actionWash(engine, state, [], 'early-four-slot-scan');
+                if (!canContinueAt(cost + next.action.cost)) break;
+                state = next.state;
+                cost += next.action.cost;
+                trace = traceAppend(trace, next.action);
+                noteWash('main');
+                scope.unlockedWashesScanned += 1;
+
+                for (const anchorId of state.talents) {
+                    if (!engine.hasOrdinaryPurpleSuccessor(anchorId)) continue;
+                    const startKey = `${root.AutoWash2Engine.stateKey(state)}|${anchorId}`;
+                    if (seenStarts.has(startKey)) continue;
+                    seenStarts.add(startKey);
+                    let branchState = root.AutoWash2Engine.cloneState(state);
+                    let branchCost = cost;
+                    let branchTrace = trace;
+                    for (let inner = 0; inner < lockedLimit; inner++) {
+                        if (!branchState.talents.includes(anchorId)
+                            || !canWash(branchState, [anchorId])) break;
+                        const lockedWash = actionWash(engine, branchState, [anchorId], 'early-carrier-scan');
+                        if (!canContinueAt(branchCost + lockedWash.action.cost)) break;
+                        branchState = lockedWash.state;
+                        branchCost += lockedWash.action.cost;
+                        branchTrace = traceAppend(branchTrace, lockedWash.action);
+                        noteWash('main');
+                        scope.lockedWashesScanned += 1;
+                        const position = engine.replaceablePositions(branchState, [anchorId])
+                            .find(index => engine.quality(branchState.talents[index]) === 4
+                                && !engine.isShenmai(branchState.talents[index])
+                                && engine.talentType(branchState.talents[index]) === engine.talentType(anchorId));
+                        if (position == null) continue;
+                        const purpleId = branchState.talents[position];
+                        let padState = branchState;
+                        let padCost = branchCost;
+                        let padTrace = branchTrace;
+                        for (let pad = 0; pad <= 8; pad++) {
+                            const purplePosition = padState.talents.indexOf(purpleId);
+                            if (purplePosition < 0) break;
+                            const exchanged = actionReplace(engine, padState, purplePosition,
+                                'early-carrier-exchange', [anchorId]);
+                            scope.exchangeAttempts += 1;
+                            scope.exchangeSuccesses += 1;
+                            if (targetSet.has(exchanged.action.addedId)) {
+                                const exchangedTrace = traceAppend(padTrace, exchanged.action);
+                                enqueue(exchanged.state, padCost, exchangedTrace, 'milestone', {
+                                    eventDepth: 2,
+                                    importance: 5800,
+                                    carryLockedIds: [anchorId],
+                                    fromExchange: true,
+                                });
+                                // Also test the cheapest no-more-exchanges continuation
+                                // immediately. The shared queue still explores tactical
+                                // alternatives, while this deterministic line cannot be
+                                // starved by thousands of zero-cost exchange nodes.
+                                let tailState = exchanged.state;
+                                let tailCost = padCost;
+                                let tailTrace = exchangedTrace;
+                                let lockedTargets = targetsIn(tailState, targetSet);
+                                while (lockedTargets.length && lockedTargets.length < targetIds.length
+                                    && canWash(tailState, lockedTargets)) {
+                                    const tailWash = actionWash(engine, tailState, lockedTargets,
+                                        'early-carrier-target-tail');
+                                    if (!canContinueAt(tailCost + tailWash.action.cost)) break;
+                                    tailState = tailWash.state;
+                                    tailCost += tailWash.action.cost;
+                                    tailTrace = traceAppend(tailTrace, tailWash.action);
+                                    noteWash('main');
+                                    scope.lockedWashesScanned += 1;
+                                    const nextTargets = targetsIn(tailState, targetSet);
+                                    if (nextTargets.length > lockedTargets.length) {
+                                        lockedTargets = nextTargets;
+                                        enqueue(tailState, tailCost, tailTrace, 'milestone', {
+                                            eventDepth: 2 + lockedTargets.length,
+                                            importance: 6200,
+                                        });
+                                    }
+                                }
+                            }
+                            if (pad === 8 || !canWash(padState, [anchorId, purpleId])) break;
+                            const padWash = actionWash(engine, padState, [anchorId, purpleId],
+                                'early-carrier-pad');
+                            if (!canContinueAt(padCost + padWash.action.cost)) break;
+                            padState = padWash.state;
+                            padCost += padWash.action.cost;
+                            padTrace = traceAppend(padTrace, padWash.action);
+                            noteWash('main');
+                            scope.lockedWashesScanned += 1;
+                        }
+                        // Keep scanning later same-type purples. An earlier valid
+                        // exchange may initialize a non-target Luck sequence, while
+                        // a later one can exchange directly into a requested target.
+                    }
+                }
+            }
+        }
+
         function buildResult() {
             const routes = Array.from(candidateNodes.values())
                 .map(node => routeFromNode(ctx, node))
@@ -1234,6 +1343,21 @@
         try {
             onProgress({ phase: 'worker-start', done: 0, total: 1, message: '正在初始化三槽/四槽源码一致洗脉状态机' });
             enqueue(startState, 0, null, 'milestone');
+            // Opening the fourth slot does not advance either RNG. It is a valid
+            // zero-cost first move even before any target purple has appeared.
+            // Without this root branch, routes such as Shang Haoqian's verified
+            // 4523-pill path (open four, then wash 13/9/2) are unreachable no
+            // matter how long the search runs.
+            if (initialSlotCount === 3) {
+                const upgraded = actionUpgrade(engine, startState);
+                scope.upgradeBranches += 1;
+                const upgradeTrace = traceAppend(null, upgraded.action);
+                enqueue(upgraded.state, 0, upgradeTrace, 'milestone', {
+                    eventDepth: 1,
+                    importance: 2600,
+                });
+                seedImmediateFourSlotCarriers(upgraded.state, upgradeTrace);
+            }
             report(`最大耗丹 ${maxTotalPills.toLocaleString()}：从当前 ${initialSlotCount} 槽状态开始完整前推`, true);
             while ((queue.size || deferredQueue.size) && scope.expandedNodes < maxEventNodes) {
                 let fromDeferred = false;

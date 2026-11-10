@@ -12,6 +12,8 @@ const context = vm.createContext(sandbox);
 sandbox.importScripts = (...files) => files.forEach(file => vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, {filename: file}));
 vm.runInContext(fs.readFileSync(path.join(root, 'auto_wash2_worker.js'), 'utf8'), context);
 const model = sandbox.AutoWash2Model;
+assert.equal(typeof sandbox.AutoWash2UnifiedRouteConstructor.constructBest, 'function',
+    'the latest upstream unified route constructor must be part of the worker search');
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(), 120000);
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(1000), 400);
 assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(4), 900000,
@@ -176,10 +178,18 @@ async function send(type, payload) {
     const anchors = purples.filter(p => !p.fromPity && p.id !== 251).slice(0, 3);
     const source = planner.usableSources(anchorRaw, anchors, purples)[0];
     const targetIds = [276, 268, 266];
+    const settings = {options:{maxTotalPills:10000}, bagPills:5000, hasBagPills:true};
+    const upstreamCandidate = sandbox.AutoWash2UnifiedRouteConstructor.constructBest(
+        anchorRaw, targetIds, {budget:10000, timeMs:5000, nMax:40, topN:20, maxWash:3000});
+    const upstreamUnified = sandbox.AutoWash2Unified.convert({...settings, initialState:anchorRaw},
+        targetIds, upstreamCandidate, 'U');
+    assert.ok(upstreamUnified?.verified, 'ported upstream route must pass our independent replay');
+    assert.equal(upstreamUnified.sourceFamily, 'U');
+    assert.equal(upstreamUnified.seedMethod, 'exchange');
+    assert.equal(upstreamUnified.postSeedMode, 'exchange-chain');
     const legacy = planner.search(anchorRaw, anchors, source, 0,
         {targets:targetIds, maxNodes:500, depth:10, maxCost:10000, sequenceBasis:'theory2'}).routes[0];
     assert.equal(legacy.cost, 1025);
-    const settings = {options:{maxTotalPills:10000}, bagPills:5000, hasBagPills:true};
     const migrated = sandbox.AutoWash2Anchor.convert(anchorRaw, anchors, legacy, targetIds, settings);
     assert.equal(migrated.verified, true);
     assert.equal(migrated.totalPills, 1025);
@@ -194,6 +204,26 @@ async function send(type, payload) {
     broken.steps[0].after.cost++;
     assert.throws(() => sandbox.AutoWash2Anchor.convert(anchorRaw, anchors, broken, targetIds, settings), /回放/);
     assert.equal(JSON.stringify(anchorRaw), anchorBefore);
+    // Sanitized regression for the documented 7,311-pill lock-seed route.
+    // Keep only fields used by the wash engine; no full save/global vars.
+    {
+        const lockRaw = {seed:1331151271, born_talent_rc:86, luck_seed:0,
+            luck_seed_inited:false, tal_lucky:47, zizhi:153, role_id:10060,
+            sex:1, role_level:100, salt:573887, vip:1,
+            role_stats:{str_val:314, con:123, dex:20, int_val:15}, global_vars:{},
+            save_channel:'', talents:[{id:199,locked:false},{id:190,locked:false},{id:193,locked:false}]};
+        const lockTargets = [250,268,271,272];
+        const candidate = sandbox.AutoWash2RouteConstructor.planBest(lockRaw, lockTargets,
+            {budget:10000,methodMs:25000,onlyPaths:['B'],nMax:100,count:40,lead:24});
+        assert.equal(candidate?.seedOpt?.seed, 915630490,
+            'automatic lock search must prioritize the documented lock seed');
+        const checked = sandbox.AutoWash2Unified.convert({initialState:lockRaw,
+            options:{maxTotalPills:10000}},lockTargets,candidate,'B');
+        assert.equal(checked?.totalPills,7311);
+        assert.equal(checked?.totalWashes,1071);
+        assert.equal(checked?.seedMethod,'lock');
+        assert.equal(checked?.postSeedMode,'exchange-chain');
+    }
     // The third engine changes the first luck-seed landing, then hands its
     // candidate to our independent replay adapter before it can be displayed.
     const seedTargets = [276, 268];
@@ -227,5 +257,92 @@ async function send(type, payload) {
         candidate.steps[0].locks = [999999];
         assert.equal(sandbox.AutoWash2Unified.convert({...settings, initialState:anchorRaw}, [oneTarget], candidate), null);
     }
-    console.log('PASS: four-stage policy, domestic/preview parity, international 60-wash parity, immutable adapter, target groups, inventory, 120 engine parity checks, wash replay, exact legacy anchor route, verified seed/unified routes and tamper/budget rejection');
+    // Keep the known long-prefix continuous-exchange strategy from being
+    // starved behind later-stage seed scans.
+    {
+        const calls = [];
+        const early = {WashSourceEngine:{isInternationalChannel:()=>false},
+            AutoWash2RouteConstructor:{
+                readSequence() { return {seq:[{id:268, no:1, fromPity:false, conflictId:1}]}; },
+                resolveSeedState() { return {valid:true, fixed:false, seedStatus:'unfixed'}; },
+                resolveSeedMethod() { return {valid:true, methodFamily:'swallow+infinite-exchange',
+                    allowsSwallow:true, allowsInfiniteExchange:true}; },
+                verify() { return {ok:false}; },
+                verifyJumpManual() { return {ok:false}; },
+                planBest(_raw, _targets, options) { calls.push(options); return null; },
+            },
+            AutoWash2UnifiedRouteConstructor:{constructBest() {
+                calls.push({onlyPaths:['U']}); return null;
+            }}};
+        early.window = early;
+        vm.runInContext(fs.readFileSync(path.join(root, 'auto_wash2_unified.js'), 'utf8'),
+            vm.createContext(early));
+        early.AutoWash2Unified.search({initialState:{zizhi:153}, options:{maxTotalPills:10000}},
+            [276, 268, 266], () => {}, () => {}, {intensity:1, timeBudgetMs:10000});
+        assert.deepEqual(JSON.parse(JSON.stringify(calls[0].onlyPaths)), ['G'],
+            'first stage must prioritize the continuous-exchange search');
+        assert.equal(calls[0].budget, 10000, 'early path must retain the user pill ceiling');
+        assert.deepEqual(JSON.parse(JSON.stringify(calls.map(call => call.onlyPaths))),
+            [['G'], ['B'], ['E']], 'candidate families must receive isolated bounded passes');
+        calls.length = 0;
+        early.AutoWash2Unified.search({initialState:{zizhi:153}, options:{maxTotalPills:10000}},
+            [276, 268, 266], () => {}, () => {}, {intensity:4, timeBudgetMs:30000});
+        assert.deepEqual(JSON.parse(JSON.stringify(calls.map(call => call.onlyPaths))),
+            [['G'], ['B'], ['U'], ['E'], ['D'], ['A']],
+            'full intensity must isolate continuous exchange, fixed/pity, lock, jump and exchange families');
+    }
+    {
+        const calls = [];
+        const lowAptitude = {WashSourceEngine:{isInternationalChannel:()=>false},
+            TALENT_DATA:{268:{name:'天生神力'}}, AutoWash2RouteConstructor:{
+                verify() { calls.push('generic'); return {ok:false}; },
+                verifyJumpManual(_raw, _targets, _steps, zi) {
+                    calls.push(['jumpManual', zi]);
+                    return {ok:true, cost:42, washes:7, zizhi:153,
+                        state:{talents:[268], bornSeed:123, luckSeed:null, bornRC:0, talLucky:0}};
+                },
+            }};
+        lowAptitude.window = lowAptitude;
+        vm.runInContext(fs.readFileSync(path.join(root, 'auto_wash2_unified.js'), 'utf8'),
+            vm.createContext(lowAptitude));
+        const route = lowAptitude.AutoWash2Unified.convert({initialState:{zizhi:151},
+            options:{maxTotalPills:10000}}, [268], {ok:true, kind:'jumpManual', zizhi:153,
+            cost:42, steps:[{type:'startWash', washes:7, cost:42, startZi:153, field:[268]},
+                {type:'exchange', washes:7, cost:42, from:1, to:268, field:[268]}]}, 'B');
+        assert.ok(route?.verified, 'manual routes must use their dedicated verifier');
+        assert.equal(route.seedMethod, 'lock', 'seed method must stay separate from route shape');
+        assert.equal(route.postSeedMode, 'exchange-chain');
+        assert.equal(route.sourceFamily, 'B');
+        assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['jumpManual', 153]],
+            'verify from the route start aptitude, not the save aptitude');
+    }
+    // Real iOS 73576 regression: the cheapest verified path opens the fourth
+    // slot immediately, retains an earlier low-grade carrier, pads the purple
+    // exchange twice, then follows a straight two-target tail.
+    {
+        const shang = {
+            mode:'seed', zizhi:153, sex:1, vip:1,
+            seed:1377955264, born_talent_rc:10,
+            luck_seed:0, luck_seed_inited:false,
+            role_id:10031, salt:551595, tal_lucky:31, role_level:100,
+            role_stats:{str_val:393, con:12, dex:12, int_val:13},
+            global_vars:{}, save_channel:'',
+            talents:[{id:205,locked:true},{id:203,locked:true},{id:185,locked:true}],
+        };
+        const candidates = [];
+        await sandbox.AutoWash2Optimizer.searchWashRoutes({
+            initialState:shang, talentData:sandbox.TALENT_DATA,
+            targetIds:[250,271,272], bagPills:7397, hasBagPills:true,
+            options:{maxTotalPills:5000, searchIntensity:4},
+            onCandidate:value => candidates.push(...(value.routes || [])),
+            shouldCancel:() => candidates.some(route => route.totalPills === 4523),
+        });
+        const exact = candidates.find(route => route.totalPills === 4523);
+        assert.ok(exact, 'Shang Haoqian immediate-four-slot route must not be pruned');
+        assert.equal(exact.totalWashes, 605);
+        assert.equal(exact.exchangeCount, 1);
+        assert.deepEqual(JSON.parse(JSON.stringify(exact.finalTalents.map(t => t.id))),
+            [250,272,271,172]);
+    }
+    console.log('PASS: four-stage family scheduler, upstream unified route replay, 7,311-pill lock regression, domestic/preview parity, international parity, target groups, inventory, engine parity and tamper/budget rejection');
 })().catch(error => { console.error(error); process.exitCode = 1; });
