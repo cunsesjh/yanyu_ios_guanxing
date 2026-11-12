@@ -30,7 +30,7 @@ HOSTS = frozenset(('ios.wlfy.blue8.cn', 'andr.wlfy.blue8.cn',
                    'pre.wlfy.blue8.cn',           # 先行服（ios/android 同域名，按渠道头判平台）
                    'yanyuonline.novastargame.net'))  # 国际服（xinma 等，按渠道头判平台）
 COPY_HEADERS = ('ver', 'appver', 'channel', 'realchannel', 'whale', 'lang',
-                'blue', 'green', 'user-agent', 'plat')
+                'blue', 'green', 'user-agent', 'plat', 'sn', 'sn2', 'sn3')
 
 
 def _platform_of(headers, host):
@@ -62,6 +62,7 @@ def session_from_har(path):
     # ProxyPin 等工具导出的 HAR 条目可能是倒序（新→旧），状态机必须按时间正序处理
     entries.sort(key=lambda e: e.get('startedDateTime') or '')
     account = key = selected = None
+    context_headers = {}
     for entry in entries:
         req, res = entry.get('request', {}), entry.get('response', {})
         url = urlsplit(req.get('url', ''))
@@ -77,12 +78,22 @@ def session_from_har(path):
             payload = {}
         acc = h.get('acc')
         if url.path == '/api_check_user':
-            account = key = selected = None
             data = payload.get('data')
             if isinstance(data, dict):
                 acc = data.get('acc') or acc
+            # A successful login response is a new session boundary. Ignore
+            # failed checks so a transient retry cannot erase a usable session.
+            if (not acc or not 200 <= res.get('status', 0) < 300
+                    or payload.get('code') != 0):
+                continue
+            account = key = selected = None
+            context_headers = {}
         if acc and acc != account:
             account, key, selected = acc, None, None
+            context_headers = {}
+        if account:
+            context_headers.update({name: value for name, value in h.items()
+                                    if name in COPY_HEADERS})
         if rh.get('k') and account:
             # A failed fresh handshake must invalidate an earlier working key.
             key = selected = None
@@ -97,10 +108,10 @@ def session_from_har(path):
                 and 200 <= res.get('status', 0) < 300 and payload.get('code', 0) == 0):
             selected = dict(url=f'{url.scheme}://{url.hostname}/api_command',
                             account=account, session=session, area=area,
-                            protocol_key=key, headers=h.copy(),
-                            platform=_platform_of(h, url.hostname or ''))
+                            protocol_key=key, headers=context_headers.copy(),
+                            platform=_platform_of(context_headers, url.hostname or ''))
     if selected is None:
-        raise ValueError('HAR 缺少同一账号的有效登录握手 k、会话和区服；请从登录前重新抓包')
+        raise ValueError('HAR 未匹配到完整登录会话；请确保文件包含登录校验或同账号握手，以及登录后的区服请求（可在抓包过程中登录）')
     return selected
 
 
@@ -165,8 +176,10 @@ def fetch(session):
     try:
         with opener.open(request, timeout=30) as response:
             raw = response.read(envelope.MAX_SAVE_BYTES + 1)
+    except urllib.error.HTTPError as error:
+        raise ValueError(f'游戏服务器拒绝请求（HTTP {error.code}）；请确认 HAR 会话和登录状态仍有效') from None
     except (urllib.error.URLError, OSError):
-        raise ValueError('游戏服务器请求失败（未重试，未转发到其他服务）') from None
+        raise ValueError('游戏服务器连接失败；请检查网络及 HAR 会话有效期（未重试，未转发到其他服务）') from None
     if len(raw) > envelope.MAX_SAVE_BYTES:
         raise ValueError('游戏服务器响应超过大小限制')
     try:
