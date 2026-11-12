@@ -31,6 +31,18 @@ body {
 .home-header h1 { margin: 0.35rem 0; color: #fff; font-family: var(--font-serif); font-size: clamp(2rem, 5vw, 3.25rem); letter-spacing: 0.12em; text-shadow: 0 2px 10px rgba(24, 64, 132, 0.35); }
 .home-version { color: #fff; font-size: 1rem; font-weight: 600; white-space: nowrap; text-shadow: 0 1px 6px rgba(24, 64, 132, 0.3); }
 
+.archive-import-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1.25rem; margin-bottom: 1rem; padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); box-shadow: 0 12px 32px rgba(38, 82, 152, 0.14); }
+.archive-import-heading { display: flex; align-items: center; gap: 0.75rem; }
+.archive-import-heading h2 { font-family: var(--font-serif); font-size: 1.05rem; }
+.archive-import-copy > p { margin-top: 0.4rem; color: var(--muted); font-size: 0.78rem; line-height: 1.55; }
+.archive-import-copy code { color: var(--text); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+.archive-import-copy .archive-import-role { margin-top: 0.25rem; }
+.archive-import-role strong { color: var(--text); }
+.archive-import-actions { min-width: 10.5rem; text-align: center; }
+.archive-import-button { width: 100%; font-weight: 650; }
+.archive-import-button:focus-within { outline: 2px solid rgba(47, 111, 208, 0.45); outline-offset: 2px; }
+.archive-import-actions .home-message { min-height: 1.1rem; margin-top: 0.45rem; }
+
 .home-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
 .home-panel { margin-bottom: 1rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); box-shadow: 0 12px 32px rgba(38, 82, 152, 0.14); }
 .panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
@@ -85,6 +97,8 @@ body {
 @media (max-width: 760px) {
     .home-shell { width: min(100% - 1rem, 1040px); padding: 1.5rem 0; }
     .home-grid { grid-template-columns: 1fr; }
+    .archive-import-panel { grid-template-columns: 1fr; gap: 0.85rem; }
+    .archive-import-actions { width: 100%; }
 }
 
 @media (max-width: 460px) {

@@ -39,7 +39,7 @@
         msg.classList.remove('is-error');
         msg.textContent = hasStoredSave()
             ? '存档已导入，选择下方板块开始观星。'
-            : '点击左侧「下载最新云存档」获取数据，或导入本地存档文件。';
+            : '请选择上方的 dat.json；导入后即可使用下方全部功能。';
     }
 
     function applyUi() {
