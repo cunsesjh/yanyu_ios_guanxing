@@ -13,12 +13,12 @@
  * simulator.js 的所有调用点保持不变，可插拔完全在「后端选择」这一层实现。
  *
  * 加载顺序要求：必须在 international_wash.js 之后、simulator.js 之前执行，
- *   以便捕获 international_wash 的全局转发包装（官方后端直接复用它）。
+ *   以便捕获 international_wash 的全局转发包装（仅国际服后端复用它）。
  *
  * 内置后端：
- *   - official ：委托原生 wasm（经由 international_wash 的转发包装，非国际服自动走原生）。
- *   - preview  ：基于 WashSourceEngine.Engine 的「先行服新算法」有状态后端（JsWashBackend）。
- *   - international ：与 official 同一套转发包装（international_wash 按蛇类型内部再分流）。
+ *   - official ：基于 WashSourceEngine.Engine 的现行国服算法（JsWashBackend）。
+ *   - preview  ：基于 WashSourceEngine.Engine 的先行服算法（JsWashBackend）。
+ *   - international ：复用 international_wash 的国际服专用包装。
  *
  * 扩展未来版本：
  *   WashEngineRegistry.registerBackend('future-v2', factoryReturningBackendObject);
@@ -43,6 +43,7 @@
     const backends = Object.create(null);
     let currentName = null;
     let previewInstance = null;          // 当前 preview 后端实例（供 bridge 复用）
+    let sourceInstance = null;           // 当前国内 JS 后端实例（official / preview）
 
     function registerBackend(name, factory) {
         backends[name] = factory;
@@ -64,6 +65,7 @@
         const backend = factory();
         installGlobals(backend);
         if (name === 'preview') previewInstance = backend;
+        sourceInstance = (name === 'official' || name === 'preview') ? backend : null;
         currentName = name;
         return backend;
     }
@@ -119,6 +121,7 @@
                 sex: Number(fullState && fullState.sex) || 1,
                 role_level: Number(fullState && fullState.role_level) || 90,
                 role_stats: (fullState && fullState.role_stats) || {},
+                role_stats_complete: !!(fullState && fullState.role_stats_complete),
                 global_vars: (fullState && fullState.global_vars) || {},
                 save_channel: (fullState && fullState.save_channel) || (options && options.saveChannel) || '',
             };
@@ -721,11 +724,12 @@
         }
     }
 
+    registerBackend('official', () => new JsWashBackend());
     registerBackend('preview', () => new JsWashBackend());
 
-    // ═══════════════════ 官方 / 国际服：复用 international_wash 的转发包装 ═══════════════════
+    // ═══════════════════ 国际服：复用 international_wash 的转发包装 ═══════════════════
     // international_wash.js 加载后会把全局 wasm* 覆盖为「非国际服→原生 wasm、国际服→国际算法」的
-    // 转发包装。我们捕获这套包装作为 official/international 后端——它天然按蛇类型分流，零改动。
+    // 转发包装。这里只保留 international 后端；国内正式服不再进入旧 WASM 洗脉实现。
     function captureIntlBackend() {
         const backend = {};
         for (const method of GLOBAL_METHODS) {
@@ -735,7 +739,6 @@
         return backend;
     }
     const intlBackend = captureIntlBackend();
-    registerBackend('official', () => intlBackend);
     registerBackend('international', () => intlBackend);
 
     // ═══════════════════ 决策点：根据存档 / 开关选择后端 ═══════════════════
@@ -750,7 +753,8 @@
     /**
      * 选择当前应使用的后端，并安装到全局 wasm*。
      * - 先行服（preview）：安装 JsWashBackend。
-     * - 正式服 / 国际服：安装 international_wash 的转发包装（其内部再按蛇类型分流）。
+     * - 正式服：安装与当前游戏推进方式一致的 JsWashBackend。
+     * - 国际服：安装 international_wash 的专用转发包装。
      * 调用时机：导入存档后、切换算法开关后。
      */
     function selectForProfile() {
@@ -764,16 +768,16 @@
     }
 
     // ═══════════════════ 包装 AlgorithmWasmBridge：无状态调用也走可插拔 ═══════════════════
-    // 仅 preview 模式下拦截 wash.washMany / wash.previewSequence 到 JsWashBackend（无状态）；
+    // 国内 official / preview 模式下拦截 wash.washMany / wash.previewSequence 到 JsWashBackend（无状态）；
     // 其余模式与操作一律转发原 bridge（即 wasm）。仅覆盖 .call 方法，保留原 bridge 对象其余属性。
     if (root.AlgorithmWasmBridge && typeof root.AlgorithmWasmBridge.call === 'function') {
         const originalBridge = root.AlgorithmWasmBridge;
         const originalCall = originalBridge.call.bind(originalBridge);
         const STATELESS_OPS = { 'wash.washMany': 'statelessWashMany', 'wash.previewSequence': 'statelessPreviewSequence' };
         const interceptedCall = function (op, payload) {
-            if (currentName === 'preview' && STATELESS_OPS[op] && previewInstance) {
-                const handler = previewInstance[STATELESS_OPS[op]];
-                if (typeof handler === 'function') return handler.call(previewInstance, (payload && payload.input) || payload);
+            if (sourceInstance && STATELESS_OPS[op]) {
+                const handler = sourceInstance[STATELESS_OPS[op]];
+                if (typeof handler === 'function') return handler.call(sourceInstance, (payload && payload.input) || payload);
             }
             return originalCall(op, payload);
         };
@@ -801,6 +805,7 @@
         selectBackend,
         selectForProfile,
         currentBackend,
+        usesSourceEngine: () => currentName === 'official' || currentName === 'preview',
         runPreviewSequence,
         GLOBAL_METHODS,
     });

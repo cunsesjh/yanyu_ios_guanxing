@@ -229,9 +229,11 @@
         if (Array.isArray(parLimit) && source.globalVars[String(parLimit[0])] !== parLimit[1]) return false;
         const levelLimit = normalizeLimit(config, 'lv_limit');
         if (levelLimit != null && source.roleLevel > numeric(levelLimit)) return false;
-        // 角色属性门槛（如 sx_limit: ["con", 60] = 根骨≥60）：不达标则排除，不抛错中断初始化
+        // sx_limit 使用游戏运行时的完整角色属性。存档中的 Str/Con/Dex/Int 加资质成长
+        // 不含装备、经脉等加成，不能据此判定不满足，否则会错误删掉候选并让整条脉序偏移。
+        // 只有调用方明确提供完整属性时才执行该过滤；桌面端导入存档默认不标记完整。
         const sxLimit = normalizeLimit(config, 'sx_limit');
-        if (Array.isArray(sxLimit) && sxLimit.length >= 2) {
+        if (source.roleStatsComplete && Array.isArray(sxLimit) && sxLimit.length >= 2) {
             const cur = numeric(source.roleStats ? source.roleStats[String(sxLimit[0])] : 0);
             if (cur < numeric(sxLimit[1])) return false;
         }
@@ -270,6 +272,7 @@
                 sex: numeric(initialState.sex, 1),
                 roleLevel: numeric(initialState.role_level, 90),
                 roleStats: initialState.role_stats || {},
+                roleStatsComplete: !!initialState.role_stats_complete,
                 globalVars: initialState.global_vars || {},
             };
             const channel = String(options.saveChannel || initialState.save_channel || initialState.channel || '').trim().toLowerCase();

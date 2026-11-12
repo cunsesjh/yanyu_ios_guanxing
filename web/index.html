@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>烟雨江湖 · 本地存档工具</title>
     <meta name="description" content="烟雨江湖本地存档导入与模拟器入口">
-    <link rel="stylesheet" href="./home.css?v=2.1.8">
+    <link rel="stylesheet" href="./home.css?v=2.1.9">
 </head>
 <body>
     <main class="home-shell">
@@ -14,6 +14,24 @@
                 <h1>观星模拟器</h1>
             </div>
         </header>
+
+        <section class="archive-import-panel" aria-labelledby="archiveImportTitle">
+            <div class="archive-import-copy">
+                <div class="archive-import-heading">
+                    <h2 id="archiveImportTitle">导入网页存档</h2>
+                    <span class="status-badge" id="homeSaveStatus">未导入</span>
+                </div>
+                <p>选择程序 <code>snapshots</code> 文件夹内的 <code>dat.json</code>，数据仅保存在当前浏览器。</p>
+                <p class="archive-import-role">当前角色：<strong id="homeMainRole">—</strong></p>
+            </div>
+            <div class="archive-import-actions">
+                <label class="btn btn-primary archive-import-button">
+                    <span class="import-txt">选择 dat.json</span>
+                    <input id="saveFileInput" type="file" accept=".json,application/json" hidden>
+                </label>
+                <p id="homeImportMessage" class="home-message" role="status" aria-live="polite"></p>
+            </div>
+        </section>
 
         <section class="home-panel module-panel" aria-labelledby="moduleTitle">
             <div class="panel-heading">
@@ -42,7 +60,7 @@
     <script src="./shared/save_decrypt.js"></script>
     <script src="./shared/archive_state.js"></script>
     <script src="./last-import.js"></script>
-    <script src="./home.js?v=2"></script>
+    <script src="./home.js?v=3"></script>
 
 </body>
 </html>

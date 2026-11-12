@@ -2016,13 +2016,13 @@ function annotateExchangeSequenceShenmaiPairs(purples, initialTalents) {
 }
 
 function runExchangeSequenceWasmSandbox(callback) {
-    // 「最新」(preview) 后端是纯 JS（WashSourceEngine），推演不依赖 wasm。
+    // 国内正式服/先行服后端都是纯 JS（WashSourceEngine），推演不依赖 wasm。
     // 若仍强制要求 wasmInitEngine 成功，wasm 未就绪（wasmReady=false）时它会返回 false
     // → 这里抛错 → 候选永远算不出来 → 置换首紫下拉为空（正式服因 wasm 已就绪故正常）。
-    // 因此：preview 后端下跳过这道 wasm 门槛；官方/国际服后端仍按原样校验。
+    // 因此：国内 JS 后端下跳过这道 wasm 门槛；国际服后端仍按原样校验。
     const isJsBackend = typeof WashEngineRegistry !== 'undefined'
-        && typeof WashEngineRegistry.currentBackend === 'function'
-        && WashEngineRegistry.currentBackend() === 'preview';
+        && typeof WashEngineRegistry.usesSourceEngine === 'function'
+        && WashEngineRegistry.usesSourceEngine();
     try {
         if (!isJsBackend && !wasmInitEngine(TALENT_DATA, ZZ_DATA)) {
             throw new Error('置换脉序引擎初始化失败');

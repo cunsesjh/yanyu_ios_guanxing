@@ -3,6 +3,9 @@
     'use strict';
     var script = document.currentScript;
     var root = new URL('./', script.src);
+    // The native sidebar owns importing in the desktop app. This panel is only
+    // for people opening the standalone index.html in a normal browser.
+    document.querySelector('.archive-import-panel')?.remove();
     // Keep the existing select and its change handlers. Only replace Chromium's
     // native popup: hovering/scrolling must never commit a value.
     var picker = null;
