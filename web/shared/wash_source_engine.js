@@ -371,7 +371,27 @@
         }
 
         isAllowedAt(id, zi = this.eligibleZi, state) {
-            return this.allowedForState(state, zi).has(Number(id));
+            const talentId = Number(id);
+            if (!this.allowed.has(talentId)) return false;
+            if (!this.externalEligible || this.source.roleRaw) {
+                // Only attribute-gated talents need the full role model. At
+                // present this is 五蕴皆空; ordinary draws stay on the cheap
+                // static-pool path, including the long preview scan on render.
+                const sxLimit = normalizeLimit(this.config.get(talentId), 'sx_limit');
+                if (!Array.isArray(sxLimit) || sxLimit.length < 2) return true;
+                if (this.source.roleRaw && root.WashRoleContext) {
+                    const stats = this.roleStatsFor(state);
+                    if (stats) {
+                        return allowed(this.config.get(talentId), {
+                            ...this.source, roleStats: stats, roleStatsComplete: true,
+                        }, zi);
+                    }
+                }
+                if (!this.source.roleStatsComplete) return true;
+            } else if (!this.externalEligible.has(talentId)) {
+                return false;
+            }
+            return allowed(this.config.get(talentId), this.source, zi);
         }
 
         roleStatsFor(state) {
@@ -387,19 +407,11 @@
         }
 
         allowedForState(state, zi = this.eligibleZi) {
-            const stats = this.roleStatsFor(state);
-            if (!stats) return this.allowed;
             const talentIds = (state && state.talents || []).map(Number);
             const key = `${zi}|${talentIds.join(',')}`;
             const cached = this.allowedPoolCache.get(key);
             if (cached) return cached;
-            const source = {...this.source, roleStats: stats, roleStatsComplete: true};
-            const result = new Set(this.allIds.filter(id => this.allowed.has(id)
-                // A caller-provided list is a snapshot of eligibility. It can
-                // be used when no role model is available, but must not freeze
-                // a talent out after another talent changes a stat threshold.
-                && (!this.externalEligible || !!this.source.roleRaw || this.externalEligible.has(id))
-                && allowed(this.config.get(id), source, zi)));
+            const result = new Set(this.allIds.filter(id => this.isAllowedAt(id, zi, state)));
             if (this.allowedPoolCache.size >= 4096) this.allowedPoolCache.delete(this.allowedPoolCache.keys().next().value);
             this.allowedPoolCache.set(key, result);
             return result;
@@ -439,10 +451,10 @@
                     bornRC = this.hooks.advanceRc({ advance, bornRC });
                 }
                 draws += 1;
-                const eligible = this.allowedForState({talents});
-                if (fromPity && eligible.has(candidate)) purpleDraws += 1;
+                const eligible = this.isAllowedAt(candidate, this.eligibleZi, {talents});
+                if (fromPity && eligible) purpleDraws += 1;
                 if (draws > 100000) throw new Error('源码洗脉抽取未收敛');
-                if (!eligible.has(candidate) || talents.includes(candidate)) continue;
+                if (!eligible || talents.includes(candidate)) continue;
                 if (this.quality(candidate) === 4 && newPurple) continue;
                 talents.push(candidate);
                 generatedEvents.push({ id: candidate, bornRC, fromPity, luckSeed: fromPity ? luck : null });
@@ -542,10 +554,10 @@
                 let candidate;
                 [candidate, luck] = this.draw(luck, true);
                 draws += 1;
-                const eligible = this.allowedForState({talents});
-                if (eligible.has(candidate)) purpleDraws += 1;
+                const eligible = this.isAllowedAt(candidate, this.eligibleZi, {talents});
+                if (eligible) purpleDraws += 1;
                 if (draws > 100000) throw new Error('源码置换抽取未收敛');
-                if (eligible.has(candidate) && !talents.includes(candidate)) {
+                if (eligible && !talents.includes(candidate)) {
                     talents.push(candidate);
                     return {
                         state: { bornSeed: state.bornSeed, luckSeed: luck, bornRC: numeric(state.bornRC), talLucky: 0, talents },

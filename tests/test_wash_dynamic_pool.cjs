@@ -51,6 +51,12 @@ const sequenceEngine = new sandbox.WashSourceEngine.Engine(sandbox.TALENT_DATA, 
     global_vars: {talent_MuRenYinJi: 1, num_ZhuangGu: 9},
 });
 const sequence = [252, 239, 170, 171];
+let fullRoleStatsCalls = 0;
+const roleStatsForSequence = sequenceEngine.roleStatsFor.bind(sequenceEngine);
+sequenceEngine.roleStatsFor = state => {
+    fullRoleStatsCalls += 1;
+    return roleStatsForSequence(state);
+};
 sequenceEngine.draw = (_seed, purple) => {
     assert.equal(purple, false);
     return [sequence.shift(), 1];
@@ -60,6 +66,8 @@ const unlockedInSameWash = sequenceEngine.wash({
 }, []);
 assert.deepEqual(Array.from(unlockedInSameWash.state.talents), [252, 239, 170, 171],
     'a qualifying Con talent unlocks 五蕴皆空 later in the same wash');
+assert.equal(fullRoleStatsCalls, 1,
+    'the full role model runs only when the attribute-gated talent is drawn');
 
 const washedOffSequenceEngine = new sandbox.WashSourceEngine.Engine(sandbox.TALENT_DATA, {
     role_id: 1, sex: 1, vip: 1, role_level: 100, zizhi: 154,
