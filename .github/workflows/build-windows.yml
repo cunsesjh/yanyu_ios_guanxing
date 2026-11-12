@@ -7,7 +7,7 @@ permissions:
   contents: write
 jobs:
   windows:
-    runs-on: windows-latest
+    runs-on: windows-self
     env:
       IOSGUANXING_DISABLE_AUTO_UPDATE: '1'
     steps:
