@@ -14,7 +14,10 @@ const SEARCH_STAGES = Object.freeze([
     {fraction: 0.20, intensity: 4, label: '全强度压低丹耗'},
 ]);
 self.AutoWash2SearchPolicy = Object.freeze({initialSearchWindow, searchTimeLimit, stages: SEARCH_STAGES});
-importScripts('data.js', 'wash_source_engine.js', 'auto_wash2_source_cache.js', 'auto_wash2_engine.js', 'auto_wash2_optimizer.js', 'auto_wash2_model.js');
+importScripts('data.js', 'born_talent_data.js', 'battle_talent_data.js', 'life_hedao_data.js',
+    'extra_attr_data.js', 'equip_data.js', 'kongfu_data.js', '../role/role.js', 'wash_role_context.js',
+    'wash_source_engine.js', 'auto_wash2_source_cache.js', 'auto_wash2_engine.js',
+    'auto_wash2_optimizer.js', 'auto_wash2_model.js');
 importScripts('anchor_route_planner.js', 'anchor_route_search.js', 'auto_wash2_anchor.js');
 importScripts('auto_wash2_seed_planner.js', 'auto_wash2_seed.js');
 importScripts('auto_wash2_unified_anchor.js', 'auto_wash2_route_constructor.js',
@@ -24,7 +27,8 @@ self.onmessage = async ({data: message}) => {
     try {
         if (message.type === 'inspect') {
             const engine = new AutoWash2Engine.Engine(TALENT_DATA, message.raw);
-            const summary = {allowed: [...engine.allowed], purpleIds: engine.purpleIds};
+            const initial = engine.initialState(message.raw);
+            const summary = {allowed: [...engine.allowedForState(initial, initial.zizhi)], purpleIds: engine.purpleIds};
             send('summary', {summary});
             return;
         }

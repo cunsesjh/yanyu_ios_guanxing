@@ -26,7 +26,7 @@
         }
         initialState(raw) { return {...super.initialState(raw), zizhi: Number(raw.zizhi ?? 154)}; }
         slotCountFor(zizhi) { return Number(root.ZZ_DATA[zizhi]?.num_talent || 0); }
-        isAllowedAt(id, zizhi) { return this.at(zizhi).allowed.has(Number(id)); }
+        isAllowedAt(id, zizhi, state) { return this.at(zizhi).isAllowedAt(id, zizhi, state); }
         wash(state, keepPositions) {
             const result = this.at(state.zizhi).wash(state, keepPositions);
             result.state.zizhi = state.zizhi;

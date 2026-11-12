@@ -735,6 +735,7 @@ function syncStateToWasm(jsState) {
         int_gift: jsState.intGift,
         role_level: jsState.roleLevel,
         role_stats: jsState.roleStats || { str_val: 0, dex: 0, con: 0, int_val: 0 },
+        role_raw: jsState.roleRaw || null,
         global_vars: jsState.globalVars || {},
         born_talent_rc: Number(jsState.bornTalentRC) || 0,
         save_channel: jsState.saveChannel || '',

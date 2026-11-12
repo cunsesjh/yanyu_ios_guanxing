@@ -1972,5 +1972,16 @@ async function initApp() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
-setTimeout(function () { if (typeof prewarmSql === 'function') prewarmSql(); }, 200);
+if (typeof globalThis !== 'undefined') {
+    globalThis.YYJHRoleAttributeModel = Object.freeze({
+        compute(role) {
+            const result = computeFinalStats(role);
+            return {str_val: result.str, con: result.con, dex: result.dex, int_val: result.int};
+        },
+    });
+}
+
+if (typeof document !== 'undefined' && document.getElementById('roleSelect')) {
+    document.addEventListener('DOMContentLoaded', initApp);
+    setTimeout(function () { if (typeof prewarmSql === 'function') prewarmSql(); }, 200);
+}

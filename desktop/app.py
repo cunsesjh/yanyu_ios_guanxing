@@ -13,7 +13,7 @@ from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
                                     QWebEngineUrlRequestInterceptor, QWebEngineSettings)
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
-from . import VERSION
+from . import RELEASE_CHANNEL, VERSION
 from .server import LocalSite
 from .release_notes import ITEMS as RELEASE_NOTE_ITEMS, TITLE as RELEASE_NOTE_TITLE
 from .service import DownloadService
@@ -297,7 +297,7 @@ class MainWindow(QMainWindow):
         sidebar.addWidget(author)
         self.theme_button = self.button('☀  切换浅色模式', self.toggle_theme)
         sidebar.addWidget(self.theme_button)
-        footer = QLabel('本地解码 · 内置观星\n\nv' + VERSION + '  /  正式版')
+        footer = QLabel('本地解码 · 内置观星\n\nv' + VERSION + '  /  ' + RELEASE_CHANNEL)
         footer.setObjectName('muted')
         sidebar.addWidget(footer)
         self.update_button = self.button('↻  检查更新', self.check_for_updates)

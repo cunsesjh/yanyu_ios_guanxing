@@ -1,6 +1,8 @@
 'use strict';
 
-importScripts('data.js', 'wash_source_engine.js', 'wash_source_optimizer.js');
+importScripts('data.js', 'born_talent_data.js', 'battle_talent_data.js', 'life_hedao_data.js',
+    'extra_attr_data.js', 'equip_data.js', 'kongfu_data.js', '../role/role.js',
+    'wash_role_context.js', 'wash_source_engine.js', 'wash_source_optimizer.js');
 
 function postWorkerMessage(type, requestId, payload) {
     self.postMessage({ type, requestId, ...(payload || {}) });

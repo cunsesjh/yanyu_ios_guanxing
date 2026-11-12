@@ -666,7 +666,7 @@
                 let candidate;
                 [candidate, luck] = engine.draw(luck, true);
                 rawDraws += 1;
-                if (typeof engine.isAllowedAt === 'function' && !engine.isAllowedAt(candidate, state.zizhi)) continue;
+                if (typeof engine.isAllowedAt === 'function' && !engine.isAllowedAt(candidate, state.zizhi, state)) continue;
                 // 当前已占用同名紫在真实 replace() 中会被内部跳过，不计入“可见置换脉序”距离。
                 if (occupied.has(candidate)) continue;
                 visibleGap += 1;
