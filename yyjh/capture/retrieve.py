@@ -27,7 +27,8 @@ RSA_N = int(
     '81a754505529922f8182719b431ceb2716ca87e2ba83a01e85ef75e463882d0b5376'
     'b6b3d66819e26c2b674f0a9ddefe934243ce87ad', 16)
 HOSTS = frozenset(('ios.wlfy.blue8.cn', 'andr.wlfy.blue8.cn',
-                   'pre.wlfy.blue8.cn'))          # 先行服（ios/android 同域名，按渠道头判平台）
+                   'pre.wlfy.blue8.cn',           # 先行服（ios/android 同域名，按渠道头判平台）
+                   'yanyuonline.novastargame.net'))  # 国际服（xinma 等，按渠道头判平台）
 COPY_HEADERS = ('ver', 'appver', 'channel', 'realchannel', 'whale', 'lang',
                 'blue', 'green', 'user-agent', 'plat')
 
@@ -58,6 +59,8 @@ def session_from_har(path):
     """
     with open(path, encoding='utf-8') as f:
         entries = json.load(f).get('log', {}).get('entries', [])
+    # ProxyPin 等工具导出的 HAR 条目可能是倒序（新→旧），状态机必须按时间正序处理
+    entries.sort(key=lambda e: e.get('startedDateTime') or '')
     account = key = selected = None
     for entry in entries:
         req, res = entry.get('request', {}), entry.get('response', {})
