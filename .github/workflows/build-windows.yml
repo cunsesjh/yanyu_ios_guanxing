@@ -99,7 +99,7 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v3.0.7-beta.6 测试版更新说明
+            ## v3.0.7-beta.7 测试版更新说明
 
             导入 HAR 时，若主动下载失败但 HAR 自身含完整存档，程序会自动回退为离线导入，并提示实际使用的存档版本和数据来源。
 
