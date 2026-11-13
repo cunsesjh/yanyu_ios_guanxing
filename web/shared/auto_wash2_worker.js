@@ -51,7 +51,7 @@ self.onmessage = async ({data: message}) => {
             }
             if (found.size) send('candidate', {result: combined()});
         }
-        let limited = false;
+        const internalLimitReasons = new Set();
         // First obtain a verified route. As soon as one is found, recompute the
         // remaining schedule around the current best cost instead of waiting
         // for a fixed feasibility phase to expire.
@@ -110,7 +110,7 @@ self.onmessage = async ({data: message}) => {
             send('progress', {progress: {message: `${purpose}：耗丹上限 ${stageCap.toLocaleString()}`}});
             for (let branch = 0; branch < branches.length; branch++) {
                 const now = Date.now();
-                if (now >= stageDeadline || now >= totalDeadline) { limited = true; break; }
+                if (now >= stageDeadline || now >= totalDeadline) break;
                 const branchesLeft = branches.length - branch;
                 const branchDeadline = Math.min(stageDeadline, now + (stageDeadline - now) / branchesLeft);
                 const progress = value => send('progress', {progress: {...value,
@@ -135,12 +135,13 @@ self.onmessage = async ({data: message}) => {
                 const foundFirstTactical = waitingForFirst && found.size > 0;
                 const improvedTactical = stopWhenImproved && startingBest != null
                     && (combined().routes[0]?.totalPills ?? Infinity) < startingBest;
-                limited ||= (!foundFirstTactical && !improvedTactical && !!result.cancelled)
-                    || !!result.searchScope?.safetyLimitReached;
+                for (const reason of result.searchScope?.limitReasons || []) internalLimitReasons.add(reason);
+                if (result.searchScope?.safetyLimitReached && !result.searchScope?.limitReasons?.length) {
+                    internalLimitReasons.add('search-safety-limit');
+                }
                 if (foundFirstTactical) return true;
                 if (improvedTactical) return true;
                 if (Date.now() >= branchDeadline || Date.now() >= totalDeadline) {
-                    limited = true;
                     continue;
                 }
                 const bestAfterTactical = combined().routes[0]?.totalPills;
@@ -156,7 +157,7 @@ self.onmessage = async ({data: message}) => {
                     maxTotalPills: anchorCeiling, searchIntensity}};
                 // The legacy anchor planner is tied to the domestic table order.
                 // International saves use the channel-aware unified constructor above.
-                const anchorLimited = isInternational ? false : !!AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
+                if (!isInternational) AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
                     () => Date.now() >= branchDeadline || Date.now() >= stageDeadline
                         || Date.now() >= totalDeadline || (waitingForFirst && found.size > 0)
                         || (stopWhenImproved && startingBest != null
@@ -164,7 +165,6 @@ self.onmessage = async ({data: message}) => {
                 const foundFirstAnchor = waitingForFirst && found.size > 0;
                 const improvedAnchor = stopWhenImproved && startingBest != null
                     && (combined().routes[0]?.totalPills ?? Infinity) < startingBest;
-                limited ||= !foundFirstAnchor && !improvedAnchor && anchorLimited;
                 if (foundFirstAnchor) return true;
                 if (improvedAnchor) return true;
             }
@@ -183,14 +183,18 @@ self.onmessage = async ({data: message}) => {
             const hadRoute = found.size > 0;
             send('progress', {progress: {message: `阶段 ${stage.intensity}/4 · ${stage.label}`}});
             runSeedStage(stage, stageDeadline, hadRoute ? 0.40 : 0.55);
-            if (Date.now() >= stageDeadline) { limited = true; continue; }
+            if (Date.now() >= stageDeadline) continue;
             const best = combined().routes[0]?.totalPills;
             const ceiling = best == null ? userBudget : Math.max(0, best - 1);
             await runPass(ceiling, stageDeadline,
                 best == null ? stage.label : `${stage.label}（当前最好 ${best.toLocaleString()} 丹）`,
                 best == null, best != null, stage.intensity);
         }
-        send('result', {result: {...combined(), limited}});
+        const hitTimeLimit = Date.now() >= totalDeadline;
+        const limitReasons = [...internalLimitReasons];
+        const limitReason = hitTimeLimit && limitReasons.length ? 'time-and-internal'
+            : hitTimeLimit ? 'time' : limitReasons.length ? 'internal' : 'completed';
+        send('result', {result: {...combined(), limited: limitReason !== 'completed', limitReason, limitReasons}});
     } catch (error) {
         send('error', {error: error?.message || String(error)});
     }

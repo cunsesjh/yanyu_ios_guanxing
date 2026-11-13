@@ -99,13 +99,13 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v3.0.7-beta.3 测试版更新说明
+            ## v3.0.7-beta.4 测试版更新说明
 
-            自动洗脉（改进）选择三个目标紫脉时，整轮搜索上限由 10 分钟延长至 15 分钟；四目标仍为最多 15 分钟。
+            自动洗脉（改进）选择三个或四个目标紫脉时，扩大状态节点、脉序扫描和路线深度安全预算，仍受 15 分钟总时限约束。
 
-            一至两个目标的搜索时长不变，仍最多 10 分钟。
+            结束提示区分总时限耗尽、内部安全上限触发和完成当前搜索范围。
 
-            搜索时间增加不代表一定能找到路线；耗丹上限、路线覆盖及当前脉序仍会影响结果。
+            扩大搜索范围不代表一定能找到路线；耗丹上限、路线覆盖及当前脉序仍会影响结果。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt

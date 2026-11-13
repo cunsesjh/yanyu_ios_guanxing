@@ -69,6 +69,14 @@ async function send(type, payload) {
     assert.equal(expandedScope.searchScope.searchIntensity, 3);
     assert.equal(expandedScope.searchScope.maxEventNodes, 900000);
     assert.equal(expandedScope.searchScope.maxEventDepth, 128);
+    const threeTargetScope = await sandbox.AutoWash2Optimizer.searchWashRoutes({
+        initialState: converted, talentData: sandbox.TALENT_DATA, targetIds: [271, 272, 250],
+        options: {maxTotalPills: 0, searchIntensity: 3}});
+    assert.equal(threeTargetScope.searchScope.expandedTargetFactor, 1.5);
+    assert.equal(threeTargetScope.searchScope.maxEventNodes, 1350000);
+    assert.equal(threeTargetScope.searchScope.maxMainRawWashes, 6000000);
+    assert.equal(threeTargetScope.searchScope.maxEventDepth, 160);
+    assert.ok(Array.isArray(threeTargetScope.searchScope.limitReasons));
     const input = {initialState: converted, targetIds: [271], compatibleGroups: [], bagPills: 100,
         hasBagPills: true, options: {maxTotalPills: 0}};
     rows = await send('search', {input});
