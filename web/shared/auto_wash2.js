@@ -19,7 +19,6 @@
                 <div class="w2-stock">背包洗髓丹<strong id="w2Bag">—</strong></div>
             </div>
             <p id="w2Summary" class="w2-muted">请先在首页导入存档，再选择人物。</p>
-            <div id="w2SequenceStatus" class="w2-sequence-status" aria-live="polite">选择人物后读取脉序状态。</div>
         </section>
         <section class="w2-section">
             <h3><span>02</span>保留当前天赋</h3>
@@ -109,40 +108,16 @@
             if (data.type !== 'summary') return;
             const allowed = new Set(data.summary.allowed);
             available = data.summary.purpleIds.filter(id => allowed.has(id));
-            renderSequenceStatus(data.summary.sequenceStatus);
             assignments = new Map([...assignments].filter(([id]) => available.includes(id)));
             renderTargets(); $('Run').disabled = false; status('已就绪，选择目标后开始规划。');
         };
         w.postMessage({type: 'inspect', requestId: id, raw});
     }
-    function renderSequenceStatus(info) {
-        const first = info?.firstPurple;
-        const seedLabel = info?.seedValid === false
-            ? '种子状态异常：' + (info.seedError || '字段不完整')
-            : info?.seedFixed
-                ? '欧气种子：已固定'
-                : '欧气种子：未固定';
-        const firstLabel = first
-            ? `导入起点后首紫：${esc(name(first.id))} · ${first.fromPity ? '保底紫' : '自然紫'} · 第 ${first.wash} 洗 · ${first.anchorEligible ? '可作置换锚点' : '无可用置换锚点'}`
-            : '导入起点后首紫：未能从当前状态推演';
-        const exchangeLabel = info?.seedFixed
-            ? '无限置换起手：不再按未固定种子重新枚举'
-            : info?.allowsInfiniteExchange
-                ? '无限置换起手：当前规划会纳入'
-                : '无限置换起手：当前状态未识别为可用路线';
-        const caveat = info?.seedFixed
-            ? '种子固定可能由首条保底紫或首次置换造成；单凭此字段不能断定历史上一定用过无限置换。'
-            : info?.currentConflictPairs
-                ? `当前场上识别到 ${info.currentConflictPairs} 组可置换冲突脉。`
-                : '此处显示的是存档状态与脉序推演结果，不是游戏操作历史记录。';
-        $('SequenceStatus').innerHTML = `<strong>脉序状态</strong><div>${esc(seedLabel)}</div><div>${firstLabel}</div><div>${esc(exchangeLabel)}</div><small>${esc(caveat)}</small>`;
-    }
     function chooseRole() {
         invalidate(); raw = null; available = []; activeRole = $('Role').value;
         $('Run').disabled = true;
-        $('SequenceStatus').textContent = '正在读取所选人物的脉序状态…';
         const s = window.state || {}, entry = s.saveRoles?.find(e => e.key === activeRole);
-        if (!entry) { $('Run').disabled = true; renderLocks(); renderTargets(); $('SequenceStatus').textContent = '选择人物后读取脉序状态。'; status('请选择人物。'); return; }
+        if (!entry) { $('Run').disabled = true; renderLocks(); renderTargets(); status('请选择人物。'); return; }
         try {
             if (s.dlcMode || /international|oversea|国际|國際/i.test([s.saveChannel, s.savePlatform].join(' '))) throw new Error('此模块暂支持国服及先行服，国际服请使用原有功能。');
             raw = AutoWash2Model.snapshot(s.saveData, entry.role, {vip: $('Vip').value, channel: s.saveChannel});
@@ -151,7 +126,7 @@
             $('Bag').textContent = bag.toLocaleString() + ' 丹';
             $('Summary').textContent = `${entry.tag} · ${entry.role.Name || '无名'} · ${ZZ_DATA[raw.zizhi]?.zz_name || ZZ_DATA[raw.zizhi]?.name || ['资质平平', '资质过人', '武林俊杰', '绝世奇才', '空前绝后'][raw.zizhi - 150]} · ${raw.zizhi - 150} 槽 · 从导入存档的原始状态起算`;
             renderLocks(); renderTargets(); inspect();
-        } catch (error) { raw = null; $('Run').disabled = true; renderLocks(); renderTargets(); $('SequenceStatus').textContent = '无法读取脉序状态：' + error.message; status(error.message, true); }
+        } catch (error) { raw = null; $('Run').disabled = true; renderLocks(); renderTargets(); status(error.message, true); }
     }
     function refresh() {
         const s = window.state || {}, signature = JSON.stringify([s.saveChannel, s.savePlatform, s.dlcMode]);
@@ -160,7 +135,6 @@
         $('Role').innerHTML = '<option value="">请选择人物</option>' + (s.saveRoles || []).map(e => `<option value="${esc(e.key)}">${esc(e.tag + ' · ' + (e.role.Name || e.role.ID))}</option>`).join('');
         $('Role').disabled = !s.saveRoles?.length; $('Run').disabled = true;
         $('Bag').textContent = '—'; $('Summary').textContent = s.saveData ? '存档已导入，请明确选择一名人物。' : '请先在首页导入存档，再选择人物。';
-        $('SequenceStatus').textContent = '选择人物后读取脉序状态。';
         renderLocks(); renderTargets(); status('等待选择人物。');
     }
     function renderResult(result) {

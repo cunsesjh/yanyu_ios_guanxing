@@ -11,9 +11,6 @@
 #autoWash2ModePanel .w2-stock { display: grid; gap: 10px; padding: 0 14px 8px; font-size: 12px; color: #9babc2; }
 #autoWash2ModePanel .w2-stock strong { font-size: 20px; color: #e8c075; }
 #autoWash2ModePanel .w2-muted { font-size: 13px; line-height: 1.8; color: #9babc2; margin: 12px 0; }
-#autoWash2ModePanel .w2-sequence-status { display: grid; gap: 6px; margin-top: 10px; padding: 12px 14px; border-left: 3px solid #68dbc0; background: rgba(44, 112, 96, .14); color: #c1cde0; font-size: 13px; line-height: 1.7; }
-#autoWash2ModePanel .w2-sequence-status strong { color: #8de3cb; }
-#autoWash2ModePanel .w2-sequence-status small { color: #9babc2; font-size: 12px; }
 #autoWash2ModePanel .w2-locks, #autoWash2ModePanel .w2-targets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 #autoWash2ModePanel .w2-lock, #autoWash2ModePanel .w2-target { border: 1px solid #2b3c53; background: #151f2e; border-radius: 9px; padding: 12px; text-align: left; color: #e6edf6; cursor: pointer; }
 #autoWash2ModePanel .w2-lock { display: grid; gap: 9px; }
