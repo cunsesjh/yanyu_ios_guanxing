@@ -5,7 +5,7 @@ function initialSearchWindow(totalSearchMs = 600000) {
     return Math.min(120000, totalSearchMs * 0.4);
 }
 function searchTimeLimit(targetCount) {
-    return Number(targetCount) === 4 ? 900000 : 600000;
+    return Number(targetCount) >= 3 ? 900000 : 600000;
 }
 const SEARCH_STAGES = Object.freeze([
     {fraction: 0.20, intensity: 1, label: '快速找路'},
@@ -57,8 +57,7 @@ self.onmessage = async ({data: message}) => {
         // for a fixed feasibility phase to expire.
         const searchStarted = Date.now();
         const requestedSearchMs = Number(message.searchTimeMs);
-        // Four-target routes have a much larger combinatorial search space;
-        // only those runs may use the additional five-minute allowance.
+        // Three- and four-target routes have a larger combinatorial search space.
         const maxSearchMs = searchTimeLimit(branches[0]?.length || 0);
         const totalSearchMs = Number.isFinite(requestedSearchMs)
             ? Math.max(100, Math.min(maxSearchMs, requestedSearchMs)) : maxSearchMs;

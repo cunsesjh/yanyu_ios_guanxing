@@ -18,8 +18,10 @@ assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(), 120000);
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(1000), 400);
 assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(4), 900000,
     'four-target searches may run for up to fifteen minutes');
-assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(3), 600000,
-    'searches with fewer than four targets stay capped at ten minutes');
+assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(3), 900000,
+    'three-target searches may run for up to fifteen minutes');
+assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(2), 600000,
+    'searches with fewer than three targets stay capped at ten minutes');
 assert.deepEqual(JSON.parse(JSON.stringify(sandbox.AutoWash2SearchPolicy.stages.map(s => [s.fraction, s.intensity]))),
     [[0.2, 1], [0.3, 2], [0.3, 3], [0.2, 4]], 'four progressive stages must consume the full shared deadline');
 const save = {CenterID: 1278440, Items: [{ID: 2601, Num: 100}], globalVariable: {test: 1}};
