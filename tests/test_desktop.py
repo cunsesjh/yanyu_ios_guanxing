@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from desktop.storage import Store, WindowsProtector
@@ -80,6 +81,30 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(self.store.selected()['id'], row['id'])
         self.assertEqual(self.store.session_path.read_bytes(), before)
         self.assertEqual(len(self.store.list_snapshots()), 1)
+
+    def test_har_download_falls_back_to_complete_offline_snapshot(self):
+        parsed = SimpleNamespace(data=DATA, runtime='ios', server='31', version='73680',
+                                 steps=[SimpleNamespace(label='数据来源', value='download 响应')])
+        with patch('desktop.service.retrieve.session_from_har', return_value=SESSION), \
+             patch('desktop.service.retrieve.fetch', side_effect=ValueError('游戏服务器拒绝请求（HTTP 500）')), \
+             patch('yyjh.capture.decode.decode', return_value=parsed):
+            result = DownloadService(self.store).download_from_har('capture.har')
+        self.assertIn('已改为从 HAR 离线导入', result['warning'])
+        self.assertIn('73680', result['warning'])
+        self.assertIsNone(result['session'])
+        self.assertEqual(self.store.load_snapshot(result['row']['id']), DATA)
+        self.assertFalse(self.store.session_path.exists(),
+                         'an unsuccessful active session must not be persisted as fresh')
+
+    def test_har_download_does_not_fallback_to_incomplete_data(self):
+        parsed = SimpleNamespace(data={'MainRole': {}, 'Roles': {}}, runtime='ios',
+                                 server='31', version='73680', steps=[])
+        with patch('desktop.service.retrieve.session_from_har', return_value=SESSION), \
+             patch('desktop.service.retrieve.fetch', side_effect=ValueError('HTTP 500')), \
+             patch('yyjh.capture.decode.decode', return_value=parsed):
+            with self.assertRaisesRegex(ValueError, 'HTTP 500.*没有可离线导入的完整存档'):
+                DownloadService(self.store).download_from_har('capture.har')
+        self.assertEqual(self.store.list_snapshots(), [])
 
     def test_history_selection_survives_restart_and_rejects_traversal(self):
         first = self.store.save_snapshot(DATA, 'ios', '1', '73576')

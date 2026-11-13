@@ -19,7 +19,6 @@ from .release_notes import ITEMS as RELEASE_NOTE_ITEMS, TITLE as RELEASE_NOTE_TI
 from .service import DownloadService
 from .storage import Store
 from .update import check_update
-from yyjh.capture import retrieve
 
 
 STYLE = '''
@@ -151,11 +150,11 @@ class DownloadThread(QThread):
     def run(self):
         try:
             if self.har:
-                self.progress.emit('正在读取 HAR 登录会话…')
-                session = retrieve.session_from_har(self.har)
+                result = DownloadService(self.store).download_from_har(
+                    self.har, self.progress.emit)
             else:
-                session = self.session
-            result = DownloadService(self.store).download(session, self.progress.emit)
+                result = DownloadService(self.store).download(
+                    self.session, self.progress.emit)
             self.completed.emit(result)
         except (ValueError, OSError, RuntimeError) as error:
             # Domain errors are user-readable. Never expose headers, raw responses,

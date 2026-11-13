@@ -99,11 +99,11 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v3.0.7-beta.5 测试版更新说明
+            ## v3.0.7-beta.6 测试版更新说明
 
-            自动洗脉（改进）新增脉序状态提示：显示欧气种子是否固定、导入起点后的首条紫脉是否为保底及其置换锚点资格，并说明当前规划是否纳入无限置换起手。
+            导入 HAR 时，若主动下载失败但 HAR 自身含完整存档，程序会自动回退为离线导入，并提示实际使用的存档版本和数据来源。
 
-            种子固定不等同于确认使用过无限置换；状态提示根据当前存档和脉序推演，不代表游戏操作历史。
+            回退仅接受通过完整性检查的存档；普通“下载最新云存档”刷新流程不变。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
