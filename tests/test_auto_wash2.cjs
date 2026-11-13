@@ -62,7 +62,18 @@ async function send(type, payload) {
 }
 (async () => {
     let rows = await send('inspect', {raw: converted});
-    assert.ok(rows.find(r => r.type === 'summary').summary.allowed.includes(271));
+    const inspectSummary = rows.find(r => r.type === 'summary').summary;
+    assert.ok(inspectSummary.allowed.includes(271));
+    assert.equal(inspectSummary.sequenceStatus.seedFixed, false);
+    assert.equal(typeof inspectSummary.sequenceStatus.allowsInfiniteExchange, 'boolean');
+    assert.ok(inspectSummary.sequenceStatus.firstPurple
+        && typeof inspectSummary.sequenceStatus.firstPurple.fromPity === 'boolean',
+    'inspection should report whether the first purple after the imported state is pity-generated');
+    rows = await send('inspect', {raw: {...converted, luck_seed: 987654, luck_seed_inited: true}});
+    const fixedSummary = rows.find(r => r.type === 'summary').summary.sequenceStatus;
+    assert.equal(fixedSummary.seedFixed, true);
+    assert.equal(fixedSummary.allowsInfiniteExchange, false,
+        'a fixed seed must not be classified as an uninitialized infinite-exchange start');
     const expandedScope = await sandbox.AutoWash2Optimizer.searchWashRoutes({
         initialState: converted, talentData: sandbox.TALENT_DATA, targetIds: [271],
         options: {maxTotalPills: 0, searchIntensity: 3}});

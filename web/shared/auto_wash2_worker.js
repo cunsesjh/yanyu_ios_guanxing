@@ -28,7 +28,27 @@ self.onmessage = async ({data: message}) => {
         if (message.type === 'inspect') {
             const engine = new AutoWash2Engine.Engine(TALENT_DATA, message.raw);
             const initial = engine.initialState(message.raw);
-            const summary = {allowed: [...engine.allowedForState(initial, initial.zizhi)], purpleIds: engine.purpleIds};
+            const sequenceZi = Number(message.raw?.zizhi) >= 154 ? 154 : 153;
+            const sequence = AutoWash2RouteConstructor.readSequence(message.raw, {zi: sequenceZi, count: 12});
+            const seedState = AutoWash2RouteConstructor.resolveSeedState(message.raw, sequence);
+            const seedMethod = AutoWash2RouteConstructor.resolveSeedMethod(message.raw, sequence);
+            const firstPurple = sequence.seq?.[0] || null;
+            const summary = {
+                allowed: [...engine.allowedForState(initial, initial.zizhi)], purpleIds: engine.purpleIds,
+                sequenceStatus: {
+                    seedFixed: seedState.fixed,
+                    seedValid: seedState.valid,
+                    seedError: seedState.error,
+                    allowsInfiniteExchange: !!seedMethod.allowsInfiniteExchange,
+                    firstPurple: firstPurple ? {
+                        id: Number(firstPurple.id), fromPity: !!firstPurple.fromPity,
+                        wash: Number(firstPurple.wash) || 0,
+                        conflictId: Number(firstPurple.conflictId) || 0,
+                        anchorEligible: !!firstPurple.anchorEligible,
+                    } : null,
+                    currentConflictPairs: seedMethod.directConflictPairs?.length || 0,
+                },
+            };
             send('summary', {summary});
             return;
         }

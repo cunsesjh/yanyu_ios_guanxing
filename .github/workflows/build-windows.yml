@@ -99,13 +99,11 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v3.0.7-beta.4 测试版更新说明
+            ## v3.0.7-beta.5 测试版更新说明
 
-            自动洗脉（改进）选择三个或四个目标紫脉时，扩大状态节点、脉序扫描和路线深度安全预算，仍受 15 分钟总时限约束。
+            自动洗脉（改进）新增脉序状态提示：显示欧气种子是否固定、导入起点后的首条紫脉是否为保底及其置换锚点资格，并说明当前规划是否纳入无限置换起手。
 
-            结束提示区分总时限耗尽、内部安全上限触发和完成当前搜索范围。
-
-            扩大搜索范围不代表一定能找到路线；耗丹上限、路线覆盖及当前脉序仍会影响结果。
+            种子固定不等同于确认使用过无限置换；状态提示根据当前存档和脉序推演，不代表游戏操作历史。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
