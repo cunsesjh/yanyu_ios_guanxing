@@ -559,7 +559,7 @@
         }
         const TG = (targets || []).map(Number);
         const held = TG.filter(id => s.talents.includes(id));
-        if (!held.length) return null;
+        if (!held.length && !seedOpt.pityCarrierExchange) return null;
         if (Number(s.zizhi) < 154) {
             e = engineOf(raw, 154);
             s = e.upgradeToFour(Object.assign({}, s, { zizhi: 154 }));
@@ -688,12 +688,29 @@
         if (Number(raw.zizhi) < 153) {
             pushStep({ type: 'upgrade', toZi: 153, washes, cost });
         }
-        // 前缀空洗（不锁任何脉，只推进）
-            for (let k = 0; k < startWash; k++) {
-                const pin = pinnedTargets.map(id => s.talents.indexOf(id)).filter(i => i >= 0);
-                const r = e.wash(s, pin);
+        // 前缀空洗中若自然出现目标，立即锁住；否则指定起点前可能丢失目标。
+        const autoPinNaturalTargets = o.autoPinNaturalTargets !== false;
+        for (let k = 0; k < startWash; k++) {
+            const pin = pinnedTargets.map(id => s.talents.indexOf(id)).filter(i => i >= 0);
+            const r = e.wash(s, pin);
             s = r.state; cost += Number(r.cost) || 0; washes++;
             if (overBudget()) return null;
+            if (autoPinNaturalTargets && pinnedTargets.length === 0) {
+                const targetSeen = (r.generatedEvents || [])
+                    .map(event => Number(event && event.id != null ? event.id : event))
+                    .find(id => TG.includes(id) && s.talents.includes(id));
+                if (targetSeen) {
+                    pinnedTargets.push(targetSeen);
+                    pushStep({ type: 'lock', id: targetSeen, target: true,
+                        washes, cost, why: 'natural-before-seed-start' });
+                    if (zi === 153) {
+                        zi = 154;
+                        e = engineOf(raw, zi);
+                        s = e.upgradeToFour(Object.assign({}, s, { zizhi: zi }));
+                        pushStep({ type: 'upgrade', toZi: 154, washes, cost });
+                    }
+                }
+            }
         }
         if (upgradeBefore && zi === 153) {
             zi = 154; e = engineOf(raw, zi);
@@ -719,7 +736,9 @@
             });
             let arriveGuard = 0;
             while (s.talents.indexOf(startCarrierId) < 0 && arriveGuard++ < maxWash) {
-                const r = e.wash(s, [s.talents.indexOf(conflict)].filter(i => i >= 0));
+                const keep = pinnedTargets.concat([conflict])
+                    .map(id => s.talents.indexOf(id)).filter(i => i >= 0);
+                const r = e.wash(s, Array.from(new Set(keep)));
                 s = r.state; cost += Number(r.cost) || 0; washes++;
                 if (overBudget()) return null;
             }
@@ -857,22 +876,11 @@
                 .find(v => v !== 251 && e.quality(v) < 4 && talentType(v) === ty) || null;
             for (let k = 0; k < n && washes < maxWash; k++) {
                 if (!washOne()) return null;
-                const low = findLow();
-                if (low != null && low !== preloadId) {
-                    if (preloadId != null) pushStep({ type: 'unlockConflict', id: preloadId, washes, cost, why: '预载换锁更近' });
-                    preloadId = low;
-                    pushStep({ type: 'lockConflict', id: preloadId, washes, cost, forPurple: peekId });
-                }
             }
-            if (preloadId == null) {
-                for (let k = 0; k < 80 && preloadId == null && washes < maxWash; k++) {
-                    if (!washOne()) return null;
-                    preloadId = findLow();
-                    if (carrier != null && !s.talents.includes(carrier)) { preloadId = null; break; }
-                }
-                if (preloadId != null) {
-                    pushStep({ type: 'lockConflict', id: preloadId, washes, cost, forPurple: peekId });
-                }
+            preloadId = findLow();
+            if (preloadId != null) {
+                pushStep({ type: 'lockConflict', id: preloadId, washes, cost,
+                    forPurple: peekId, noWash: true });
             }
         } else {
             for (let k = 0; k < n && washes < maxWash; k++) if (!washOne()) return null;
@@ -895,7 +903,105 @@
         return { kind: 'exchange', zi: zi0, n, lead, startWash, upgradeBefore, first, seed, chain, steps, cost, washes,
             carrier, conflict, pinnedTargetIds: pinnedTargets,
             startAnchorId: startCarrierId, startAnchorNo,
-            startAnchorWash: startWash, carrierArrivalWash: washes };
+            startAnchorWash: startWash, carrierArrivalWash: washes,
+            preloadedConflictId: preloadId || 0,
+            seedAnchorContinuation: !!preloadId };
+    }
+
+    // 保底载体置换：锁定即将触发保底的低阶冲突脉，以保底紫本身置换定种子。
+    function pityCarrierExchangeSeeds(raw, zi0, options) {
+        const o = options || {};
+        const zi = Number(zi0) >= 150 ? Number(zi0) : 153;
+        const maxWash = Math.max(500, Number(o.maxWash) || 1500);
+        const leadWindow = Math.max(10, Number(o.leadWindow) || 45);
+        const budget = Math.max(0, Number(o.budget) || 0);
+        const stopAt = Date.now() + Math.max(100, Number(o.timeMs) || 2500);
+        const expired = () => Date.now() >= stopAt;
+        const start = startStateAt(raw, zi), e = start.e;
+        const copy = value => Object.assign(root.WashSourceEngine.cloneState(value), {zizhi: zi});
+        const path = [{state: copy(start.s), washes: 0, cost: 0}];
+        let state = start.s, washes = 0, cost = 0, firstPityWash = 0;
+        while (washes < maxWash && !expired()) {
+            const result = e.wash(state, []);
+            state = result.state; washes++; cost += Number(result.cost) || 0;
+            if (budget > 0 && cost > budget) break;
+            path.push({state: copy(state), washes, cost});
+            if (result.pityPurpleId != null) { firstPityWash = washes; break; }
+        }
+        if (!firstPityWash) return [];
+        const recent = path.filter(item => item.washes < firstPityWash
+            && item.washes >= Math.max(0, firstPityWash - leadWindow));
+        const lowIds = new Set();
+        for (const item of recent) for (const id of item.state.talents) {
+            if (Number(id) !== 251 && e.quality(Number(id)) < 4) lowIds.add(Number(id));
+        }
+        const candidates = [], seen = new Set();
+        for (const lowId of lowIds) for (const origin of recent) {
+            if (expired()) return candidates.sort((a, b) => Number(a.cost) - Number(b.cost));
+            if (!origin.state.talents.includes(lowId)) continue;
+            let s = copy(origin.state);
+            let w = origin.washes, c = origin.cost, pityId = 0;
+            while (w < maxWash && !pityId && !expired()) {
+                const keep = [s.talents.indexOf(lowId)].filter(index => index >= 0);
+                if (!keep.length) break;
+                const result = e.wash(s, keep);
+                s = result.state; w++; c += Number(result.cost) || 0;
+                if (budget > 0 && c > budget) break;
+                if (result.pityPurpleId != null) pityId = Number(result.pityPurpleId);
+            }
+            if (!pityId || !s.talents.includes(lowId) || !s.talents.includes(pityId)
+                || e.talentType(lowId) !== e.talentType(pityId)) continue;
+            const pityWash = w, pityCost = c;
+            let first = 0;
+            try {
+                let luck = s.luckSeed;
+                for (let i = 0; i < 4000 && !first; i++) {
+                    let id; [id, luck] = e.draw(luck, true);
+                    if (e.allowed.has(id) && !s.talents.includes(Number(id))) first = Number(id);
+                }
+            } catch (error) { first = 0; }
+            if (!first) continue;
+            const findConflict = () => s.talents.map(Number).find(id => id !== 251
+                && id !== lowId && id !== pityId && e.quality(id) < 4
+                && e.talentType(id) === e.talentType(first)) || 0;
+            let conflict = findConflict(), preloadWash = 0;
+            if (!e.isShenmai(first) && !conflict) {
+                while (w < maxWash && preloadWash < 80 && !conflict && !expired()) {
+                    const keep = [lowId, pityId].map(id => s.talents.indexOf(id)).filter(index => index >= 0);
+                    const result = e.wash(s, keep);
+                    s = result.state; w++; preloadWash++; c += Number(result.cost) || 0;
+                    if (budget > 0 && c > budget) break;
+                    conflict = findConflict();
+                }
+            }
+            if (!first || (budget > 0 && c > budget)) continue;
+            const replaceLocks = [lowId, pityId].concat(conflict ? [conflict] : []);
+            const position = s.talents.indexOf(pityId);
+            if (!e.replaceablePositions(s, replaceLocks).includes(position)) continue;
+            let replaced;
+            try { replaced = e.replace(s, position, replaceLocks); } catch (error) { continue; }
+            if (Number(replaced.addedId) !== first) continue;
+            const seed = Number(replaced.state.luckSeed);
+            const key = `${lowId}:${origin.washes}:${pityId}:${first}:${seed}`;
+            if (!Number.isFinite(seed) || seen.has(key)) continue;
+            seen.add(key);
+            const steps = [
+                {type: 'preludeWash', washes: origin.washes, cost: origin.cost, locks: []},
+                {type: 'lockConflict', id: lowId, washes: origin.washes, cost: origin.cost, locks: []},
+                {type: 'washToPity', washes: pityWash, cost: pityCost, firstPurple: pityId, locks: [lowId]},
+                {type: 'lockCarrier', id: pityId, washes: pityWash, cost: pityCost, locks: [lowId]},
+            ];
+            if (preloadWash) steps.push({type: 'preludeWash', washes: w, cost: c, locks: [lowId, pityId]});
+            if (conflict) steps.push({type: 'lockConflict', id: conflict, washes: w, cost: c,
+                locks: [lowId, pityId], noWash: true});
+            steps.push({type: 'exchange', from: pityId, to: first, washes: w, cost: c,
+                first: true, locks: replaceLocks.slice(), replaceLocks: replaceLocks.slice()});
+            candidates.push({kind: 'exchange', pityCarrierExchange: true, zi, n: 0,
+                first, seed, carrier: pityId, conflict: lowId,
+                chain: [first].concat(queueOf(raw, zi, seed, 24)), steps,
+                washes: w, cost: c, initialConsumed: 1, pityCarrierId: pityId});
+        }
+        return candidates.sort((a, b) => Number(a.cost) - Number(b.cost));
     }
 
     // ────────────────────── ③④⑤ 五条规则校验（链筛选） ──────────────────────
@@ -1036,6 +1142,7 @@
             Number(seed.startAnchorNo) || 0,
             Number(seed.washes != null ? seed.washes : seed.startWash) || 0,
             seed.pityPrelude ? 1 : 0,
+            seed.pityCarrierExchange ? 1 : 0,
             seed.openFour ? 1 : 0,
             (seed.pinnedTargetIds || []).map(Number).sort((a, b) => a - b).join(','),
             Number(seed.initialConsumed) || 0,
@@ -3408,6 +3515,11 @@
                 } else if (stp.type === 'lockCarrier') {
                     carrier = Number(stp.id);
                     pushStep(Object.assign({}, stp, { washes, cost }));
+                } else if (stp.type === 'lock') {
+                    const id = Number(stp.id);
+                    if (!s.talents.includes(id)) return bail('定种子前缀目标锁定失败');
+                    if (TG.includes(id) && !held.includes(id)) held.push(id);
+                    pushStep(Object.assign({}, stp, { washes, cost }));
                 } else if (stp.type === 'exchange') {
                     const pos = s.talents.indexOf(Number(stp.from));
                     const locks = (stp.locks || []).slice();
@@ -4756,6 +4868,35 @@
             }
         }
 
+        // —— 路径E-3：保底紫作为置换载体定种子，再交给统一路线构造与回放 ——
+        if (want('E') && !seedState.fixed && ctx.seq.some(event => event.fromPity)) {
+            let pitySeeds = [];
+            try {
+                pitySeeds = pityCarrierExchangeSeeds(raw, zi0, {
+                    budget: headBudget > 0 ? headBudget : budget,
+                    maxWash: o.maxWash || 1500,
+                    leadWindow: 45,
+                    timeMs: Math.min(1200, Math.max(100, deadline - Date.now())),
+                });
+            } catch (error) { pitySeeds = []; }
+            for (const seedOpt of pitySeeds) {
+                if (Date.now() >= deadline) break;
+                if (headBudget > 0 && Number(seedOpt.cost) > headBudget) continue;
+                if (bestCost > 0 && Number(seedOpt.cost) >= bestCost) continue;
+                const route = eatFromSeed(ctx, raw, TG, seedOpt,
+                    Object.assign({}, o, {
+                        budget, bestCost, tailReserve, headBudget, observedTailReserves,
+                        deadline, sequenceCache, chainCheckCache,
+                        onCandidateRoute: candidate => publishCandidate(candidate, 'pity-carrier-exchange'),
+                    }));
+                if (!route || !route.ok) continue;
+                if (!best || Number(route.cost) < Number(best.cost)) {
+                    best = Object.assign({}, route, {kind: 'pity-carrier-exchange', seedOpt});
+                    bestCost = Number(route.cost) || 0;
+                }
+            }
+        }
+
         // ===== 方法组一：连续置换（独立执行器）—— 薛龙城型路线 =====
         enterPhase(bestCost > 0
             ? `已验证 ${bestCost} 丹 · 继续搜索连续置换${zi0 >= 154 ? '·4槽' : '·3槽'}`
@@ -5346,7 +5487,7 @@
     }
 
     root.AutoWash2RouteConstructor = Object.freeze({
-        readSequence, seedFixByExchange, chainChecks, execute, verify, planBest,
+        readSequence, seedFixByExchange, pityCarrierExchangeSeeds, chainChecks, execute, verify, planBest,
         queueOf, replayLockSteps, executeLockRoute, executeLockToPity, nameOf, tailCandidates,
         eatFromSeed, normalizeJumpManualRoute, verifyJumpManual,
         readSequenceAfterSeedOpen, nearestConflictBefore, usesNearestConflict,

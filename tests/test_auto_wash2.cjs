@@ -14,6 +14,8 @@ vm.runInContext(fs.readFileSync(path.join(root, 'auto_wash2_worker.js'), 'utf8')
 const model = sandbox.AutoWash2Model;
 assert.equal(typeof sandbox.AutoWash2UnifiedRouteConstructor.constructBest, 'function',
     'the latest upstream unified route constructor must be part of the worker search');
+assert.equal(typeof sandbox.AutoWash2RouteConstructor.pityCarrierExchangeSeeds, 'function',
+    'the pity-carrier seed route must be exposed to the isolated worker');
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(), 120000);
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(1000), 400);
 assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(4), 900000,
@@ -172,6 +174,25 @@ async function send(type, payload) {
     const predicted = engine.wash(engine.initialState(initial), []);
     const purple = predicted.state.talents.find(id => sandbox.TALENT_DATA[id].weight === 4);
     assert.ok(purple);
+    const pityCarrierRaw = {...converted, seed:1705411653, born_talent_rc:10,
+        luck_seed:0, luck_seed_inited:false, tal_lucky:2, zizhi:153,
+        role_id:10031, salt:780148, vip:1,
+        role_stats:{str_val:129, con:117, dex:10, int_val:101},
+        talents:[{id:272,locked:false},{id:189,locked:false},{id:247,locked:false}]};
+    const pityCarrierSeeds = sandbox.AutoWash2RouteConstructor.pityCarrierExchangeSeeds(
+        pityCarrierRaw, 153, {maxWash: 1000, timeMs: 1200});
+    assert.ok(pityCarrierSeeds.length > 0,
+        'must enumerate a pity-carrier seed on the deterministic regression fixture');
+    const pitySeed = pityCarrierSeeds[0];
+    assert.equal(pitySeed.pityCarrierExchange, true);
+    assert.equal(pitySeed.chain[0], pitySeed.first);
+    assert.equal(pitySeed.initialConsumed, 1);
+    const pityReplay = sandbox.AutoWash2RouteConstructor.execute(
+        pityCarrierRaw, [pitySeed.first], pitySeed, {budget: 100000, headBudget: 100000});
+    assert.equal(pityReplay.ok, true, pityReplay.note);
+    assert.equal(sandbox.AutoWash2RouteConstructor.verify(
+        pityCarrierRaw, [pitySeed.first], pityReplay.steps, pitySeed.zi).ok, true,
+    'pity-carrier candidate must independently replay');
     rows = await send('search', {input: {...input, initialState: initial, targetIds: [purple], options: {maxTotalPills: predicted.cost}}});
     result = rows.find(r => r.type === 'result').result;
     const route = result.routes.find(r => r.totalPills === predicted.cost);
