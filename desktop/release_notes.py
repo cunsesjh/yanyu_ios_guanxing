@@ -1,6 +1,6 @@
 """Offline notes shown once for each installed application version."""
 
-TITLE = '装备序列扩展（测试版）'
+TITLE = '装备序列扩展'
 
 ITEMS = (
     '装备打造新增“橙装图纸”分类，可直接筛选并预测固定橙色图纸的连续打造序列。',
