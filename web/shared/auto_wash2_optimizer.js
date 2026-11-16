@@ -382,16 +382,18 @@
         const initialSlotCount = Math.max(0, Math.min(4, numeric(startState.zizhi, numeric(input.initialState?.zizhi, 154)) - 150));
         const searchIntensity = Math.max(1, Math.min(4,
             Math.trunc(numeric(input?.options?.searchIntensity, 1))));
+        const targetCount = targetIds.length;
+        const expandedTargetFactor = targetCount >= 3 ? 1.5 : 1;
         const limits = {
             ...SEARCH_LIMITS,
-            maxEventNodes: SEARCH_LIMITS.maxEventNodes + (searchIntensity - 1) * 250000,
-            maxMainRawWashes: SEARCH_LIMITS.maxMainRawWashes + (searchIntensity - 1) * 1000000,
-            maxTailRawWashes: SEARCH_LIMITS.maxTailRawWashes + (searchIntensity - 1) * 1000000,
-            maxEventDepth: SEARCH_LIMITS.maxEventDepth + (searchIntensity - 1) * 16,
-            maxFinalTailExchangeDepth: SEARCH_LIMITS.maxFinalTailExchangeDepth + (searchIntensity - 1) * 8,
-            maxExchangePreviewDepth: SEARCH_LIMITS.maxExchangePreviewDepth + (searchIntensity - 1) * 2,
-            maxSparseTargetGap: SEARCH_LIMITS.maxSparseTargetGap + (searchIntensity - 1) * 4,
-            maxSparseRawDraws: SEARCH_LIMITS.maxSparseRawDraws + (searchIntensity - 1) * 24,
+            maxEventNodes: Math.floor((SEARCH_LIMITS.maxEventNodes + (searchIntensity - 1) * 250000) * expandedTargetFactor),
+            maxMainRawWashes: Math.floor((SEARCH_LIMITS.maxMainRawWashes + (searchIntensity - 1) * 1000000) * expandedTargetFactor),
+            maxTailRawWashes: Math.floor((SEARCH_LIMITS.maxTailRawWashes + (searchIntensity - 1) * 1000000) * expandedTargetFactor),
+            maxEventDepth: SEARCH_LIMITS.maxEventDepth + (searchIntensity - 1) * 16 + (targetCount >= 3 ? 32 : 0),
+            maxFinalTailExchangeDepth: SEARCH_LIMITS.maxFinalTailExchangeDepth + (searchIntensity - 1) * 8 + (targetCount >= 3 ? 16 : 0),
+            maxExchangePreviewDepth: SEARCH_LIMITS.maxExchangePreviewDepth + (searchIntensity - 1) * 2 + (targetCount >= 3 ? 4 : 0),
+            maxSparseTargetGap: SEARCH_LIMITS.maxSparseTargetGap + (searchIntensity - 1) * 4 + (targetCount >= 3 ? 8 : 0),
+            maxSparseRawDraws: SEARCH_LIMITS.maxSparseRawDraws + (searchIntensity - 1) * 24 + (targetCount >= 3 ? 48 : 0),
         };
         const {
             maxEventNodes,
@@ -409,6 +411,8 @@
             algorithm: 'source-complete-window-destroy-tail-v025',
             implementationRevision: 'v0.2.5-complete-window-destroy',
             searchIntensity,
+            targetCount,
+            expandedTargetFactor,
             strategyGraph: '三槽真实起手、最近冲突脉反查、全部置换窗口保留、稀疏目标桥、毁脉临时支点、三四紫尾段独立预算',
             maxTotalPills,
             activePillCeiling: maxTotalPills,
@@ -473,7 +477,12 @@
             safetyLimitReached: false,
             mainSafetyLimitReached: false,
             tailSafetyLimitReached: false,
+            limitReasons: [],
         };
+        function noteSafetyLimit(reason) {
+            scope.safetyLimitReached = true;
+            if (!scope.limitReasons.includes(reason)) scope.limitReasons.push(reason);
+        }
         const ctx = {
             engine, targetIds, targetSet, initialState: input.initialState || {}, startState,
             hasBagPills: !!input.hasBagPills,
@@ -572,7 +581,7 @@
             }
             const eventDepth = numeric(meta.eventDepth, 0);
             if (eventDepth > maxEventDepth) {
-                scope.safetyLimitReached = true;
+                noteSafetyLimit('event-depth');
                 return false;
             }
             const protectedIds = idsInStateOrder(state, meta.protectedIds || []);
@@ -633,12 +642,12 @@
             if (kind === 'tail') {
                 if (!tailWashBudgetAvailable()) {
                     scope.tailSafetyLimitReached = true;
-                    scope.safetyLimitReached = true;
+                    noteSafetyLimit('tail-wash-budget');
                     return false;
                 }
             } else if (!mainWashBudgetAvailable()) {
                 scope.mainSafetyLimitReached = true;
-                scope.safetyLimitReached = true;
+                noteSafetyLimit('main-wash-budget');
                 throw new Error('SEARCH_MAIN_SAFETY_LIMIT');
             }
             if (operations % 256 === 0) {
@@ -681,7 +690,7 @@
                 let candidate;
                 [candidate, luck] = engine.draw(luck, true);
                 rawDraws += 1;
-                if (typeof engine.isAllowedAt === 'function' && !engine.isAllowedAt(candidate, state.zizhi)) continue;
+                if (typeof engine.isAllowedAt === 'function' && !engine.isAllowedAt(candidate, state.zizhi, state)) continue;
                 // 当前已占用同名紫在真实 replace() 中会被内部跳过，不计入“可见置换脉序”距离。
                 if (occupied.has(candidate)) continue;
                 visibleGap += 1;
@@ -925,7 +934,7 @@
             let generated = 0;
             for (const position of positions) {
                 if (numeric(node.eventDepth, 0) >= maxFinalTailExchangeDepth) {
-                    scope.safetyLimitReached = true;
+                    noteSafetyLimit('tail-exchange-depth');
                     break;
                 }
                 scope.exchangeAttempts += 1;
@@ -968,7 +977,7 @@
                 if (!canWash(state, lockedTargets)) break;
                 if (!tailWashBudgetAvailable()) {
                     scope.tailSafetyLimitReached = true;
-                    scope.safetyLimitReached = true;
+                    noteSafetyLimit('tail-wash-budget');
                     break;
                 }
                 const next = actionWash(engine, state, lockedTargets, 'final-tail');
@@ -1490,14 +1499,14 @@
                 report(`关键状态 ${scope.expandedNodes.toLocaleString()}，模拟洗脉 ${scope.rawWashesSimulated.toLocaleString()}（主 ${scope.mainRawWashesSimulated.toLocaleString()} / 尾 ${scope.tailRawWashesSimulated.toLocaleString()}），主队列 ${queue.size.toLocaleString()}，救援 ${deferredQueue.size.toLocaleString()}，毁脉 ${scope.destroyVeinExpanded.toLocaleString()}，稀疏桥 ${scope.sparseExchangeWindowsDetected.toLocaleString()}，完整候选 ${scope.candidateCount.toLocaleString()}`);
                 await checkpoint('正在继续遍历其余可达路线');
             }
-            if (queue.size || deferredQueue.size) scope.safetyLimitReached = true;
+            if (queue.size || deferredQueue.size) noteSafetyLimit('event-node-budget');
             scope.exhaustiveWithinStrategyGraph = !queue.size && !deferredQueue.size && !scope.safetyLimitReached;
             return buildResult();
         } catch (error) {
             if (error && error.message === 'SEARCH_CANCELLED') return { cancelled: true, routes: [], searchScope: scope };
             if (error && error.message === 'SEARCH_MAIN_SAFETY_LIMIT') {
                 scope.mainSafetyLimitReached = true;
-                scope.safetyLimitReached = true;
+                noteSafetyLimit('main-wash-budget');
                 scope.exhaustiveWithinStrategyGraph = false;
                 return buildResult();
             }

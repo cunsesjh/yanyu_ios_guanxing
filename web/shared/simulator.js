@@ -546,6 +546,7 @@ function captureImportSnapshot() {
         int_gift: state.intGift,
         role_level: state.roleLevel,
         role_stats: state.roleStats || { str_val: 0, dex: 0, con: 0, int_val: 0 },
+        role_raw: state.roleRaw || null,
         global_vars: state.globalVars || {},
         born_talent_rc: Number(state.bornTalentRC) || 0,
         save_channel: state.saveChannel || '',
@@ -855,6 +856,7 @@ function renderTalents() {
                 int_gift: Number(state.intGift) || 0,
                 role_level: Number(state.roleLevel) || 90,
                 role_stats: state.roleStats || {},
+                role_raw: state.roleRaw || null,
                 global_vars: state.globalVars || state.saveData?.globalVariable || {},
                 born_talent_rc: Number(state.bornTalentRC) || 0,
                 save_channel: state.saveChannel || '',
@@ -6000,8 +6002,10 @@ function getAiAvailablePurpleIds() {
     const planning = JSON.parse(JSON.stringify(original));
     planning.zizhi = 154;
     planning.role_stats = state.roleStats || {};   // 让 sx_limit 能读到真实根骨等属性
+    planning.role_raw = state.roleRaw || null;
     const engine = new WashSourceEngine.Engine(TALENT_DATA, planning, { dlcMode: state.dlcMode });
-    return engine.purpleIds.filter(id => engine.allowed.has(id));
+    const current = engine.initialState(planning);
+    return engine.purpleIds.filter(id => engine.allowedForState(current, current.zizhi).has(id));
 }
 
 function validateAiTargetSelection({ showMessage = true } = {}) {
@@ -6354,10 +6358,9 @@ async function runAiPrediction() {
     if (initialState) {
         initialState.save_channel = state.saveChannel || '';
         initialState.born_talent_rc = Number(state.bornTalentRC) || 0;
+        initialState.role_raw = state.roleRaw || null;
     }
-    const eligibleTalentIds = typeof isInternationalSave === 'function' && isInternationalSave(state)
-        ? (wasmGetAvailableTalents() || []).map(item => Number(item && typeof item === 'object' ? item.id : item)).filter(id => id > 0)
-        : null;
+    const eligibleTalentIds = null;
     try {
         const result = await startAiSearchWorker({
             initialState,

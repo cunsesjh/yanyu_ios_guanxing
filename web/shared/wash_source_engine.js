@@ -272,6 +272,7 @@
                 sex: numeric(initialState.sex, 1),
                 roleLevel: numeric(initialState.role_level, 90),
                 roleStats: initialState.role_stats || {},
+                roleRaw: initialState.role_raw || null,
                 roleStatsComplete: !!initialState.role_stats_complete,
                 globalVars: initialState.global_vars || {},
             };
@@ -306,9 +307,12 @@
             const eligibleTalentIds = Array.isArray(options.eligibleTalentIds)
                 ? options.eligibleTalentIds.map(Number).filter(id => id > 0)
                 : null;
-            this.allowed = eligibleTalentIds
-                ? new Set(eligibleTalentIds.filter(id => this.config.has(id)))
-                : new Set(ordered.filter(item => allowed(item, this.source, this.eligibleZi)).map(item => numeric(item.id)));
+            this.externalEligible = eligibleTalentIds ? new Set(eligibleTalentIds) : null;
+            this.allowed = new Set(ordered.filter(item => allowed(item,
+                {...this.source, roleStatsComplete: false}, this.eligibleZi))
+                .map(item => numeric(item.id)));
+            this.roleStatsCache = new Map();
+            this.allowedPoolCache = new Map();
             // —— 结构性钩子：未来版本若改变保底判定 / 计数器步进 / 欧气种子初始化 / 累加规则，
             //    只需传入对应 hook 覆盖默认实现，wash() 主体无需改动（可插拔核心）——
             const hooks = (options.hooks && typeof options.hooks === 'object') ? options.hooks : {};
@@ -366,6 +370,53 @@
             return [ids[index], nextSeed];
         }
 
+        isAllowedAt(id, zi = this.eligibleZi, state) {
+            const talentId = Number(id);
+            if (!this.allowed.has(talentId)) return false;
+            if (!this.externalEligible || this.source.roleRaw) {
+                // Only attribute-gated talents need the full role model. At
+                // present this is 五蕴皆空; ordinary draws stay on the cheap
+                // static-pool path, including the long preview scan on render.
+                const sxLimit = normalizeLimit(this.config.get(talentId), 'sx_limit');
+                if (!Array.isArray(sxLimit) || sxLimit.length < 2) return true;
+                if (this.source.roleRaw && root.WashRoleContext) {
+                    const stats = this.roleStatsFor(state);
+                    if (stats) {
+                        return allowed(this.config.get(talentId), {
+                            ...this.source, roleStats: stats, roleStatsComplete: true,
+                        }, zi);
+                    }
+                }
+                if (!this.source.roleStatsComplete) return true;
+            } else if (!this.externalEligible.has(talentId)) {
+                return false;
+            }
+            return allowed(this.config.get(talentId), this.source, zi);
+        }
+
+        roleStatsFor(state) {
+            if (!this.source.roleRaw || !root.WashRoleContext) return null;
+            const talentIds = (state && state.talents || []).map(Number);
+            const key = talentIds.join(',');
+            if (this.roleStatsCache.has(key)) return this.roleStatsCache.get(key);
+            const stats = root.WashRoleContext.roleStats(this.source.roleRaw, talentIds);
+            if (!stats || !Number.isFinite(Number(stats.con))) return null;
+            if (this.roleStatsCache.size >= 4096) this.roleStatsCache.delete(this.roleStatsCache.keys().next().value);
+            this.roleStatsCache.set(key, stats);
+            return stats;
+        }
+
+        allowedForState(state, zi = this.eligibleZi) {
+            const talentIds = (state && state.talents || []).map(Number);
+            const key = `${zi}|${talentIds.join(',')}`;
+            const cached = this.allowedPoolCache.get(key);
+            if (cached) return cached;
+            const result = new Set(this.allIds.filter(id => this.isAllowedAt(id, zi, state)));
+            if (this.allowedPoolCache.size >= 4096) this.allowedPoolCache.delete(this.allowedPoolCache.keys().next().value);
+            this.allowedPoolCache.set(key, result);
+            return result;
+        }
+
         wash(sourceState, keepPositions) {
             const state = cloneState(sourceState);
             // 锁定顺序由场上槽位决定，调用者不能通过倒序传索引把冲突移到紫前。
@@ -400,9 +451,10 @@
                     bornRC = this.hooks.advanceRc({ advance, bornRC });
                 }
                 draws += 1;
-                if (fromPity && this.allowed.has(candidate)) purpleDraws += 1;
+                const eligible = this.isAllowedAt(candidate, this.eligibleZi, {talents});
+                if (fromPity && eligible) purpleDraws += 1;
                 if (draws > 100000) throw new Error('源码洗脉抽取未收敛');
-                if (!this.allowed.has(candidate) || talents.includes(candidate)) continue;
+                if (!eligible || talents.includes(candidate)) continue;
                 if (this.quality(candidate) === 4 && newPurple) continue;
                 talents.push(candidate);
                 generatedEvents.push({ id: candidate, bornRC, fromPity, luckSeed: fromPity ? luck : null });
@@ -502,9 +554,10 @@
                 let candidate;
                 [candidate, luck] = this.draw(luck, true);
                 draws += 1;
-                if (this.allowed.has(candidate)) purpleDraws += 1;
+                const eligible = this.isAllowedAt(candidate, this.eligibleZi, {talents});
+                if (eligible) purpleDraws += 1;
                 if (draws > 100000) throw new Error('源码置换抽取未收敛');
-                if (this.allowed.has(candidate) && !talents.includes(candidate)) {
+                if (eligible && !talents.includes(candidate)) {
                     talents.push(candidate);
                     return {
                         state: { bornSeed: state.bornSeed, luckSeed: luck, bornRC: numeric(state.bornRC), talLucky: 0, talents },

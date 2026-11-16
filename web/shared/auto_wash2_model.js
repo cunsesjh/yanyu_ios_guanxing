@@ -16,6 +16,7 @@
             role_id: Number(role.ID), sex: Number(role.Sex) || 1, role_level: Number(role.Level) || 90,
             salt: Number(save.CenterID || 0) % 1000000, vip: Number(context.vip ?? 1),
             role_stats: {str_val: attr('Str'), con: attr('Con'), dex: attr('Dex'), int_val: attr('Int')},
+            role_raw: JSON.parse(JSON.stringify(role)),
             global_vars: JSON.parse(JSON.stringify(save.globalVariable || {})),
             save_channel: context.channel || '',
             talents: talentRows.filter(t => t && typeof t === 'object')

@@ -18,8 +18,10 @@ assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(), 120000);
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(1000), 400);
 assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(4), 900000,
     'four-target searches may run for up to fifteen minutes');
-assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(3), 600000,
-    'searches with fewer than four targets stay capped at ten minutes');
+assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(3), 900000,
+    'three-target searches may run for up to fifteen minutes');
+assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(2), 600000,
+    'searches with fewer than three targets stay capped at ten minutes');
 assert.deepEqual(JSON.parse(JSON.stringify(sandbox.AutoWash2SearchPolicy.stages.map(s => [s.fraction, s.intensity]))),
     [[0.2, 1], [0.3, 2], [0.3, 3], [0.2, 4]], 'four progressive stages must consume the full shared deadline');
 const save = {CenterID: 1278440, Items: [{ID: 2601, Num: 100}], globalVariable: {test: 1}};
@@ -60,13 +62,23 @@ async function send(type, payload) {
 }
 (async () => {
     let rows = await send('inspect', {raw: converted});
-    assert.ok(rows.find(r => r.type === 'summary').summary.allowed.includes(271));
+    const inspectSummary = rows.find(r => r.type === 'summary').summary;
+    assert.ok(inspectSummary.allowed.includes(271));
+    assert.equal('sequenceStatus' in inspectSummary, false);
     const expandedScope = await sandbox.AutoWash2Optimizer.searchWashRoutes({
         initialState: converted, talentData: sandbox.TALENT_DATA, targetIds: [271],
         options: {maxTotalPills: 0, searchIntensity: 3}});
     assert.equal(expandedScope.searchScope.searchIntensity, 3);
     assert.equal(expandedScope.searchScope.maxEventNodes, 900000);
     assert.equal(expandedScope.searchScope.maxEventDepth, 128);
+    const threeTargetScope = await sandbox.AutoWash2Optimizer.searchWashRoutes({
+        initialState: converted, talentData: sandbox.TALENT_DATA, targetIds: [271, 272, 250],
+        options: {maxTotalPills: 0, searchIntensity: 3}});
+    assert.equal(threeTargetScope.searchScope.expandedTargetFactor, 1.5);
+    assert.equal(threeTargetScope.searchScope.maxEventNodes, 1350000);
+    assert.equal(threeTargetScope.searchScope.maxMainRawWashes, 6000000);
+    assert.equal(threeTargetScope.searchScope.maxEventDepth, 160);
+    assert.ok(Array.isArray(threeTargetScope.searchScope.limitReasons));
     const input = {initialState: converted, targetIds: [271], compatibleGroups: [], bagPills: 100,
         hasBagPills: true, options: {maxTotalPills: 0}};
     rows = await send('search', {input});

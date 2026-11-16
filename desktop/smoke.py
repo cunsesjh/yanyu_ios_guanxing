@@ -122,7 +122,7 @@ def run_smoke(app, web, report):
         return DATA, '73576', None
 
     timer.timeout.connect(tick)
-    with patch('desktop.app.retrieve.session_from_har', return_value=SESSION), \
+    with patch('desktop.service.retrieve.session_from_har', return_value=SESSION), \
          patch('desktop.service.retrieve.fetch', side_effect=fake_fetch):
         timer.start()
         status = app.exec()

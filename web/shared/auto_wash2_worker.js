@@ -5,7 +5,7 @@ function initialSearchWindow(totalSearchMs = 600000) {
     return Math.min(120000, totalSearchMs * 0.4);
 }
 function searchTimeLimit(targetCount) {
-    return Number(targetCount) === 4 ? 900000 : 600000;
+    return Number(targetCount) >= 3 ? 900000 : 600000;
 }
 const SEARCH_STAGES = Object.freeze([
     {fraction: 0.20, intensity: 1, label: '快速找路'},
@@ -14,7 +14,10 @@ const SEARCH_STAGES = Object.freeze([
     {fraction: 0.20, intensity: 4, label: '全强度压低丹耗'},
 ]);
 self.AutoWash2SearchPolicy = Object.freeze({initialSearchWindow, searchTimeLimit, stages: SEARCH_STAGES});
-importScripts('data.js', 'wash_source_engine.js', 'auto_wash2_source_cache.js', 'auto_wash2_engine.js', 'auto_wash2_optimizer.js', 'auto_wash2_model.js');
+importScripts('data.js', 'born_talent_data.js', 'battle_talent_data.js', 'life_hedao_data.js',
+    'extra_attr_data.js', 'equip_data.js', 'kongfu_data.js', '../role/role.js', 'wash_role_context.js',
+    'wash_source_engine.js', 'auto_wash2_source_cache.js', 'auto_wash2_engine.js',
+    'auto_wash2_optimizer.js', 'auto_wash2_model.js');
 importScripts('anchor_route_planner.js', 'anchor_route_search.js', 'auto_wash2_anchor.js');
 importScripts('auto_wash2_seed_planner.js', 'auto_wash2_seed.js');
 importScripts('auto_wash2_unified_anchor.js', 'auto_wash2_route_constructor.js',
@@ -24,7 +27,10 @@ self.onmessage = async ({data: message}) => {
     try {
         if (message.type === 'inspect') {
             const engine = new AutoWash2Engine.Engine(TALENT_DATA, message.raw);
-            const summary = {allowed: [...engine.allowed], purpleIds: engine.purpleIds};
+            const initial = engine.initialState(message.raw);
+            const summary = {
+                allowed: [...engine.allowedForState(initial, initial.zizhi)], purpleIds: engine.purpleIds,
+            };
             send('summary', {summary});
             return;
         }
@@ -47,14 +53,13 @@ self.onmessage = async ({data: message}) => {
             }
             if (found.size) send('candidate', {result: combined()});
         }
-        let limited = false;
+        const internalLimitReasons = new Set();
         // First obtain a verified route. As soon as one is found, recompute the
         // remaining schedule around the current best cost instead of waiting
         // for a fixed feasibility phase to expire.
         const searchStarted = Date.now();
         const requestedSearchMs = Number(message.searchTimeMs);
-        // Four-target routes have a much larger combinatorial search space;
-        // only those runs may use the additional five-minute allowance.
+        // Three- and four-target routes have a larger combinatorial search space.
         const maxSearchMs = searchTimeLimit(branches[0]?.length || 0);
         const totalSearchMs = Number.isFinite(requestedSearchMs)
             ? Math.max(100, Math.min(maxSearchMs, requestedSearchMs)) : maxSearchMs;
@@ -107,7 +112,7 @@ self.onmessage = async ({data: message}) => {
             send('progress', {progress: {message: `${purpose}：耗丹上限 ${stageCap.toLocaleString()}`}});
             for (let branch = 0; branch < branches.length; branch++) {
                 const now = Date.now();
-                if (now >= stageDeadline || now >= totalDeadline) { limited = true; break; }
+                if (now >= stageDeadline || now >= totalDeadline) break;
                 const branchesLeft = branches.length - branch;
                 const branchDeadline = Math.min(stageDeadline, now + (stageDeadline - now) / branchesLeft);
                 const progress = value => send('progress', {progress: {...value,
@@ -132,12 +137,13 @@ self.onmessage = async ({data: message}) => {
                 const foundFirstTactical = waitingForFirst && found.size > 0;
                 const improvedTactical = stopWhenImproved && startingBest != null
                     && (combined().routes[0]?.totalPills ?? Infinity) < startingBest;
-                limited ||= (!foundFirstTactical && !improvedTactical && !!result.cancelled)
-                    || !!result.searchScope?.safetyLimitReached;
+                for (const reason of result.searchScope?.limitReasons || []) internalLimitReasons.add(reason);
+                if (result.searchScope?.safetyLimitReached && !result.searchScope?.limitReasons?.length) {
+                    internalLimitReasons.add('search-safety-limit');
+                }
                 if (foundFirstTactical) return true;
                 if (improvedTactical) return true;
                 if (Date.now() >= branchDeadline || Date.now() >= totalDeadline) {
-                    limited = true;
                     continue;
                 }
                 const bestAfterTactical = combined().routes[0]?.totalPills;
@@ -153,7 +159,7 @@ self.onmessage = async ({data: message}) => {
                     maxTotalPills: anchorCeiling, searchIntensity}};
                 // The legacy anchor planner is tied to the domestic table order.
                 // International saves use the channel-aware unified constructor above.
-                const anchorLimited = isInternational ? false : !!AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
+                if (!isInternational) AutoWash2Anchor.search(anchorInput, branches[branch], collect, progress,
                     () => Date.now() >= branchDeadline || Date.now() >= stageDeadline
                         || Date.now() >= totalDeadline || (waitingForFirst && found.size > 0)
                         || (stopWhenImproved && startingBest != null
@@ -161,7 +167,6 @@ self.onmessage = async ({data: message}) => {
                 const foundFirstAnchor = waitingForFirst && found.size > 0;
                 const improvedAnchor = stopWhenImproved && startingBest != null
                     && (combined().routes[0]?.totalPills ?? Infinity) < startingBest;
-                limited ||= !foundFirstAnchor && !improvedAnchor && anchorLimited;
                 if (foundFirstAnchor) return true;
                 if (improvedAnchor) return true;
             }
@@ -180,14 +185,18 @@ self.onmessage = async ({data: message}) => {
             const hadRoute = found.size > 0;
             send('progress', {progress: {message: `阶段 ${stage.intensity}/4 · ${stage.label}`}});
             runSeedStage(stage, stageDeadline, hadRoute ? 0.40 : 0.55);
-            if (Date.now() >= stageDeadline) { limited = true; continue; }
+            if (Date.now() >= stageDeadline) continue;
             const best = combined().routes[0]?.totalPills;
             const ceiling = best == null ? userBudget : Math.max(0, best - 1);
             await runPass(ceiling, stageDeadline,
                 best == null ? stage.label : `${stage.label}（当前最好 ${best.toLocaleString()} 丹）`,
                 best == null, best != null, stage.intensity);
         }
-        send('result', {result: {...combined(), limited}});
+        const hitTimeLimit = Date.now() >= totalDeadline;
+        const limitReasons = [...internalLimitReasons];
+        const limitReason = hitTimeLimit && limitReasons.length ? 'time-and-internal'
+            : hitTimeLimit ? 'time' : limitReasons.length ? 'internal' : 'completed';
+        send('result', {result: {...combined(), limited: limitReason !== 'completed', limitReason, limitReasons}});
     } catch (error) {
         send('error', {error: error?.message || String(error)});
     }

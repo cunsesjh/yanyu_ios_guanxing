@@ -33,7 +33,7 @@
                 <button id="w2Preset" type="button" class="btn btn-reset">金顶混</button>
                 <button id="w2Clear" type="button" class="btn btn-reset">清空选择</button>
             </div>
-            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。欧气种子/统一构造、锚点路线与分级战术搜索按四阶段共同比较，未用时间会自动转给后续引擎；整轮通常最多约 10 分钟，四个目标紫脉时最多约 15 分钟，找到后继续按当前最低丹耗减一压价。国服、先行服及国际服均使用各自脉序状态机回放，只有验证通过的候选才会显示。</p>
+            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。欧气种子/统一构造、锚点路线与分级战术搜索按四阶段共同比较，未用时间会自动转给后续引擎；整轮通常最多约 10 分钟，三个或四个目标紫脉时最多约 15 分钟，找到后继续按当前最低丹耗减一压价。国服、先行服及国际服均使用各自脉序状态机回放，只有验证通过的候选才会显示。</p>
             <p class="w2-credit">特别鸣谢 B站大佬「庸丶人」提供欧气种子路线、吞脉/跳脉及统一路线构造的研究方案</p>
             <div id="w2Targets" class="w2-targets"></div>
             <p id="w2Requirements" class="w2-requirements"></p>
@@ -45,6 +45,17 @@
     function status(text, error = false) {
         $('Status').textContent = text;
         $('Status').classList.toggle('w2-error', error);
+    }
+    function limitReasonText(reasons) {
+        const labels = {
+            'event-depth': '路线深度',
+            'main-wash-budget': '主脉序扫描量',
+            'tail-wash-budget': '尾脉扫描量',
+            'tail-exchange-depth': '尾段置换深度',
+            'event-node-budget': '状态节点数',
+            'search-safety-limit': '搜索安全预算',
+        };
+        return [...new Set(reasons || [])].map(reason => labels[reason] || reason).join('、');
     }
     function stop(text) {
         request++;
@@ -159,7 +170,15 @@
                 if (data.type === 'progress') status(`${data.progress?.message || '搜索中…'} · ${((Date.now() - started) / 1000).toFixed(1)} 秒`);
                 if (data.type === 'candidate') renderResult(data.result);
                 if (data.type === 'error') { stop(); status(data.error, true); }
-                if (data.type === 'result') { renderResult(data.result); stop(); status(`本轮搜索${data.result?.limited ? '已达计算上限' : '完成'} · ${((Date.now() - started) / 1000).toFixed(1)} 秒。${data.result?.routes?.length ? '可展开查看操作路线。' : '本轮未找到不代表不存在可行路线。'}`); }
+                if (data.type === 'result') {
+                    renderResult(data.result); stop();
+                    const internalReason = limitReasonText(data.result?.limitReasons);
+                    const limitMessage = data.result?.limitReason === 'time' ? '已用满总时限'
+                        : data.result?.limitReason === 'time-and-internal' ? '总时限与内部安全上限均已触发'
+                            : data.result?.limitReason === 'internal' ? `触发内部安全上限${internalReason ? '：' + internalReason : ''}`
+                                : '完成当前搜索范围';
+                    status(`本轮搜索${limitMessage} · ${((Date.now() - started) / 1000).toFixed(1)} 秒。${data.result?.routes?.length ? '可展开查看操作路线。' : '本轮未找到不代表不存在可行路线。'}`);
+                }
             };
             w.postMessage({type: 'search', requestId: id, input});
         } catch (error) { stop(); status(error.message, true); }

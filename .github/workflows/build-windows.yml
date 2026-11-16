@@ -7,7 +7,7 @@ permissions:
   contents: write
 jobs:
   windows:
-    runs-on: windows-self
+    runs-on: windows-latest
     env:
       IOSGUANXING_DISABLE_AUTO_UPDATE: '1'
     steps:
@@ -26,6 +26,8 @@ jobs:
           node-version: '22'
       - name: Improved wash engine and legacy route replay
         run: node tests/test_auto_wash2.cjs
+      - name: Dynamic wash eligibility regression
+        run: node tests/test_wash_dynamic_pool.cjs
       - name: Embedded page smoke test
         env:
           QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
@@ -33,6 +35,7 @@ jobs:
         run: python dev/smoke_desktop.py
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: desktop-test-report
           path: |
@@ -57,6 +60,7 @@ jobs:
         run: python dev/check_auto_wash2.py
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: desktop-layout-report
           path: |
@@ -82,6 +86,7 @@ jobs:
           $hash = (Get-FileHash dist/iosGuanxing.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  iosGuanxing.exe" | Set-Content dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: iosGuanxing-Windows-x64
           path: |
@@ -94,15 +99,13 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v3.0.5 正式版更新公告
+            ## v3.0.7 正式版更新公告
 
-            本次结合了 B 站大佬「庸丶人」分享的欧气种子路线思路，对「自动洗脉（改进）」的搜索逻辑进行了重写与整合。
+            支持从包含完整存档响应的国际服 HAR 离线导入；主动下载失败时，程序会自动回退到 HAR 内的完整存档，并提示实际使用的数据来源和版本。若 HAR 不含完整存档，仍需使用有效会话主动下载。
 
-            新版搜索不再只依赖单一路线，而是分阶段尝试多类搜索方法，包括欧气种子路线、锁脉定种子、连续置换、跳脉及目标脉序搜索等。程序会先寻找可行路线，再利用剩余时间继续扩展搜索、比较丹耗，尝试找到更省丹的方案。默认丹耗上限为 5000 丹，搜索时间通常最长约 10 分钟；四目标路线在符合条件时可延长至约 15 分钟。
+            自动洗脉（改进）会根据角色属性及当前脉状态动态判断属性门槛天赋，减少候选脉池误判。
 
-            需要注意，搜索结果受角色存档、脉序及搜索范围影响，程序找到的是当前搜索范围内通过回放校验的方案，不保证一定找到路线，也不保证达到理论上的全局最低丹耗。
-
-            感谢抖音大佬「江南晚来客」提供洗脉样本数据并协助校对，帮助提升了数据准确性。
+            扩大三目标及四目标路线的搜索安全范围，并区分搜索时限耗尽与内部安全预算触发。搜索结果仍受角色脉序和搜索范围影响，不保证达到全局最低丹耗。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt

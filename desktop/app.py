@@ -13,13 +13,12 @@ from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
                                     QWebEngineUrlRequestInterceptor, QWebEngineSettings)
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
-from . import VERSION
+from . import RELEASE_CHANNEL, VERSION
 from .server import LocalSite
 from .release_notes import ITEMS as RELEASE_NOTE_ITEMS, TITLE as RELEASE_NOTE_TITLE
 from .service import DownloadService
 from .storage import Store
 from .update import check_update
-from yyjh.capture import retrieve
 
 
 STYLE = '''
@@ -151,11 +150,11 @@ class DownloadThread(QThread):
     def run(self):
         try:
             if self.har:
-                self.progress.emit('正在读取 HAR 登录会话…')
-                session = retrieve.session_from_har(self.har)
+                result = DownloadService(self.store).download_from_har(
+                    self.har, self.progress.emit)
             else:
-                session = self.session
-            result = DownloadService(self.store).download(session, self.progress.emit)
+                result = DownloadService(self.store).download(
+                    self.session, self.progress.emit)
             self.completed.emit(result)
         except (ValueError, OSError, RuntimeError) as error:
             # Domain errors are user-readable. Never expose headers, raw responses,
@@ -297,7 +296,7 @@ class MainWindow(QMainWindow):
         sidebar.addWidget(author)
         self.theme_button = self.button('☀  切换浅色模式', self.toggle_theme)
         sidebar.addWidget(self.theme_button)
-        footer = QLabel('本地解码 · 内置观星\n\nv' + VERSION + '  /  正式版')
+        footer = QLabel('本地解码 · 内置观星\n\nv' + VERSION + '  /  ' + RELEASE_CHANNEL)
         footer.setObjectName('muted')
         sidebar.addWidget(footer)
         self.update_button = self.button('↻  检查更新', self.check_for_updates)

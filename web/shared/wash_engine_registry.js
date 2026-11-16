@@ -121,6 +121,7 @@
                 sex: Number(fullState && fullState.sex) || 1,
                 role_level: Number(fullState && fullState.role_level) || 90,
                 role_stats: (fullState && fullState.role_stats) || {},
+                role_raw: (fullState && fullState.role_raw) || null,
                 role_stats_complete: !!(fullState && fullState.role_stats_complete),
                 global_vars: (fullState && fullState.global_vars) || {},
                 save_channel: (fullState && fullState.save_channel) || (options && options.saveChannel) || '',
