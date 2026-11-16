@@ -10,10 +10,11 @@ GITEE_RELEASE_PAGE = 'https://gitee.com/cunses/yanyu_ios_guanxing/releases/tag/'
 
 
 def version_tuple(value):
-    match = re.fullmatch(r'v?(\d+)\.(\d+)\.(\d+)', str(value).strip())
+    match = re.fullmatch(r'v?(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?', str(value).strip())
     if not match:
         raise ValueError('无法识别发布版本号。')
-    return tuple(map(int, match.groups()))
+    major, minor, patch, beta = match.groups()
+    return int(major), int(minor), int(patch), 0 if beta else 1, int(beta or 0)
 
 
 def parse_release(payload, current):
@@ -22,7 +23,7 @@ def parse_release(payload, current):
     body = str(payload.get('body') or '').strip()
     return {
         'tag': tag,
-        'version': '.'.join(map(str, latest)),
+        'version': tag[1:] if tag.startswith('v') else tag,
         'available': latest > version_tuple(current),
         'body': body[:1200],
         'github_url': GITHUB_RELEASE_PAGE + tag,

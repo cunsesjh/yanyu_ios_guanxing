@@ -28,6 +28,8 @@ jobs:
         run: node tests/test_auto_wash2.cjs
       - name: Dynamic wash eligibility regression
         run: node tests/test_wash_dynamic_pool.cjs
+      - name: Equipment orange blueprint and material regression
+        run: node tests/test_equipment_features.cjs
       - name: Embedded page smoke test
         env:
           QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
@@ -99,13 +101,13 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v3.0.7 正式版更新公告
+            ## v3.0.8-beta.1 测试版更新公告
 
-            支持从包含完整存档响应的国际服 HAR 离线导入；主动下载失败时，程序会自动回退到 HAR 内的完整存档，并提示实际使用的数据来源和版本。若 HAR 不含完整存档，仍需使用有效会话主动下载。
+            装备打造新增“橙装图纸”分类，可直接筛选并预测固定橙色图纸的连续打造序列。
 
-            自动洗脉（改进）会根据角色属性及当前脉状态动态判断属性门槛天赋，减少候选脉池误判。
+            100级戒指可在精炼芒晶材料中选择赤石髓并预测内劲序列；100级腰带可选择石笋芯并预测罡气序列。
 
-            扩大三目标及四目标路线的搜索安全范围，并区分搜索时限耗尽与内部安全预算触发。搜索结果仍受角色脉序和搜索范围影响，不保证达到全局最低丹耗。
+            赤石髓和石笋芯仅对对应的100级装备显示，其他等级或部位不会出现在材料列表中。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt

@@ -16,8 +16,11 @@ class Response(io.BytesIO):
 class UpdateTests(unittest.TestCase):
     def test_semantic_version_comparison_is_numeric(self):
         self.assertGreater(version_tuple('v3.10.0'), version_tuple('3.9.9'))
+        self.assertLess(version_tuple('v3.0.8-beta.1'), version_tuple('3.0.8'))
+        self.assertGreater(version_tuple('v3.0.8-beta.2'), version_tuple('3.0.8-beta.1'))
         self.assertTrue(parse_release({'tag_name': 'v3.0.3'}, '3.0.2')['available'])
         self.assertFalse(parse_release({'tag_name': 'v3.0.2'}, '3.0.2')['available'])
+        self.assertFalse(parse_release({'tag_name': 'v3.0.7'}, '3.0.8-beta.1')['available'])
 
     def test_public_release_payload_and_fixed_release_pages(self):
         payload = {'tag_name': 'v3.1.0', 'body': '修复内容',

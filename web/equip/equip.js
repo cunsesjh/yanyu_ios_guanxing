@@ -26,6 +26,12 @@ const PATH_PAGE_SIZE = 12;
 const CRAFTED_MJ_SEED_PAPER_MULTIPLIER = 198;
 const SPECIAL_MATERIAL_PART_OVERRIDES = Object.freeze({
     6884: Object.freeze([7]),
+    8825: Object.freeze([8]),
+    8826: Object.freeze([5]),
+});
+const SPECIAL_MATERIAL_LEVEL_OVERRIDES = Object.freeze({
+    8825: 100,
+    8826: 100,
 });
 const JIANWANG_SWORD_IDS = new Set([5707, 5708, 5709, 5710, 5711, 5712, 5713, 5714, 5715, 5716, 5717]);
 const JIANWANG_LEVEL_100_IDS = new Set([5714, 5715, 5716, 5717]);
@@ -970,6 +976,16 @@ function papersForNpc(npcId) {
     return list;
 }
 
+function isOrangePaper(item) {
+    const paper = item && (item.paper || item);
+    return Number(paper && paper.min_color) === 5
+        && Number(paper && paper.max_color) === 5;
+}
+
+function orangePapersForNpc(npcId) {
+    return papersForNpc(npcId).filter(isOrangePaper);
+}
+
 function fillNpcSelect() {
     const sel = document.getElementById('npcSelect');
     sel.innerHTML = '';
@@ -1100,6 +1116,34 @@ function fillPaperSelectByCategory(category) {
     const sel = document.getElementById('paperSelect');
     if (!sel) return;
     const filter = (document.getElementById('paperFilter')?.value || '').trim().toLowerCase();
+    if (category === 'orange') {
+        const npcId = Number(document.getElementById('npcSelect')?.value);
+        const prev = sel.value;
+        sel.innerHTML = '';
+        const items = orangePapersForNpc(npcId).filter(item => {
+            if (!filter) return true;
+            return `${item.label} ${item.equip?.name || ''}`.toLowerCase().includes(filter);
+        });
+        for (const item of items) {
+            const opt = document.createElement('option');
+            opt.value = JSON.stringify({
+                selectId: item.selectId,
+                equipId: item.equipId,
+                minColor: item.paper.min_color,
+                maxColor: item.paper.max_color,
+            });
+            opt.textContent = `${item.label} · 固定橙装`;
+            sel.appendChild(opt);
+        }
+        if (!items.length) {
+            sel.innerHTML = '<option value="">（当前工匠类型下无匹配橙装图纸）</option>';
+        } else if (prev && [...sel.options].some(option => option.value === prev)) {
+            sel.value = prev;
+        }
+        fillSpecialSelect();
+        updateMakeHints();
+        return;
+    }
     const allowed = category === 'tie' ? PAPER_CATEGORY_TIE_NAMES : PAPER_CATEGORY_XIU_NAMES;
     const prev = sel.value;
     sel.innerHTML = '';
@@ -2213,7 +2257,10 @@ function specialMaterialParts(material) {
 
 function specialMaterialSupportsEquip(material, equip) {
     const equipType = equip && (equip.typ != null ? equip.typ : equip.type);
-    return specialMaterialParts(material).includes(equipType);
+    const equipLevel = Number(equip && (equip.need_lv != null ? equip.need_lv : equip.lv));
+    const requiredLevel = SPECIAL_MATERIAL_LEVEL_OVERRIDES[String(material && material.id)];
+    return specialMaterialParts(material).includes(equipType)
+        && (!requiredLevel || equipLevel === requiredLevel);
 }
 
 function clearMakeAdvanceNotice() {

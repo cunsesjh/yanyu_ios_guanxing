@@ -25,6 +25,12 @@
     ]);
     const SPECIAL_MATERIAL_PART_OVERRIDES = Object.freeze({
         6884: Object.freeze([7]),
+        8825: Object.freeze([8]),
+        8826: Object.freeze([5]),
+    });
+    const SPECIAL_MATERIAL_LEVEL_OVERRIDES = Object.freeze({
+        8825: 100,
+        8826: 100,
     });
     const SPECIAL_QUALITY_WEIGHTS = Object.freeze([5000, 500, 50, 5, 1]);
     const SPECIAL_QUALITY_RANGES = Object.freeze([[85, 95], [95, 105], [105, 115], [115, 125], [125, 150]]);
@@ -110,7 +116,10 @@
 
     function specialMaterialSupportsEquip(material, equip) {
         const equipType = finiteNumber(equip && (equip.typ != null ? equip.typ : equip.type));
-        return specialMaterialParts(material).includes(equipType);
+        const equipLevel = finiteNumber(equip && (equip.need_lv != null ? equip.need_lv : equip.lv));
+        const requiredLevel = SPECIAL_MATERIAL_LEVEL_OVERRIDES[String(material && material.id)];
+        return specialMaterialParts(material).includes(equipType)
+            && (!requiredLevel || equipLevel === requiredLevel);
     }
 
     function specialMaterialsForEquip(data, equip) {
