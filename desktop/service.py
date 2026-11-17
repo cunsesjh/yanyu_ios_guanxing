@@ -10,12 +10,14 @@ class DownloadService:
         progress('正在向游戏服务器请求当前云存档…')
         data, version, _ = retrieve.fetch(session)
         progress('解码校验成功，正在保存完整存档…')
-        row = self.store.save_snapshot(data, session['platform'], session['area'], version)
         warning = ''
+        session_ref = None
         try:
-            self.store.save_session(session)
+            session_ref = self.store.save_session(session)
         except (OSError, RuntimeError, ValueError):
             warning = '存档已保存；会话未能加密保存，重新启动后需要再次导入 HAR。'
+        row = self.store.save_snapshot(data, session['platform'], session['area'], version,
+                                       session_ref=session_ref)
         return dict(row=row, session=session, warning=warning)
 
     def download_from_har(self, har_path, progress=lambda text: None):
