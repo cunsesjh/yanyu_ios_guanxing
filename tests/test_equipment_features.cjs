@@ -68,4 +68,9 @@ const html = fs.readFileSync(path.join(root, 'web/equip/index.html'), 'utf8');
 assert.ok((html.match(/value="orange"/g) || []).length >= 2,
     'both linked equipment category selectors must expose orange blueprints');
 
+assert.equal(
+    vm.runInContext('summarizeExtTotals([{prop:"atk",value:100},{prop:"atk",value:80},{prop:"blood",value:0.02}])', context),
+    '攻击+180 · 吸血+2%',
+);
+
 console.log('equipment feature regression tests passed');

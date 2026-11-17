@@ -620,6 +620,27 @@ function convertZhaoValue(value, dims) {
     return Math.abs(v) > 1 ? Math.floor(v + 1e-6) : v;
 }
 
+function neijinInfluenceRate(neijin) {
+    const value = Math.max(0, num(neijin));
+    return 3 * value / (4000 + value);
+}
+
+function neijinReferenceRows(currentNeijin) {
+    const current = Math.max(0, Math.floor(num(currentNeijin)));
+    const currentRate = neijinInfluenceRate(current);
+    return [0, 50, 100, 150].map(add => {
+        const neijin = current + add;
+        const rate = neijinInfluenceRate(neijin);
+        return {
+            add,
+            neijin,
+            rate,
+            delta: rate - currentRate,
+            factor2Scale: 1 + rate,
+        };
+    });
+}
+
 function findActiveWg(list) {
     return findActiveSkill(list);
 }
@@ -1439,6 +1460,30 @@ function renderFinalStats(role, partyRoles) {
     `).join('');
 }
 
+function renderNeijinReference(role, partyRoles) {
+    const root = document.getElementById('neijinReference');
+    const meta = document.getElementById('neijinReferenceMeta');
+    if (!root) return;
+    const finalStats = computeFinalStats(role, partyRoles);
+    const rows = neijinReferenceRows(finalStats.neijin);
+    const skillName = finalStats.skill.neiName || '当前未装备内功';
+    if (meta) {
+        meta.textContent = `${skillName} · 当前 ${Math.floor(finalStats.neijin)}（底${finalStats.body.neijin}+装${finalStats.equip.neijin}）`;
+    }
+    const pct = value => `${(value * 100).toFixed(2).replace(/\.00$/, '')}%`;
+    root.innerHTML = `<table class="role-table neijin-reference-table">
+        <thead><tr><th>方案</th><th>内劲</th><th>作用率</th><th>较当前</th><th>系数 2.0 时倍率</th></tr></thead>
+        <tbody>${rows.map(row => `<tr>
+            <td>${row.add ? `+${row.add}` : '当前'}</td>
+            <td class="num">${row.neijin}</td>
+            <td class="num est">${pct(row.rate)}</td>
+            <td class="num">${row.add ? `+${pct(row.delta)}` : '—'}</td>
+            <td class="num">${row.factor2Scale.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')} 倍</td>
+        </tr>`).join('')}</tbody>
+    </table>
+    <p class="neijin-reference-note">作用率 R = 3 × 内劲 ÷ (4000 + 内劲)。仅用于配置明确按内劲缩放的招式；实际数值仍取决于该招式的基础值和配置系数。</p>`;
+}
+
 function cell(label, value, accent = false) {
     return `<div class="stat-cell">
         <span class="label">${escapeHtml(label)}</span>
@@ -1852,6 +1897,7 @@ function renderRole(entry) {
         party = saveData.Hezhao.Roles;
     }
     renderFinalStats(role, party);
+    renderNeijinReference(role, party);
     renderAttrs(role, party);
     renderXiuwei(role);
     renderCombat(role);

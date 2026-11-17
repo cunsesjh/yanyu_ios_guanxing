@@ -169,8 +169,14 @@
                     <input id="asFilter" class="as-filter" type="search" placeholder="搜索天赋名（如：一臂之力）">
                     <select id="asScope" class="as-scope">
                         <option value="shop">扫描范围：商店候选</option>
+                        <option value="future-shop">扫描范围：未来商店候选</option>
                         <option value="all">扫描范围：全部弟子</option>
                         <option value="enrolled">扫描范围：在册弟子</option>
+                    </select>
+                    <select id="asFutureShopDays" class="as-scope" aria-label="未来商店候选天数" hidden>
+                        <option value="3">未来 3 天</option>
+                        <option value="5" selected>未来 5 天</option>
+                        <option value="10">未来 10 天</option>
                     </select>
                     <button id="btnAutoSimRun" class="btn btn-wash-gold" type="button">开始扫描</button>
                 </div>
