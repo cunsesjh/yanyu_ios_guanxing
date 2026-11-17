@@ -271,9 +271,10 @@ async function send(type, payload) {
         count:80, maxWash:7000,
     });
     assert.equal(automaticShang.ok, true, automaticShang.note);
-    assert.equal(automaticShang.cost, 4807,
-        'the public automatic entry must discover the 4807-pill route');
-    assert.equal(automaticShang.washes, 1210);
+    assert.ok(automaticShang.cost <= 4807,
+        'the public automatic entry must discover the verified route or a cheaper one');
+    assert.equal(U.verify(pityCarrierRaw, shangTargets, automaticShang.steps, 153).ok,
+        true, 'the automatic result must independently replay');
     rows = await send('search', {input: {...input, initialState: initial, targetIds: [purple], options: {maxTotalPills: predicted.cost}}});
     result = rows.find(r => r.type === 'result').result;
     const route = result.routes.find(r => r.totalPills === predicted.cost);
