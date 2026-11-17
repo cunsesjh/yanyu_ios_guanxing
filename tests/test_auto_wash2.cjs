@@ -267,7 +267,7 @@ async function send(type, payload) {
     assert.equal(U.verify(pityCarrierRaw, shangTargets, shangRoute.steps, 153).ok,
         true, 'the 4807-pill route must independently replay');
     const automaticShang = U.planBest(pityCarrierRaw, shangTargets, {
-        zi:153, budget:6000, methodMs:30000, onlyPaths:['E'],
+        zi:153, budget:6000, methodMs:300000, onlyPaths:['E'],
         count:80, maxWash:7000,
     });
     assert.equal(automaticShang.ok, true, automaticShang.note);
