@@ -179,20 +179,52 @@ async function send(type, payload) {
         role_id:10031, salt:780148, vip:1,
         role_stats:{str_val:129, con:117, dex:10, int_val:101},
         talents:[{id:272,locked:false},{id:189,locked:false},{id:247,locked:false}]};
-    const pityCarrierSeeds = sandbox.AutoWash2RouteConstructor.pityCarrierExchangeSeeds(
-        pityCarrierRaw, 153, {maxWash: 1000, timeMs: 1200});
-    assert.ok(pityCarrierSeeds.length > 0,
-        'must enumerate a pity-carrier seed on the deterministic regression fixture');
-    const pitySeed = pityCarrierSeeds[0];
-    assert.equal(pitySeed.pityCarrierExchange, true);
-    assert.equal(pitySeed.chain[0], pitySeed.first);
-    assert.equal(pitySeed.initialConsumed, 1);
-    const pityReplay = sandbox.AutoWash2RouteConstructor.execute(
-        pityCarrierRaw, [pitySeed.first], pitySeed, {budget: 100000, headBudget: 100000});
-    assert.equal(pityReplay.ok, true, pityReplay.note);
-    assert.equal(sandbox.AutoWash2RouteConstructor.verify(
-        pityCarrierRaw, [pitySeed.first], pityReplay.steps, pitySeed.zi).ok, true,
-    'pity-carrier candidate must independently replay');
+    const U = sandbox.AutoWash2RouteConstructor;
+    const shangTargets = [250, 271, 272, 268];
+    const shangSequence = U.readSequence(pityCarrierRaw, {zi:153, count:80});
+    const pitySeed = U.pityCarrierExchangeSeeds(
+        pityCarrierRaw, shangTargets, 153,
+        {budget:2600, maxWash:1500, leadWindow:45})
+        .find(seed => Number(seed.seed) === 2007551897);
+    assert.ok(pitySeed, 'must enumerate the verified Shang Haoqian pity-carrier seed');
+    pitySeed.chain = [Number(pitySeed.first)]
+        .concat(U.queueOf(pityCarrierRaw, 153, Number(pitySeed.seed), 24));
+    const shangTail = U.tailCandidates(shangSequence.seq, shangTargets, 0, 0)
+        .find(item => Number(item.no) === 10 && Number(item.id) === 272);
+    assert.ok(shangTail, 'must retain O#10 岿然顶天 as the tail target');
+    const shangCheck = U.chainChecks(shangSequence, shangTargets, pitySeed.chain,
+        pitySeed, shangTail, 'combined', [250, 268], true);
+    assert.equal(shangCheck.ok, true, shangCheck.reason);
+    const sameAnchor = (shangCheck.fullInsertMapVariants || []).find(items =>
+        items.filter(item => Number(item.anchorNo) === 9).length === 2
+        && items.some(item => Number(item.idx) === 5)
+        && items.some(item => Number(item.idx) === 6));
+    assert.ok(sameAnchor, 'must keep C#6/C#7 on the same O#9 anchor');
+    const shangRoute = U.execute(pityCarrierRaw, shangTargets, pitySeed, {
+        budget:5000, bestCost:0, headBudget:5000, maxWash:7000, M:16, lead:14,
+        tailTarget:shangCheck.tailTarget, seq:shangSequence.seq,
+        chainEnd:shangCheck.endFull, planAnchorId:sameAnchor[0].anchor,
+        insertMap:sameAnchor,
+        executionChain:shangCheck.executionChainFull || shangCheck.executionChain,
+        chainIsFull:true,
+        strictTargetOccurrences:!!shangCheck.strictTargetOccurrences,
+        naturalFixedTargets:shangCheck.naturalFixedTargets || [],
+        targetActivationNo:shangCheck.targetActivationNo || {},
+        targetActivationOrdinal:shangCheck.targetActivationOrdinal || {},
+    });
+    assert.equal(shangRoute.ok, true, shangRoute.note);
+    assert.equal(shangRoute.cost, 4807);
+    assert.equal(shangRoute.washes, 1210);
+    assert.equal(U.verify(pityCarrierRaw, shangTargets, shangRoute.steps, 153).ok,
+        true, 'the 4807-pill route must independently replay');
+    const automaticShang = U.planBest(pityCarrierRaw, shangTargets, {
+        zi:153, budget:6000, methodMs:30000, onlyPaths:['E'],
+        count:80, maxWash:7000,
+    });
+    assert.equal(automaticShang.ok, true, automaticShang.note);
+    assert.equal(automaticShang.cost, 4807,
+        'the public automatic entry must discover the 4807-pill route');
+    assert.equal(automaticShang.washes, 1210);
     rows = await send('search', {input: {...input, initialState: initial, targetIds: [purple], options: {maxTotalPills: predicted.cost}}});
     result = rows.find(r => r.type === 'result').result;
     const route = result.routes.find(r => r.totalPills === predicted.cost);
