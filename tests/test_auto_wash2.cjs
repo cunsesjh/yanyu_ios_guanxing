@@ -81,6 +81,24 @@ async function send(type, payload) {
     assert.equal(threeTargetScope.searchScope.maxMainRawWashes, 6000000);
     assert.equal(threeTargetScope.searchScope.maxEventDepth, 160);
     assert.ok(Array.isArray(threeTargetScope.searchScope.limitReasons));
+    // Acquiring a target must retain the earlier low-grade conflict vein.
+    // The 4,802-pill Bu Jingyun route keeps 体壮如牛 while temporarily
+    // replacing the target 岿然顶天.
+    {
+        const sacrificeRaw = {...converted, zizhi:154, talents:[
+            {id:250, locked:true}, {id:179, locked:true},
+            {id:272, locked:true}, {id:243, locked:false},
+        ]};
+        const sacrificeEngine = new sandbox.AutoWash2Engine.Engine(
+            sandbox.TALENT_DATA, sacrificeRaw);
+        const sacrificeState = sacrificeEngine.initialState(sacrificeRaw);
+        const retained = sandbox.AutoWash2Optimizer.retainedLocksAfterTargetGain(
+            sacrificeState, [250, 179], [250, 268, 271, 272]);
+        assert.deepEqual(JSON.parse(JSON.stringify(retained)), [250, 179, 272]);
+        assert.ok(sacrificeEngine.replaceablePositions(sacrificeState, retained)
+            .includes(sacrificeState.talents.indexOf(272)),
+        'retaining the earlier conflict vein must allow temporary target sacrifice');
+    }
     const input = {initialState: converted, targetIds: [271], compatibleGroups: [], bagPills: 100,
         hasBagPills: true, options: {maxTotalPills: 0}};
     rows = await send('search', {input});

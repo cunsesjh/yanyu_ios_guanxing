@@ -119,6 +119,12 @@
         return state.talents.filter(id => wanted.has(id));
     }
 
+    function retainedLocksAfterTargetGain(state, previousLocks, targetIds) {
+        const targets = new Set((targetIds || []).map(Number));
+        const currentTargets = state.talents.filter(id => targets.has(Number(id)));
+        return idsInStateOrder(state, [...(previousLocks || []), ...currentTargets]);
+    }
+
     function targetsIn(state, targetSet) {
         return state.talents.filter(id => targetSet.has(id));
     }
@@ -670,6 +676,10 @@
             return gain * 2400 + extra;
         }
 
+        function locksAfterTargetGain(state, previousLocks) {
+            return retainedLocksAfterTargetGain(state, previousLocks, targetIds);
+        }
+
         function previewSparseLuckTargets(state) {
             const missing = targetIds.filter(id => !state.talents.includes(id));
             if (!missing.length || typeof engine.draw !== 'function') {
@@ -1103,6 +1113,7 @@
 
                     const nextTargets = targetsIn(state, targetSet);
                     if (nextTargets.length > startingTargetCount) {
+                        const milestoneLocks = locksAfterTargetGain(state, node.protectedIds);
                         if (targetIds.length === 4 && startingTargetCount === 2 && nextTargets.length === 3) {
                             // 第三紫每一次真实出现都立即独立验证第四紫；尾段验证结束后，本锁二主线继续向后扫描。
                             scope.thirdTailCandidates += 1;
@@ -1116,13 +1127,29 @@
                             enqueue(state, cost, trace, 'milestone', {
                                 eventDepth: node.eventDepth + 1,
                                 importance: targetGainImportance(state, startingTargetCount, 900),
+                                carryLockedIds: milestoneLocks,
                             });
+                            if (milestoneLocks.some(id => !nextTargets.includes(id))) {
+                                enqueue(state, cost, trace, 'milestone', {
+                                    eventDepth: node.eventDepth + 1,
+                                    importance: targetGainImportance(state, startingTargetCount, 840),
+                                });
+                            }
                         }
                     }
 
-                    directExchangeBranches(state, cost, trace,
-                        nextTargets.length > startingTargetCount ? nextTargets : node.protectedIds,
-                        { eventDepth: node.eventDepth, fromExchange: false });
+                    if (nextTargets.length > startingTargetCount) {
+                        const retainedLocks = locksAfterTargetGain(state, node.protectedIds);
+                        directExchangeBranches(state, cost, trace, retainedLocks,
+                            { eventDepth: node.eventDepth, fromExchange: false });
+                        if (retainedLocks.some(id => !nextTargets.includes(id))) {
+                            directExchangeBranches(state, cost, trace, nextTargets,
+                                { eventDepth: node.eventDepth, fromExchange: false });
+                        }
+                    } else {
+                        directExchangeBranches(state, cost, trace, node.protectedIds,
+                            { eventDepth: node.eventDepth, fromExchange: false });
+                    }
 
                     // 当前洗脉结束后再更新最近 blocker，供下一次及更后的紫脉事件使用。
                     rememberNearestBlockers(nearestBlockers, state, cost, trace, node.protectedIds, scanStep);
@@ -1158,10 +1185,18 @@
                     washedAfterAnchor = true;
                     const currentTargetCount = targetsIn(state, targetSet).length;
                     if (currentTargetCount > startingTargetCount) {
+                        const milestoneLocks = locksAfterTargetGain(state, opportunity.lockedIds);
                         enqueue(state, cost, trace, 'milestone', {
                             eventDepth: node.eventDepth + 1,
                             importance: targetGainImportance(state, startingTargetCount, 800),
+                            carryLockedIds: milestoneLocks,
                         });
+                        if (milestoneLocks.some(id => !targetsIn(state, targetSet).includes(id))) {
+                            enqueue(state, cost, trace, 'milestone', {
+                                eventDepth: node.eventDepth + 1,
+                                importance: targetGainImportance(state, startingTargetCount, 740),
+                            });
+                        }
                     }
                     directExchangeBranches(state, cost, trace, opportunity.lockedIds, {
                         eventDepth: node.eventDepth,
@@ -1514,6 +1549,8 @@
         }
     }
 
-    root.AutoWash2Optimizer = Object.freeze({ searchWashRoutes, MinHeap, compactActions });
+    root.AutoWash2Optimizer = Object.freeze({
+        searchWashRoutes, MinHeap, compactActions, retainedLocksAfterTargetGain,
+    });
 })(typeof window !== 'undefined' ? window : globalThis);
 

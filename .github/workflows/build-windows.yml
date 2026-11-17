@@ -101,13 +101,13 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v3.0.8-beta.1 测试版更新公告
+            ## v3.0.8-beta.4 测试版更新公告
 
-            装备打造新增“橙装图纸”分类，可直接筛选并预测固定橙色图纸的连续打造序列。
+            修复自动洗脉取得目标脉后丢失低阶冲突脉的问题。
 
-            100级戒指可在精炼芒晶材料中选择赤石髓并预测内劲序列；100级腰带可选择石笋芯并预测罡气序列。
+            搜索现在会同时保留释放辅助脉和继承冲突脉两种分支，支持临时置换目标脉后重新获取。
 
-            赤石髓和石笋芯仅对对应的100级装备显示，其他等级或部位不会出现在材料列表中。
+            新增步惊云路线回归，覆盖体壮如牛支撑岿然顶天置换的关键步骤。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
