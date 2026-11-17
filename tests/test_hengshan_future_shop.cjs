@@ -34,4 +34,12 @@ assert.ok(calls.every(call => call.refreshes === 0));
 assert.deepEqual(Array.from(result, item => item.shopDay), [1, 2, 3]);
 assert.equal(new Set(result.map(item => item.key)).size, 3);
 
+calls.length = 0;
+const thirtyDays = sandbox.HengshanShopView.predictFutureShopStudents(30);
+assert.equal(thirtyDays.length, 30);
+assert.equal(calls.length, 30);
+assert.deepEqual(Array.from(thirtyDays, item => item.shopDay),
+    Array.from({ length: 30 }, (_, index) => index + 1));
+assert.equal(new Set(thirtyDays.map(item => item.key)).size, 30);
+
 console.log('hengshan future shop tests passed');

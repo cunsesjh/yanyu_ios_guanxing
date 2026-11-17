@@ -99,6 +99,37 @@ async function send(type, payload) {
             .includes(sacrificeState.talents.indexOf(272)),
         'retaining the earlier conflict vein must allow temporary target sacrifice');
     }
+    // End-to-end regression for the documented Bu Jingyun route. The public
+    // optimizer must discover the route, not merely accept its target swap.
+    {
+        const buJingyunRaw = {
+            seed:1877921107, born_talent_rc:19,
+            luck_seed:0, luck_seed_inited:false, tal_lucky:3,
+            zizhi:153, role_id:10060, sex:1, role_level:90,
+            salt:960291, vip:1,
+            role_stats:{str_val:260, con:118, dex:8, int_val:10},
+            global_vars:{repute:854}, save_channel:'',
+            talents:[
+                {id:193, locked:false},
+                {id:250, locked:true},
+                {id:184, locked:false},
+            ],
+        };
+        const automatic = await sandbox.AutoWash2Optimizer.searchWashRoutes({
+            initialState: buJingyunRaw,
+            talentData: sandbox.TALENT_DATA,
+            targetIds: [250, 268, 271, 272],
+            options: {maxTotalPills:6000, searchIntensity:4},
+        });
+        const route4802 = automatic.routes.find(route => route.totalPills === 4802);
+        assert.ok(route4802, 'automatic search must discover the 4,802-pill Bu Jingyun route');
+        assert.equal(route4802.totalWashes, 713);
+        assert.equal(route4802.exchangeCount, 5);
+        assert.deepEqual(JSON.parse(JSON.stringify(
+            route4802.finalTalents.map(talent => talent.id).sort((a, b) => a - b))),
+        [250, 268, 271, 272]);
+        assert.equal(route4802.verified, true);
+    }
     const input = {initialState: converted, targetIds: [271], compatibleGroups: [], bagPills: 100,
         hasBagPills: true, options: {maxTotalPills: 0}};
     rows = await send('search', {input});

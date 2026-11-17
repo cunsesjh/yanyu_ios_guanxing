@@ -133,7 +133,7 @@
     }
 
     function predictFutureShopStudents(days, initialState) {
-        var count = [3, 5, 10].indexOf(Number(days)) >= 0 ? Number(days) : 5;
+        var count = [3, 5, 10, 30].indexOf(Number(days)) >= 0 ? Number(days) : 5;
         var start = initialState || getShopState();
         if (!E || typeof E.shopRefresh !== 'function') return [];
         if (!start || !(Number(start.seed) > 0)) return [];
