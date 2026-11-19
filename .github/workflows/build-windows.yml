@@ -30,6 +30,10 @@ jobs:
         run: node tests/test_wash_dynamic_pool.cjs
       - name: Equipment orange blueprint and material regression
         run: node tests/test_equipment_features.cjs
+      - name: Hengshan future shop forecast regression
+        run: node tests/test_hengshan_future_shop.cjs
+      - name: Role neijin and gangqi regression
+        run: node tests/test_role_neijin.cjs
       - name: Embedded page smoke test
         env:
           QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
@@ -101,13 +105,17 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v3.0.8 正式版更新公告
+            v3.0.9 最后一次更新公告
 
-            装备打造新增“橙装图纸”分类，可直接筛选并预测固定橙色图纸的连续打造序列。
+            xdm把这几天更新的几个功能上了，没开发完的和还没进行功能测试的就不发了
 
-            100级戒指可在精炼芒晶材料中选择赤石髓并预测内劲序列；100级腰带可选择石笋芯并预测罡气序列。
+            - 装备精炼规划新增“属性合计”，自动汇总最终附加属性。
+            - 恒山自动推演新增未来商店候选，可选择未来 3、5、10、30 天；默认每天 5 名候选计算。
+            - 角色页面新增“内劲影响参考”，展示当前内劲以及增加 50、100、150 后的作用率变化。
+            - 补全内劲、罡气计算，包括装备精炼主属性、秘技、合斗个人及全队加成。
+            - 历史存档与云存档下载会话按账号绑定，切换其他账号的历史存档后，可下载该账号的最新云存档。
 
-            赤石髓和石笋芯仅对对应的100级装备显示，其他等级或部位不会出现在材料列表中。装备打造预测结果默认显示全部品质，仍可手动筛选白、绿、蓝或紫色结果。
+            然后大佬的网页观星，https://yy-sim.pages.dev/ ，之前用过咱观星的话，在本机的C:/User/Administrator/AppData/Local/iosGuanxing/snapshots里会有存档文件夹，里面的dat.json可以直接导入到网页
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt

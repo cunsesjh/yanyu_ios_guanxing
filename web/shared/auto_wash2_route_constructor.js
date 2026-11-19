@@ -559,7 +559,9 @@
         }
         const TG = (targets || []).map(Number);
         const held = TG.filter(id => s.talents.includes(id));
-        if (!held.length) return null;
+        // 保底载体置换种子在种子落盘时可能还没有任何目标（商昊乾 733 洗），
+        // 仍需从这一刻继续扫描动态脉序；否则会退回静态 O# 表，收尾编号错位。
+        if (!held.length && !seedOpt.pityCarrierExchange) return null;
         if (Number(s.zizhi) < 154) {
             e = engineOf(raw, 154);
             s = e.upgradeToFour(Object.assign({}, s, { zizhi: 154 }));
@@ -688,12 +690,35 @@
         if (Number(raw.zizhi) < 153) {
             pushStep({ type: 'upgrade', toZi: 153, washes, cost });
         }
-        // 前缀空洗（不锁任何脉，只推进）
-            for (let k = 0; k < startWash; k++) {
-                const pin = pinnedTargets.map(id => s.talents.indexOf(id)).filter(i => i >= 0);
-                const r = e.wash(s, pin);
+        // 前缀空洗：如果指定起点之前自然出现了目标紫，必须立即锁住并
+        // 让它参与后续开槽/种子置换。不能只保留“初始场上已有”的目标，
+        // 否则 O#1 转世金仙会在 O#2 不灭肉身起点前丢失，链头随之算错。
+        const autoPinNaturalTargets = o.autoPinNaturalTargets !== false;
+        for (let k = 0; k < startWash; k++) {
+            const pin = pinnedTargets.map(id => s.talents.indexOf(id)).filter(i => i >= 0);
+            const r = e.wash(s, pin);
             s = r.state; cost += Number(r.cost) || 0; washes++;
             if (overBudget()) return null;
+            if (autoPinNaturalTargets && pinnedTargets.length === 0) {
+                const targetSeen = (r.generatedEvents || [])
+                    .map(event => Number(event && event.id != null ? event.id : event))
+                    .find(id => TG.includes(id) && s.talents.includes(id));
+                if (targetSeen) {
+                    pinnedTargets.push(targetSeen);
+                    pushStep({
+                        type: 'lock', id: targetSeen, target: true,
+                        washes, cost, why: 'natural-before-seed-start',
+                    });
+                    // 锁到第一个目标后按统一规则立即开四槽，后续前缀
+                    // 继续在四槽流中推进。拜妮娜 2133 路线即此形态。
+                    if (zi === 153) {
+                        zi = 154;
+                        e = engineOf(raw, zi);
+                        s = e.upgradeToFour(Object.assign({}, s, { zizhi: zi }));
+                        pushStep({ type: 'upgrade', toZi: 154, washes, cost });
+                    }
+                }
+            }
         }
         if (upgradeBefore && zi === 153) {
             zi = 154; e = engineOf(raw, zi);
@@ -719,7 +744,9 @@
             });
             let arriveGuard = 0;
             while (s.talents.indexOf(startCarrierId) < 0 && arriveGuard++ < maxWash) {
-                const r = e.wash(s, [s.talents.indexOf(conflict)].filter(i => i >= 0));
+                const keep = pinnedTargets.concat([conflict])
+                    .map(id => s.talents.indexOf(id)).filter(i => i >= 0);
+                const r = e.wash(s, Array.from(new Set(keep)));
                 s = r.state; cost += Number(r.cost) || 0; washes++;
                 if (overBudget()) return null;
             }
@@ -857,22 +884,16 @@
                 .find(v => v !== 251 && e.quality(v) < 4 && talentType(v) === ty) || null;
             for (let k = 0; k < n && washes < maxWash; k++) {
                 if (!washOne()) return null;
-                const low = findLow();
-                if (low != null && low !== preloadId) {
-                    if (preloadId != null) pushStep({ type: 'unlockConflict', id: preloadId, washes, cost, why: '预载换锁更近' });
-                    preloadId = low;
-                    pushStep({ type: 'lockConflict', id: preloadId, washes, cost, forPurple: peekId });
-                }
             }
-            if (preloadId == null) {
-                for (let k = 0; k < 80 && preloadId == null && washes < maxWash; k++) {
-                    if (!washOne()) return null;
-                    preloadId = findLow();
-                    if (carrier != null && !s.talents.includes(carrier)) { preloadId = null; break; }
-                }
-                if (preloadId != null) {
-                    pushStep({ type: 'lockConflict', id: preloadId, washes, cost, forPurple: peekId });
-                }
+            // 只检查 n 次垫洗结束后的当前场；若首链冲突正好存在，
+            // 直接锁定并允许首锚继续推进；否则首锚只完成 C#1。
+            const low = findLow();
+            if (low != null) {
+                preloadId = low;
+                pushStep({
+                    type: 'lockConflict', id: preloadId,
+                    washes, cost, forPurple: peekId, noWash: true,
+                });
             }
         } else {
             for (let k = 0; k < n && washes < maxWash; k++) if (!washOne()) return null;
@@ -895,7 +916,332 @@
         return { kind: 'exchange', zi: zi0, n, lead, startWash, upgradeBefore, first, seed, chain, steps, cost, washes,
             carrier, conflict, pinnedTargetIds: pinnedTargets,
             startAnchorId: startCarrierId, startAnchorNo,
-            startAnchorWash: startWash, carrierArrivalWash: washes };
+            startAnchorWash: startWash, carrierArrivalWash: washes,
+            preloadedConflictId: preloadId || 0,
+            seedAnchorContinuation: !!preloadId };
+    }
+
+    /**
+     * 保底载体置换定种子：
+     * 在首保底出现前不久锁住同类型低阶冲突，保持保底紫身份不变；
+     * 保底出现后再锁该保底紫并置换，置换结果成为 C#1。
+     *
+     * 该分支不同于“裸洗到首保底后直接定种子”，也不同于等待普通自然紫载体。
+     */
+    function pityCarrierExchangeSeeds(raw, targets, zi0, options) {
+        const o = options || {};
+        const zi = Number(zi0) >= 150 ? Number(zi0) : 153;
+        const leadWindow = Math.max(10, Number(o.leadWindow) || 45);
+        const maxWash = Math.max(500, Number(o.maxWash) || 1500);
+        const budget = Math.max(0, Number(o.budget) || 0);
+        const st0 = startStateAt(raw, zi);
+        const e = st0.e;
+        let state = st0.s;
+        let washes = 0;
+        let cost = 0;
+        const path = [];
+        let firstPityWash = 0;
+        while (washes < maxWash) {
+            path.push({
+                state: root.AutoWash2Engine.cloneState(state),
+                washes, cost,
+            });
+            const result = e.wash(state, []);
+            state = result.state;
+            washes++;
+            cost += Number(result.cost) || 0;
+            if (budget > 0 && cost > budget) break;
+            if (result.pityPurpleId != null) {
+                firstPityWash = washes;
+                path.push({
+                    state: root.AutoWash2Engine.cloneState(state),
+                    washes, cost,
+                });
+                break;
+            }
+        }
+        if (!firstPityWash || !path.length) return [];
+        const recent = path.slice(-Math.min(path.length, leadWindow));
+        const lows = new Set();
+        for (const item of recent) {
+            for (const id of item.state.talents) {
+                const numericId = Number(id);
+                if (e.quality(numericId) < 4 && numericId !== 251) lows.add(numericId);
+            }
+        }
+        const hits = [];
+        const seen = new Set();
+        for (const lowId of lows) {
+            for (const start of recent) {
+                if (!start.state.talents.includes(lowId)) continue;
+                let replay = root.AutoWash2Engine.cloneState(start.state);
+                let replayWash = start.washes;
+                let replayCost = start.cost;
+                let pityId = 0;
+                let guard = 0;
+                while (!pityId && guard++ < Math.max(300, maxWash) && replayWash < maxWash) {
+                    const keep = [replay.talents.indexOf(lowId)].filter(index => index >= 0);
+                    const result = e.wash(replay, keep);
+                    replay = result.state;
+                    replayWash++;
+                    replayCost += Number(result.cost) || 0;
+                    if (budget > 0 && replayCost > budget) break;
+                    if (result.pityPurpleId != null) pityId = Number(result.pityPurpleId);
+                }
+                if (!pityId || !replay.talents.includes(lowId)
+                    || !replay.talents.includes(pityId)) continue;
+                if (e.talentType(lowId) !== e.talentType(pityId)) continue;
+                const pityWash = replayWash;
+                const pityCost = replayCost;
+                // 保底紫出现后身份已经稳定；可以继续主动洗脉，预载
+                // C#1 的冲突脉，再执行保底紫载体置换。
+                let peekId = 0;
+                try {
+                    let peekLuck = replay.luckSeed;
+                    for (let draw = 0; draw < 4000 && !peekId; draw++) {
+                        let id;
+                        [id, peekLuck] = e.draw(peekLuck, true);
+                        if (e.allowed.has(id) && !replay.talents.includes(Number(id))) {
+                            peekId = Number(id);
+                        }
+                    }
+                } catch (error) { peekId = 0; }
+                const extraSeedSteps = [];
+                let peekConflict = 0;
+                if (peekId && !e.isShenmai(peekId)) {
+                    const findPeekLow = () => replay.talents.map(Number)
+                        .find(id => id !== 251 && e.quality(id) < 4
+                            && e.talentType(id) === e.talentType(peekId)
+                            && id !== lowId && id !== pityId) || null;
+                    peekConflict = findPeekLow();
+                    if (!peekConflict) {
+                        const beforeWash = replayWash;
+                        for (let k = 0; k < 80 && !peekConflict; k++) {
+                            const keep = [lowId, pityId]
+                                .map(id => replay.talents.indexOf(id))
+                                .filter(index => index >= 0);
+                            const washed = e.wash(replay, keep);
+                            replay = washed.state;
+                            replayWash++;
+                            replayCost += Number(washed.cost) || 0;
+                            if (budget > 0 && replayCost > budget) break;
+                            peekConflict = findPeekLow();
+                        }
+                        if (peekConflict) {
+                            extraSeedSteps.push({
+                                type: 'preludeWash',
+                                count: replayWash - beforeWash,
+                                washes: replayWash, cost: replayCost,
+                                locks: [lowId, pityId],
+                            });
+                        }
+                    }
+                    if (peekConflict) {
+                        extraSeedSteps.push({
+                            type: 'lockConflict', id: peekConflict,
+                            washes: replayWash, cost: replayCost,
+                            locks: [lowId, pityId],
+                            noWash: true,
+                        });
+                    }
+                }
+                const locks = [lowId, pityId]
+                    .concat(peekConflict ? [peekConflict] : []);
+                const position = replay.talents.indexOf(pityId);
+                if (!e.replaceablePositions(replay, locks).includes(position)) continue;
+                let replaced;
+                try { replaced = e.replace(replay, position, locks); }
+                catch (error) { continue; }
+                const first = Number(replaced.addedId);
+                if (peekId && first !== peekId) continue;
+                const seed = Number(replaced.state.luckSeed);
+                const key = `${lowId}:${start.washes}:${pityId}:${first}:${seed}`;
+                if (!first || !Number.isFinite(seed) || seen.has(key)) continue;
+                seen.add(key);
+                const steps = [
+                    {
+                        type: 'preludeWash', count: start.washes,
+                        washes: start.washes, cost: start.cost,
+                        locks: [],
+                    },
+                    {
+                        type: 'lockConflict', id: lowId,
+                        washes: start.washes, cost: start.cost,
+                        locks: [],
+                    },
+                    {
+                        type: 'washToPity', firstPurple: pityId,
+                        washes: pityWash, cost: pityCost,
+                        locks: [lowId],
+                    },
+                    {
+                        type: 'lockCarrier', id: pityId,
+                        washes: pityWash, cost: pityCost,
+                        locks: [lowId],
+                    },
+                    ...extraSeedSteps,
+                    {
+                        type: 'exchange', from: pityId, to: first,
+                        washes: replayWash, cost: replayCost,
+                        first: true,
+                        replaceLocks: locks.slice(),
+                        locks: locks.slice(),
+                    },
+                ];
+                // 保底紫作为载体时，保底紫已经落地，允许在同一锚点主动
+                // 洗出后续链位的冲突脉，再连续推进多个真实链位。
+                const continuationChain = [first]
+                    .concat(queueOf(raw, zi, seed, 24));
+                let continuationState = root.AutoWash2Engine.cloneState(replaced.state);
+                let continuationWash = replayWash;
+                let continuationCost = replayCost;
+                let currentCarrier = first;
+                let consumedCount = 1;
+                const findLow = (state, type, exclude) => state.talents.map(Number)
+                    .find(id => id !== 251 && e.quality(id) < 4
+                        && e.talentType(id) === type
+                        && !(exclude || []).includes(id)) || null;
+                for (let index = 1; index < continuationChain.length
+                    && consumedCount < 8; index++) {
+                    const nextCarrier = Number(continuationChain[index]);
+                    if (!currentCarrier || !nextCarrier) break;
+                    let sourceConflict = findLow(
+                        continuationState, e.talentType(currentCarrier), []);
+                    if (!sourceConflict) {
+                        const beforeWash = continuationWash;
+                        let found = null;
+                        for (let k = 0; k < 80 && found == null; k++) {
+                            const keep = [continuationState.talents.indexOf(currentCarrier)]
+                                .filter(value => value >= 0);
+                            const washed = e.wash(continuationState, keep);
+                            continuationState = washed.state;
+                            continuationWash++;
+                            continuationCost += Number(washed.cost) || 0;
+                            if (budget > 0 && continuationCost > budget) break;
+                            found = findLow(continuationState, e.talentType(currentCarrier), []);
+                        }
+                        if (found == null) break;
+                        steps.push({
+                            type: 'preludeWash',
+                            count: continuationWash - beforeWash,
+                            washes: continuationWash, cost: continuationCost,
+                            locks: [currentCarrier],
+                        });
+                        sourceConflict = found;
+                    }
+                    steps.push({
+                        type: 'lockConflict', id: sourceConflict,
+                        washes: continuationWash, cost: continuationCost,
+                        locks: [currentCarrier], noWash: true,
+                    });
+                    const nextType = e.talentType(nextCarrier);
+                    const sameExchangeType = nextType === e.talentType(currentCarrier);
+                    let nextConflict = e.isShenmai(nextCarrier) || nextCarrier === 251
+                        ? null : (sameExchangeType ? sourceConflict
+                            : findLow(continuationState, nextType,
+                                [currentCarrier, sourceConflict]));
+                    if (nextCarrier !== 251 && !e.isShenmai(nextCarrier)
+                        && !sameExchangeType
+                        && nextConflict == null) {
+                        const beforeWash = continuationWash;
+                        let found = null;
+                        for (let k = 0; k < 80 && found == null; k++) {
+                            const keep = [sourceConflict, currentCarrier]
+                                .map(id => continuationState.talents.indexOf(id))
+                                .filter(value => value >= 0);
+                            const washed = e.wash(continuationState, keep);
+                            continuationState = washed.state;
+                            continuationWash++;
+                            continuationCost += Number(washed.cost) || 0;
+                            if (budget > 0 && continuationCost > budget) break;
+                            found = findLow(continuationState, nextType,
+                                [currentCarrier, sourceConflict]);
+                        }
+                        if (found == null) break;
+                        steps.push({
+                            type: 'preludeWash',
+                            count: continuationWash - beforeWash,
+                            washes: continuationWash, cost: continuationCost,
+                            locks: [sourceConflict, currentCarrier],
+                        });
+                        nextConflict = found;
+                    }
+                    if (nextConflict != null) {
+                        steps.push({
+                            type: 'lockConflict', id: nextConflict,
+                            washes: continuationWash, cost: continuationCost,
+                            locks: [currentCarrier, sourceConflict],
+                            noWash: true,
+                        });
+                    }
+                    // 游戏界面锁定后会把「冲突 → 载体」排到前面；
+                    // 场内身份不变，只归一化显示/执行顺序。
+                    const orderedLocks = [sourceConflict]
+                        .concat(nextConflict == null ? [] : [nextConflict])
+                        .concat([currentCarrier])
+                        .map(Number)
+                        .filter((id, at, all) => all.indexOf(id) === at);
+                    const lockedTalents = orderedLocks.filter(id =>
+                        continuationState.talents.includes(id));
+                    continuationState.talents = lockedTalents.concat(
+                        continuationState.talents.filter(id => !lockedTalents.includes(id)));
+                    const positionNow = continuationState.talents.indexOf(currentCarrier);
+                    const replaceLocks = [sourceConflict]
+                        .concat(nextConflict == null ? [] : [nextConflict])
+                        .concat([currentCarrier]);
+                    const canContinueAtAnchor = positionNow >= 0
+                        && e.replaceablePositions(continuationState, replaceLocks)
+                            .includes(positionNow);
+                    if (root.__RC_TRACE) {
+                        console.log(`[RC][pity-continuation] C#${index + 1} ` +
+                            `from=${nameOf(currentCarrier)} to=${nameOf(nextCarrier)} ` +
+                            `conflict=${nameOf(sourceConflict)} nextConflict=` +
+                            `${nextConflict == null ? '无' : nameOf(nextConflict)} ` +
+                            `pos=${positionNow} can=${canContinueAtAnchor} ` +
+                            `field=[${continuationState.talents.map(nameOf).join('、')}] ` +
+                            `locks=[${replaceLocks.map(nameOf).join('、')}]`);
+                    }
+                    if (!canContinueAtAnchor) break;
+                    let continued;
+                    try {
+                        continued = e.replace(continuationState, positionNow, replaceLocks);
+                    } catch (error) { break; }
+                    if (Number(continued.addedId) !== nextCarrier) {
+                        if (root.__RC_TRACE) {
+                            console.log(`[RC][pity-continuation] actual=` +
+                                nameOf(continued.addedId) + ` expected=` + nameOf(nextCarrier));
+                        }
+                        break;
+                    }
+                    continuationState = continued.state;
+                    steps.push({
+                        type: 'exchange', from: currentCarrier,
+                        to: nextCarrier,
+                        washes: continuationWash, cost: continuationCost,
+                        replaceLocks: replaceLocks.slice(),
+                        locks: replaceLocks.slice(),
+                    });
+                    currentCarrier = nextCarrier;
+                    consumedCount = index + 1;
+                    if (nextCarrier === 251) break;
+                }
+                hits.push({
+                    kind: 'exchange',
+                    pityCarrierExchange: true,
+                    zi, n: 0, lead: 14, carrier: pityId, first, seed,
+                    conflict: lowId, lowId,
+                    startWash: start.washes, washes: replayWash,
+                    cost: continuationCost,
+                    washes: continuationWash,
+                    steps,
+                    initialConsumed: consumedCount,
+                    chain: continuationChain,
+                    pityCarrierId: pityId, pityCarrierConflictId: lowId,
+                });
+            }
+        }
+        hits.sort((a, b) => Number(a.cost) - Number(b.cost));
+        return hits;
     }
 
     // ────────────────────── ③④⑤ 五条规则校验（链筛选） ──────────────────────
@@ -912,7 +1258,14 @@
         const out = [];
         for (const p of (seq || [])) {
             if (p.no < minTailNo) continue;
-            if (!targets.includes(p.id) && !p.shenmai) continue;
+            // 三紫把“收尾”统一为“收尾锚点”：除目标紫和非目标神脉外，
+            // 可置换的非目标自然紫也进入候选。四紫保持原逻辑不变。
+            const ordinaryTailAnchor = K <= 3
+                && !targets.includes(p.id)
+                && !p.shenmai
+                && !p.fromPity
+                && Number(p.id) !== 251;
+            if (!targets.includes(p.id) && !p.shenmai && !ordinaryTailAnchor) continue;
             out.push(p);
         }
         return out;
@@ -1230,10 +1583,13 @@
         // 不能拿 startWash=0 把定种子前的早期副本误当成可用目标。
         const fixWash = Number(seedOpt && (seedOpt.washes != null
             ? seedOpt.washes : seedOpt.startWash)) || 0;
+        const pinnedSeedTargets = new Set((seedOpt && seedOpt.pinnedTargetIds || [])
+            .map(Number));
         const naturalTargets = TG.filter(id => {
             // 保底位只记录位置，不把静态显示的名字当固定目标。
             // 保底位对应的动态目标由链位映射，而不是 naturalTargets。
-            return seqUp.some(x => x.id === id && !x.fromPity
+            return pinnedSeedTargets.has(Number(id))
+                || seqUp.some(x => x.id === id && !x.fromPity
                 && (fixWash <= 0 || Number(x.wash) >= fixWash));
         });
         // 场上脉使用独立的 F#/「场上#n」编号，不能与置换链 C#n 混为一谈。
@@ -1259,6 +1615,285 @@
         // 持续锁到保底位太耗丹，作为收尾已经淘汰。
         if (tail.fromPity && !TG.includes(tail.id) && !tail.shenmai) {
             return { ok: false, reason: '保底紫收尾已移除（太耗丹）' };
+        }
+        // 三紫统一收尾锚点：非目标普通紫与非目标神脉共用同一套
+        // “C#last 直接落点 → 再向前倒插”逻辑，仅冲突来源不同。
+        // 四紫仍走后面的原有分支。
+        if (K <= 3 && !TG.includes(Number(tail.id))) {
+            tailKind = 'anchor';
+            if (!tail.shenmai && !isSequenceAnchorEligible(tail, false)) {
+                return { ok: false, reason: '三紫收尾锚点不可置换：缺少前置冲突' };
+            }
+            const fixWash = Number(seedOpt && (seedOpt.washes != null
+                ? seedOpt.washes : seedOpt.startWash)) || 0;
+            const initialEntries = (ctx.raw.talents || []).map((item, index) => ({
+                id: Number(item && item.id != null ? item.id : item),
+                fieldNo: index + 1,
+                locked: !!(item && typeof item === 'object' && item.locked),
+            })).filter(item => item.id > 0);
+            const initFieldIds = initialEntries.map(item => item.id);
+            const pinned = new Set((seedOpt && seedOpt.pinnedTargetIds || []).map(Number));
+            const combineNatural = anchorMode === 'combined';
+            const naturalFixedSet = new Set((naturalFixedIds || []).map(Number));
+            const naturalTargets = TG.filter(id => seqUp.some(event =>
+                Number(event.id) === Number(id) && !event.fromPity
+                && (fixWash <= 0 || Number(event.wash) >= fixWash)));
+            const seedFirst = Number(chain[0]) || 0;
+            const initialConsumedRaw = Number(seedOpt && seedOpt.initialConsumed);
+            const chainNeedStart = Number.isFinite(initialConsumedRaw)
+                ? Math.max(0, Math.min(chain.length - 1, initialConsumedRaw)) : 1;
+            const baseTargets = new Set(initFieldIds);
+            if (TG.includes(seedFirst)) baseTargets.add(seedFirst);
+            if (combineNatural) {
+                for (const id of naturalTargets) {
+                    if (naturalFixedSet.has(Number(id))) baseTargets.add(Number(id));
+                }
+            }
+            let fullEnd = -1;
+            for (let i = 0; i < chain.length; i++) {
+                const have = new Set(baseTargets);
+                for (let j = 0; j <= i; j++) have.add(Number(chain[j]));
+                if (TG.every(id => have.has(Number(id)))) {
+                    fullEnd = i;
+                    break;
+                }
+            }
+            if (fullEnd < chainNeedStart) {
+                return { ok: false, reason: '三紫收尾锚点：完整置换链盖不住全部目标' };
+            }
+            const fullNeed = [];
+            for (let i = chainNeedStart; i <= fullEnd; i++) {
+                const id = Number(chain[i]);
+                if (combineNatural && naturalFixedSet.has(id)
+                    && naturalTargets.includes(id)) continue;
+                fullNeed.push({ idx: i, id });
+            }
+            if (!fullNeed.length) {
+                return { ok: false, reason: '三紫收尾锚点：没有可倒插的链位' };
+            }
+            const seedCarrierNo = Number(seedOpt && seedOpt.anchorNo) || (() => {
+                const carrierId = Number(seedOpt && seedOpt.carrier) || 0;
+                if (!carrierId) return 0;
+                const hit = seq.find(event => Number(event.id) === carrierId);
+                return hit ? Number(hit.no) || 0 : 0;
+            })();
+            const anchorCands = [];
+            for (let i = seqUp.length - 1; i >= 0; i--) {
+                const event = seqUp[i];
+                if (Number(event.id) === 251) continue;
+                if (combineNatural && TG.includes(Number(event.id))
+                    && naturalFixedSet.has(Number(event.id))) continue;
+                if (event !== tail && !isSequenceAnchorEligible(event, !!event.shenmai)) continue;
+                if (seedCarrierNo > 0
+                    && Number(event.id) === Number(seedOpt && seedOpt.carrier)
+                    && Number(event.no) === seedCarrierNo) continue;
+                anchorCands.push({
+                    id: Number(event.id),
+                    no: Number(event.no) || 0,
+                    ordinal: occurrenceOrdinalByNo.get(Number(event.no) || 0) || 0,
+                    isPity: !!event.fromPity,
+                    pityOrdinal: pityOrdinalByNo.get(Number(event.no) || 0) || 0,
+                    conflictId: Number(event.conflictId) || 0,
+                    conflictWash: Number(event.conflictWash) || 0,
+                    wash: Number(event.wash) || 0,
+                    shenmai: !!event.shenmai,
+                    event,
+                });
+            }
+            const tailCandidate = anchorCands.find(item =>
+                Number(item.no) === Number(tail.no)
+                && Number(item.id) === Number(tail.id));
+            if (!tailCandidate) {
+                return { ok: false, reason: '三紫收尾锚点：收尾位置未进入锚点表' };
+            }
+            // 长链应从靠前锚点开始铺开，最后一步固定回 O#k；
+            // 不能只取 O#k 附近锚点，否则前半条链会被硬塞到少数锚点上。
+            const maxSameAnchorRun = 4;
+            const allAnchorsAsc = anchorCands.slice().reverse()
+                .filter(item => Number(item.no) <= Number(tail.no));
+            const preferredAnchorsAsc = allAnchorsAsc.filter(item =>
+                !item.shenmai || TG.includes(Number(item.id)));
+            const preferredCapacity = preferredAnchorsAsc.reduce((sum, item) =>
+                sum + (item.isPity ? maxSameAnchorRun + 1
+                    : item.shenmai ? 2 : maxSameAnchorRun), 0);
+            const anchorPoolAsc = preferredCapacity >= fullNeed.length
+                ? preferredAnchorsAsc : allAnchorsAsc;
+            const requiredAnchorGroups = Math.max(2,
+                Math.ceil(fullNeed.length / maxSameAnchorRun));
+            const earlyAnchorCount = Math.min(anchorPoolAsc.length,
+                requiredAnchorGroups + 2);
+            const anchorsAsc = anchorPoolAsc.slice(0, earlyAnchorCount);
+            if (!anchorsAsc.some(item => Number(item.no) === Number(tail.no))) {
+                anchorsAsc.push(tailCandidate);
+            }
+            const anchorCapacity = anchorsAsc.reduce((sum, item) =>
+                sum + (item.isPity ? maxSameAnchorRun + 1
+                    : item.shenmai ? 2 : maxSameAnchorRun), 0);
+            if (fullNeed.length > anchorCapacity) {
+                return { ok: false, reason: '三紫收尾锚点：长链所需锚点容量不足' };
+            }
+            const tailIndex = anchorsAsc.findIndex(item =>
+                Number(item.no) === Number(tail.no)
+                && Number(item.id) === Number(tail.id));
+            if (tailIndex < 0 || tailIndex !== anchorsAsc.length - 1) {
+                return { ok: false, reason: '三紫收尾锚点：锚点顺序没有止于 O#k' };
+            }
+            const groups = [];
+            const picked = [];
+            const sameRunAtEnd = () => {
+                if (!picked.length) return 0;
+                const lastNo = Number(picked[picked.length - 1].no);
+                let run = 0;
+                for (let i = picked.length - 1; i >= 0; i--) {
+                    if (Number(picked[i].no) !== lastNo) break;
+                    run++;
+                }
+                return run;
+            };
+            const visit = start => {
+                if (groups.length >= 64) return;
+                if (picked.length === fullNeed.length) {
+                    if (Number(picked[picked.length - 1].no) === Number(tail.no)) {
+                        groups.push(picked.slice());
+                    }
+                    return;
+                }
+                for (let i = start; i < anchorsAsc.length; i++) {
+                    if (picked.length && Number(anchorsAsc[i].no)
+                        === Number(picked[picked.length - 1].no)
+                        && sameRunAtEnd() >= maxSameAnchorRun) continue;
+                    // 最后一项必须是 O#k，提前保留收尾锚点。
+                    if (picked.length === fullNeed.length - 1
+                        && Number(anchorsAsc[i].no) !== Number(tail.no)) continue;
+                    picked.push(anchorsAsc[i]);
+                    visit(i);
+                    picked.pop();
+                }
+            };
+            visit(0);
+            const rank = sequence => sequence.reduce((count, anchor, index) =>
+                count + (index === 0 || Number(anchor.no) !== Number(sequence[index - 1].no)
+                    ? 1 : 0), 0);
+            // 先让链首落在更早的可用锚点，避免把整条链都堆到 O#k
+            // 上导致执行阶段没有足够载体/冲突；同起点再优先少分组。
+            groups.sort((a, b) => Number(a[0].no) - Number(b[0].no)
+                || rank(a) - rank(b)
+                || Number(a[a.length - 1].no) - Number(b[b.length - 1].no));
+            const mapItems = anchors => fullNeed.map((item, index) => {
+                const anchor = anchors[index];
+                return {
+                    target: item.id,
+                    idx: item.idx,
+                    anchor: anchor.id,
+                    anchorPityId: anchor.isPity ? anchor.id : 0,
+                    anchorIsPity: !!anchor.isPity,
+                    anchorPityOrdinal: Number(anchor.pityOrdinal) || 0,
+                    anchorNo: anchor.no,
+                    anchorOrdinal: anchor.ordinal,
+                    anchorConflictId: Number(anchor.conflictId) || 0,
+                    anchorConflictWash: Number(anchor.conflictWash) || 0,
+                    anchorWash: anchor.wash,
+                };
+            });
+            let fullInsertMap = null;
+            for (const anchors of groups.slice(0, 24)) {
+                const mapped = mapItems(anchors);
+                let previousAnchorNo = 0;
+                let valid = true;
+                for (const item of mapped) {
+                    const anchorNo = Number(item.anchorNo) || 0;
+                    if (anchorNo <= 0 || anchorNo < previousAnchorNo) {
+                        valid = false;
+                        break;
+                    }
+                    previousAnchorNo = anchorNo;
+                    const event = seqUp.find(p => Number(p.no) === anchorNo);
+                    if (!event || !event.shenmai) continue;
+                    const priorTargetShen = mapped.some(prev =>
+                        Number(prev.idx) < Number(item.idx)
+                        && TG.includes(Number(prev.target))
+                        && isShen(Number(prev.target))
+                        && Number(prev.anchorWash || 0) < Number(item.anchorWash || 0))
+                        || initFieldIds.some(id => pinned.has(Number(id))
+                            && TG.includes(Number(id)) && isShen(Number(id)));
+                    if (priorTargetShen) {
+                        item.conflictShenId = 0;
+                        item.conflictShenRole = 'prior-target';
+                        item.releaseConflictAfterUse = false;
+                        continue;
+                    }
+                    const fallback = initialEntries.find(entry =>
+                        !TG.includes(Number(entry.id))
+                        && isShen(Number(entry.id))
+                        && Number(entry.id) !== Number(event.id));
+                    if (!fallback) {
+                        valid = false;
+                        break;
+                    }
+                    item.conflictShenId = Number(fallback.id);
+                    item.conflictShenFieldNo = Number(fallback.fieldNo) || 0;
+                    item.conflictShenRole = 'non-target-fallback';
+                    item.releaseConflictAfterUse = true;
+                }
+                if (valid) {
+                    fullInsertMap = mapped;
+                    break;
+                }
+            }
+            if (!fullInsertMap) {
+                return { ok: false, reason: '三紫收尾锚点：倒插锚点不足' };
+            }
+            const targetActivationNo = {};
+            const targetActivationOrdinal = {};
+            if (combineNatural) {
+                for (const id of naturalTargets) {
+                    if (!naturalFixedSet.has(Number(id))) continue;
+                    const natural = seqUp.find(p => Number(p.id) === Number(id)
+                        && !p.fromPity && (fixWash <= 0 || Number(p.wash) >= fixWash));
+                    if (!natural) continue;
+                    targetActivationNo[Number(id)] = Number(natural.no) || 0;
+                    targetActivationOrdinal[Number(id)] =
+                        occurrenceOrdinalByNo.get(Number(natural.no) || 0) || 0;
+                }
+            }
+            const executionChainFull = chain.slice(0, fullEnd + 1).map(Number);
+            const planAnchor = Number(fullInsertMap[0].anchor) || 0;
+            return {
+                ok: true,
+                tail,
+                tailKind,
+                tailAnchorMapped: true,
+                end: fullEnd,
+                chainTargets,
+                tailTarget: 0,
+                planAnchor,
+                insertMap: fullInsertMap,
+                executionChain: executionChainFull,
+                executionChainFull,
+                endFull: fullEnd,
+                fullInsertMap,
+                fullInsertMapVariants: [fullInsertMap],
+                chainExtension: {
+                    currentChainValid: true,
+                    anchorCapacitySufficient: true,
+                    lengtheningAllowed: false,
+                    attempted: false,
+                    accepted: 0,
+                    rejected: 0,
+                    reason: 'three-target-tail-anchor',
+                },
+                fullPlanAnchor: planAnchor,
+                releaseInsertMap: fullInsertMap,
+                releasePlanAnchor: planAnchor,
+                releaseTargetActivationNo: Object.assign({}, targetActivationNo),
+                releaseTargetActivationOrdinal: Object.assign({}, targetActivationOrdinal),
+                tailNo: Number(tail.no) || 0,
+                strictTargetOccurrences: true,
+                naturalFixedTargets: combineNatural
+                    ? naturalTargets.filter(id => naturalFixedSet.has(Number(id))) : [],
+                targetActivationNo,
+                targetActivationOrdinal,
+            };
         }
         if (TG.includes(tail.id)) {
             tailKind = 'target';
@@ -1466,6 +2101,14 @@
                         && TG.includes(Number(prev.target))
                         && isShen(Number(prev.target))
                         && Number(prev.anchorWash || 0) < Number(item.anchorWash || 0))
+                        // 由原始脉序天然提供、并已在前方锁定的目标神脉，
+                        // 同样可以作为当前神脉锚点的前置互冲脉。
+                        || Array.from(naturalFixedSet).some(id =>
+                            TG.includes(Number(id)) && isShen(Number(id))
+                            && seqUp.some(event =>
+                                Number(event.id) === Number(id)
+                                && Number(event.wash) > 0
+                                && Number(event.wash) < Number(item.anchorWash || 0)))
                         || initFieldIds.some(id => pinned.has(Number(id))
                             && TG.includes(Number(id)) && isShen(Number(id)));
                     if (priorTargetShen) {
@@ -1691,6 +2334,11 @@
                     && naturalTargets.includes(id)) continue;
                 fullNeed.push({ idx: i, id });
             }
+            if (root.__RC_TRACE) {
+                console.log(`[RC][target-anchors] tail=O#${Number(tail.no)}:${nameOf(tail.id)} ` +
+                    `need=${fullNeed.map(item => `C#${item.idx + 1}:${nameOf(item.id)}`).join('→')} ` +
+                    `anchors=${anchorCands.map(item => `O#${item.no}:${nameOf(item.id)}`).join('/')}`);
+            }
             // 倒插神脉锚点的优先级：
             //   1. 前置已有目标神脉 → 无损互冲，直接使用；
             //   2. 否则先尝试完全跳过神脉锚点；
@@ -1705,14 +2353,26 @@
                 const anchorsAsc = candidates.slice().reverse();
                 const suffixCount = fullNeed.length - firstTargetIndex;
                 if (anchorsAsc.length < suffixCount + 1) return null;
-                const anchors = fullNeed.map((item, index) =>
-                    index < firstTargetIndex
-                        ? anchorsAsc[0]
-                        : anchorsAsc[1 + index - firstTargetIndex]);
-                const candidateMap = mapItemsToAnchorList(fullNeed, anchors);
-                return candidateMap.every(item => Number(item.anchor) > 0)
-                    && validInsertMap(candidateMap, allowNonTargetShenFallback)
-                    ? candidateMap : null;
+                // 固定种子路线允许第一个锚点连续承接链前缀，但后缀仍必须
+                // 优先使用靠后的锚点。不能把目标紫从
+                // O#9 回退到 O#7，只因为前缀需要单独占用 O#1。
+                // 从“锚点列表最右端”开始试后缀；只有靠后的后缀不合法时，
+                // 才逐步向前退，保证同一条合法链优先采用更晚的目标锚点。
+                for (let suffixStart = anchorsAsc.length - suffixCount;
+                    suffixStart >= 1; suffixStart--) {
+                    const suffixAnchors = anchorsAsc.slice(
+                        suffixStart, suffixStart + suffixCount);
+                    const anchors = fullNeed.map((item, index) =>
+                        index < firstTargetIndex
+                            ? anchorsAsc[0]
+                            : suffixAnchors[index - firstTargetIndex]);
+                    const candidateMap = mapItemsToAnchorList(fullNeed, anchors);
+                    if (candidateMap.every(item => Number(item.anchor) > 0)
+                        && validInsertMap(candidateMap, allowNonTargetShenFallback)) {
+                        return candidateMap;
+                    }
+                }
+                return null;
             };
             let fullInsertMap = mapTargetsToAnchors(fullNeed);
             let fullMapValid = fullNeed.length <= anchorCands.length
@@ -2094,6 +2754,7 @@
         const anchorLead = Math.max(10, Number(p.anchorLead) || 120);
         const conflictTtl = Math.max(60, Number(p.conflictTtl) || 260);
         const tailTarget = Number(p.tailTarget) || 0;
+        const tailAnchorMapped = !!p.tailAnchorMapped;
         const releaseSeedTarget = !!p.releaseSeedTarget;
         // 首次换果被释放后，执行语义从“链目标必须置换”切换为“链目标也可天然重捕”。
         // 萧佩吟 3161 路线就是先释放神力，随后天然锁玄阳，再开四槽。
@@ -3070,11 +3731,11 @@
                 if (anchorPurple != null && !s.talents.includes(anchorPurple)) {
                     // 中间链位也属于固定倒插链，不能在别的载体上提前烧掉。
                     // 必须等当前场序重新扫描出的锚点及最近冲突成立。
-                    if (!tailStage) return acted ? 'acted' : 'none';
+                    if (!tailStage || tailAnchorMapped) return acted ? 'acted' : 'none';
                 }
                 // ★ 靠后优先：后面还有可用锚点 → 不在链位上吃目标。
                 //   链位（毁脉点）只做连续置换+毁脉；目标留到后面的锚点再插（省丹）。
-                if (mode === 'keep' && !tailStage && anchorPurple == null) {
+                if (mode === 'keep' && (!tailStage || tailAnchorMapped) && anchorPurple == null) {
                     // ★ 倒插锚点（insertMap 优先）：当前目标的锚点 = 原始脉里要插到的那条紫
                     const im = insertAt(consumed, next);
                     if (root.__RC_TRACE && !im) {
@@ -3103,6 +3764,13 @@
                     // 此时当前载体就是这条锚点血缘，不能再回头等原来的刀法。
                     const continuingAtAnchor = anchorPurple != null && from === anchorPurple;
                     const anchorAlreadyOnField = anchorPurple != null && s.talents.includes(anchorPurple);
+                    if (root.__RC_TRACE && mode === 'keep') {
+                        console.log(`[RC][keep-gate] next=${nameOf(next)} consumed=${consumed} ` +
+                            `thisAnchor=${nameOf(thisAnchor)} carrier=${carrier ? nameOf(carrier) : '无'} ` +
+                            `anchorPurple=${anchorPurple ? nameOf(anchorPurple) : '无'} ` +
+                            `continuing=${continuingAtAnchor} onField=${anchorAlreadyOnField} ` +
+                            `pityTarget=${isPityTarget} strict=${strictTargetOccurrences}`);
+                    }
                     if ((thisAnchor > 0 || thisAnchorIsPity) && (carrier == null || carrier !== thisAnchor)
                         && !continuingAtAnchor && !anchorAlreadyOnField
                         && !(!strictTargetOccurrences && isPityTarget)) {
@@ -3232,6 +3900,28 @@
                 const continuesMappedAnchor = !!(currentMapped && followingMapped
                     && Number(currentMapped.anchor) === Number(followingMapped.anchor)
                     && !!currentMapped.anchorIsPity === !!followingMapped.anchorIsPity);
+                // 同一锚点上，当前链位换出的非神脉就是下一链位的载体。
+                // 只有当前载体是神脉、且已有一个锁定的目标神脉可做互冲时，
+                // 才允许占两个空槽继续；普通紫不能因此获得额外连续置换。
+                const shenConflictAllowsExtraContinuation = e.isShenmai(from)
+                    && held.some(id => e.isShenmai(Number(id)));
+                if (mode !== 'keep' && continuesMappedAnchor
+                    && shenConflictAllowsExtraContinuation
+                    && !e.isShenmai(next)
+                    && !conflicts.some(c => e.talentType(c.id) === e.talentType(next))) {
+                    const pre = preloadConflict(e.talentType(next), from, true);
+                    if (root.__RC_TRACE) {
+                        console.log(`[RC][same-anchor-preload] from=${nameOf(from)} ` +
+                            `next=${nameOf(next)} type=${e.talentType(next)} ` +
+                            `pre=${pre == null ? 'null' : (pre < 0 ? pre : nameOf(pre))}`);
+                    }
+                    if (pre === -1) { carrier = origCarrier; return 'bail'; }
+                    if (pre === -2 || pre == null) {
+                        carrier = origCarrier;
+                        rollbackPreloadedConflicts(conflictsBeforePreload);
+                        break;
+                    }
+                }
                 if (mode !== 'keep' && !e.isShenmai(next)
                     && !conflicts.some(c => e.talentType(c.id) === e.talentType(next))
                     && following != null && !TG.includes(Number(following))) {
@@ -3375,7 +4065,27 @@
                 // 连续置换必须始终留出 3 个可洗槽（冲突、载体、下一洗）。
                 // 已锁目标后只剩两槽时，本锚点仍可完成这一次置换，但不能
                 // 把换果继续当载体原地连换。典型：于小雪 8# 已锁岿然+术绍。
-                if (freeSlots() < 3) { carrier = null; break; }
+                // 同一倒插锚点的连续置换段通常仍要留 3 个空槽；
+                // 例外是神脉互冲：冲突由已锁定的目标神脉提供，少占一个冲突格。
+                // 商昊乾 O#9 九阴→天人→转世记录即此特例。
+                const extraSlotByShenConflict = continueAnchorLineage
+                    && e.isShenmai(from)
+                    && held.some(id => e.isShenmai(Number(id)));
+                const continuousLocks = new Set([
+                    ...held,
+                    ...conflicts.map(c => Number(c.id)),
+                    ...(carrier == null ? [] : [Number(carrier)]),
+                ].filter(id => id > 0));
+                // 连续置换必须在锁定目标、冲突和当前载体后，仍留下
+                // 至少一条可洗槽。神脉互冲时，冲突由已锁定的目标神脉提供，
+                // 不再额外占用一个冲突格，所以有效锁数减一。
+                const effectiveLockCount = continuousLocks.size
+                    - (extraSlotByShenConflict ? 1 : 0);
+                const totalSlots = zi >= 154 ? 4 : 3;
+                if (totalSlots - effectiveLockCount < 1) {
+                    carrier = null;
+                    break;
+                }
                 releaseUnneededConflicts();
                 acted = true;
             }
@@ -3398,6 +4108,14 @@
                         // ★ 定种子之前的保底紫不属于本链（链从定种子时刻起算），不推进 consumed
                     }
                 }
+                if (stp.type === 'preludeWash' && dw > 0) {
+                    const preStep = Object.assign({}, stp, {
+                        washes, cost, count: dw,
+                        locks: (stp.locks || []).slice(),
+                    });
+                    pushStep(preStep);
+                    preStep.locks = (stp.locks || []).slice();
+                }
                 if (stp.type === 'upgrade' && zi === 153 && Number(stp.toZi) >= 154) {
                     zi = 154; e = engineOf(raw, zi);
                     s = e.upgradeToFour(Object.assign({}, s, { zizhi: zi }));
@@ -3408,9 +4126,21 @@
                 } else if (stp.type === 'lockCarrier') {
                     carrier = Number(stp.id);
                     pushStep(Object.assign({}, stp, { washes, cost }));
+                } else if (stp.type === 'lock') {
+                    const id = Number(stp.id);
+                    if (TG.includes(id) && s.talents.includes(id)
+                        && !held.includes(id)) {
+                        held.push(id);
+                    }
+                    pushStep(Object.assign({}, stp, { washes, cost }));
                 } else if (stp.type === 'exchange') {
                     const pos = s.talents.indexOf(Number(stp.from));
                     const locks = (stp.locks || []).slice();
+                    if (root.__RC_TRACE) {
+                        console.log(`[RC][seed-exchange] from=${nameOf(stp.from)} ` +
+                            `pos=${pos} locks=[${locks.map(nameOf).join('、')}] ` +
+                            `field=[${s.talents.map(nameOf).join('、')}]`);
+                    }
                     if (pos < 0 || !e.replaceablePositions(s, locks).includes(pos)) return bail('定种子置换不可达');
                     const r = e.replace(s, pos, locks);
                     s = r.state; exchanges++;
@@ -4145,7 +4875,10 @@
         //   每个组合都完整回放，实际计算锁脉、冲突、烧脉、倒插和丹耗。
         if (TG.length >= 3 && !o.anchorVariantsDone) {
             const fixWash = Number(seedOpt && seedOpt.washes) || 0;
-            const naturalCandidates = TG.filter(id => (cctx.seq || []).some(p =>
+            const pinnedForNatural = new Set((seedOpt && seedOpt.pinnedTargetIds || [])
+                .map(Number));
+            const naturalCandidates = TG.filter(id => pinnedForNatural.has(Number(id))
+                || (cctx.seq || []).some(p =>
                 Number(p.id) === Number(id) && !p.fromPity
                 && Number(p.wash) >= fixWash));
             let variantBest = null;
@@ -4198,7 +4931,9 @@
                 ? `O#${tail.no}:${nameOf(tail.id)}@${tail.wash}`
                 : 'none').join('；')}`);
         }
-        if (TG.length <= 3 && !seedAnchorNo) tails.push(null);
+        // 三紫现在统一选择收尾锚点；默认不再生成“无收尾压缩链”。
+        // 仅调试/旧回归显式要求时才保留 null 分支。
+        if (TG.length <= 3 && !seedAnchorNo && o.includeNoTail) tails.push(null);
         if (o.forcedTailNone) {
             tails = [null];
         } else if (o.forcedTailNo != null) {
@@ -4338,7 +5073,9 @@
                         // 先按总预算完整跑，拿到实际收尾预留后再校验收尾前上界。
                         budget, bestCost, headBudget: budget,
                         maxWash: o.maxWash || 6000, M: Number(o.M) || 16, lead,
-                        tailTarget: chk.tailTarget, seq: cctx.seq,
+                        tailTarget: chk.tailTarget,
+                        tailAnchorMapped: !!chk.tailAnchorMapped,
+                        seq: cctx.seq,
                         chainEnd: chainValue.end,
                         planAnchorId: chainValue.planAnchor != null ? chainValue.planAnchor : chk.planAnchor,
                         insertMap: chainValue.insertMap || chk.insertMap || [],
@@ -4730,26 +5467,62 @@
                 }
             }
         }
-        // —— 路径E-2（第三条 Case 2）：欧气种子未固定 → 裸洗到首条保底紫定种子 → 定收尾+倒插 ——
-        //   ★ 不限首条是否保底紫：只要原始脉序里有保底紫就试（薛龙城=首条非保底紫，但靠这条自然洗到保底紫定种子）
-        if (want('E') && !seedState.fixed && ctx.seq.some(p => p.fromPity) && root.AutoWash2SeedPlanner && typeof root.AutoWash2SeedPlanner.runToFirstPity === 'function') {
-            const jr = root.AutoWash2SeedPlanner.runToFirstPity(raw, zi0, 0);   // 0 跳 = 裸洗到首条保底紫
+        // —— 路径E-3：保底载体置换定种子 ——
+        // 先锁首保底前的同类型低阶冲突，保底紫出现后身份不变，
+        // 再锁保底紫本身做一次种子置换。商昊乾 1217 记录走的就是此分支。
+        if (want('E') && !seedState.fixed) {
+            const pityCarrierSeeds = pityCarrierExchangeSeeds(raw, TG, zi0, {
+                budget: headBudget > 0 ? headBudget : budget,
+                maxWash: o.maxWash || 1500,
+                leadWindow: 45,
+            });
+            for (const seedOpt of pityCarrierSeeds) {
+                if (Date.now() > deadline) break;
+                if (headBudget > 0 && Number(seedOpt.cost) > headBudget) continue;
+                if (bestCost > 0 && Number(seedOpt.cost) >= bestCost) continue;
+                seedOpt.chain = [Number(seedOpt.first)]
+                    .concat(queueOf(raw, zi0, Number(seedOpt.seed), 24));
+                const ex = eatFromSeed(ctx, raw, TG, seedOpt,
+                    Object.assign({}, o, {
+                        budget, bestCost, tailReserve, headBudget, observedTailReserves,
+                        deadline, chainCheckCache, sequenceCache,
+                        onCandidateRoute: route =>
+                            publishCandidate(route, 'pity-carrier-exchange'),
+                    }));
+                if (!ex || !ex.ok) continue;
+                if (!best || ex.cost < best.cost) {
+                    best = Object.assign({}, ex, {
+                        kind: 'pity-carrier-exchange',
+                        seedOpt,
+                        chain: seedOpt.chain,
+                    });
+                    bestCost = ex.cost;
+                }
+            }
+        }
+
+        // 保留裸洗到保底的旧路线作为回退；优先尝试保底载体定种子，
+        // 避免旧分支的收尾搜索耗尽当前方法时间片。
+        if (want('E') && !seedState.fixed && ctx.seq.some(p => p.fromPity)
+            && root.AutoWash2SeedPlanner
+            && typeof root.AutoWash2SeedPlanner.runToFirstPity === 'function'
+            && Date.now() < deadline && !(best && best.cost <= budget)) {
+            const jr = root.AutoWash2SeedPlanner.runToFirstPity(raw, zi0, 0);
             if (jr && jr.wash != null) {
-                // ★ 裸洗到首条保底紫 = 定种子（保底紫写 luckSeed），不再追加置换；种子定之后统一走倒插
                 const chain2 = [Number(jr.first)].concat(queueOf(raw, zi0, Number(jr.seed), 24));
-                const seedOpt2 = { kind: 'exchange', zi: zi0, n: 0, lead, carrier: 0, chain: chain2, first: Number(jr.first), seed: Number(jr.seed), steps: [], startWash: 0, upgradeBefore: false, a: Number(jr.wash) || 0, d: 0, lowId: 0, washes: Number(jr.wash) || 0, cost: Number(jr.cost) || 0, pityPrelude: true };
-                // 只跳过当前裸洗保底候选，不能 continue 整个 zi0；
-                // 否则后面的吞脉法和无限置换都会被一起跳过。
-                if (!((headBudget > 0 && Number(jr.cost) > headBudget)
-                    || (bestCost > 0 && Number(jr.cost) >= bestCost))) {
+                const seedOpt2 = {kind:'exchange', zi:zi0, n:0, lead, carrier:0,
+                    chain:chain2, first:Number(jr.first), seed:Number(jr.seed), steps:[],
+                    startWash:0, upgradeBefore:false, a:Number(jr.wash)||0, d:0,
+                    lowId:0, washes:Number(jr.wash)||0, cost:Number(jr.cost)||0,
+                    pityPrelude:true};
+                if (!(headBudget > 0 && Number(jr.cost) > headBudget)
+                    && !(bestCost > 0 && Number(jr.cost) >= bestCost)) {
                     const ex2 = eatFromSeed(ctx, raw, TG, seedOpt2,
-                        Object.assign({}, o, {
-                            budget, bestCost, tailReserve, headBudget, observedTailReserves,
-                            deadline, sequenceCache,
-                            onCandidateRoute: route => publishCandidate(route, 'pity-exchange'),
-                        }));
+                        Object.assign({}, o, {budget, bestCost, tailReserve, headBudget,
+                            observedTailReserves, deadline, sequenceCache,
+                            onCandidateRoute: route => publishCandidate(route, 'pity-exchange')}));
                     if (ex2 && (!best || ex2.cost < best.cost)) {
-                        best = Object.assign({}, ex2, { kind: 'pity-exchange', seedOpt: seedOpt2 });
+                        best = Object.assign({}, ex2, {kind:'pity-exchange', seedOpt:seedOpt2});
                         bestCost = ex2.cost;
                     }
                 }
@@ -5174,7 +5947,9 @@
                         // 路径A最终走找收尾+倒插，不提前锁下一个换果冲突。
                         preloadNextConflict: false,
                     });
-                } catch (err) { seedOpt = null; }
+                } catch (err) {
+                    seedOpt = null;
+                }
                 perfStats.seedFixMs = (Number(perfStats.seedFixMs) || 0)
                     + (Date.now() - seedStarted);
                 perfStats.seedFixCalls = (Number(perfStats.seedFixCalls) || 0) + 1;
@@ -5346,7 +6121,8 @@
     }
 
     root.AutoWash2RouteConstructor = Object.freeze({
-        readSequence, seedFixByExchange, chainChecks, execute, verify, planBest,
+        readSequence, seedFixByExchange, pityCarrierExchangeSeeds,
+        chainChecks, execute, verify, planBest,
         queueOf, replayLockSteps, executeLockRoute, executeLockToPity, nameOf, tailCandidates,
         eatFromSeed, normalizeJumpManualRoute, verifyJumpManual,
         readSequenceAfterSeedOpen, nearestConflictBefore, usesNearestConflict,

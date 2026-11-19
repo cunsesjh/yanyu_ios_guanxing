@@ -39,11 +39,38 @@ class DesktopTests(unittest.TestCase):
         reopened = Store(self.tmp.name, FakeProtector())
         self.assertEqual(reopened.selected()['id'], result['row']['id'])
         self.assertEqual(reopened.load_snapshot(result['row']['id']), DATA)
-        saved = reopened.load_session()
+        saved = reopened.load_session(result['row']['session_ref'])
         self.assertEqual(saved['headers'], {'ver': '73576'})
-        raw = reopened.session_path.read_bytes()
+        raw = reopened.session_file(result['row']['session_ref']).read_bytes()
         self.assertNotIn(b'fake-session', raw)
         self.assertNotIn(b'never-save', raw)
+
+    def test_history_snapshot_selects_its_own_account_session(self):
+        other_session = dict(SESSION, account='other-account', session='other-session', area='36')
+        first_data = dict(DATA, EncryptID=SESSION['account'])
+        other_data = dict(DATA, EncryptID=other_session['account'],
+                          MainRole={'Name': '另一账号'})
+        first_ref = self.store.save_session(SESSION)
+        first = self.store.save_snapshot(first_data, 'ios', '1', '73576', first_ref)
+        other_ref = self.store.save_session(other_session)
+        other = self.store.save_snapshot(other_data, 'ios', '36', '73576', other_ref)
+
+        reopened = Store(self.tmp.name, FakeProtector())
+        self.assertEqual(reopened.session_for_snapshot(first)['session'], 'fake-session')
+        self.assertEqual(reopened.session_for_snapshot(other)['session'], 'other-session')
+        self.assertNotEqual(first['session_ref'], other['session_ref'])
+        self.assertNotIn('fake-account', json.dumps(first))
+
+    def test_legacy_latest_session_only_matches_its_own_old_snapshot(self):
+        legacy = json.dumps(SESSION).encode()
+        self.store.session_path.write_bytes(self.store.protector.protect(legacy))
+        matching = self.store.save_snapshot(dict(DATA, EncryptID=SESSION['account']),
+                                            'ios', '1', '73576')
+        other = self.store.save_snapshot(dict(DATA, EncryptID='other-account'),
+                                         'ios', '1', '73576')
+        self.assertEqual(self.store.session_for_snapshot(matching)['session'], 'fake-session')
+        self.assertIsNone(self.store.session_for_snapshot(other))
+        self.assertTrue(self.store.session_file(self.store.session_ref(SESSION)).is_file())
 
     def test_theme_preference_is_separate_from_snapshot_selection(self):
         row = self.store.save_snapshot(DATA, 'ios', '1', '73576')
@@ -72,14 +99,14 @@ class DesktopTests(unittest.TestCase):
             self.store.mark_release_notes_seen('')
 
     def test_failed_refresh_keeps_previous_snapshot_and_session(self):
-        self.store.save_session(SESSION)
+        session_ref = self.store.save_session(SESSION)
         row = self.store.save_snapshot(DATA, 'ios', '1', '73576')
-        before = self.store.session_path.read_bytes()
+        before = self.store.session_file(session_ref).read_bytes()
         with patch('desktop.service.retrieve.fetch', side_effect=ValueError('登录会话已失效')):
             with self.assertRaises(ValueError):
                 DownloadService(self.store).download(dict(SESSION, session='other-account'))
         self.assertEqual(self.store.selected()['id'], row['id'])
-        self.assertEqual(self.store.session_path.read_bytes(), before)
+        self.assertEqual(self.store.session_file(session_ref).read_bytes(), before)
         self.assertEqual(len(self.store.list_snapshots()), 1)
 
     def test_har_download_falls_back_to_complete_offline_snapshot(self):
@@ -93,7 +120,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('73680', result['warning'])
         self.assertIsNone(result['session'])
         self.assertEqual(self.store.load_snapshot(result['row']['id']), DATA)
-        self.assertFalse(self.store.session_path.exists(),
+        self.assertFalse(self.store.sessions.exists(),
                          'an unsuccessful active session must not be persisted as fresh')
 
     def test_har_download_does_not_fallback_to_incomplete_data(self):
@@ -122,8 +149,9 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(self.store.load_snapshot(result['row']['id']), DATA)
 
     def test_delete_snapshot_is_recoverable_and_preserves_session(self):
-        self.store.save_session(SESSION)
-        session = self.store.session_path.read_bytes()
+        session_ref = self.store.save_session(SESSION)
+        session_path = self.store.session_file(session_ref)
+        session = session_path.read_bytes()
         first = self.store.save_snapshot(DATA, 'ios', '1', '73576')
         second = self.store.save_snapshot(DATA, 'ios', '1', '73580')
         with self.assertRaises(ValueError):
@@ -140,7 +168,7 @@ class DesktopTests(unittest.TestCase):
         self.store.delete_snapshot(second['id'])
         self.assertIsNone(Store(self.tmp.name).selected())
         self.assertEqual(self.store.list_snapshots(), [])
-        self.assertEqual(self.store.session_path.read_bytes(), session)
+        self.assertEqual(session_path.read_bytes(), session)
 
     def test_incomplete_or_corrupt_snapshots_are_not_silently_loaded(self):
         row = self.store.save_snapshot(DATA, 'ios', '1', '73576')

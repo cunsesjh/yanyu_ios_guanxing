@@ -1,6 +1,7 @@
 """Atomic desktop state and Windows user-bound session encryption."""
 import ctypes
 from ctypes import wintypes
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -65,8 +66,26 @@ class Store:
         self.root.mkdir(parents=True, exist_ok=True)
         self.protector = protector or WindowsProtector()
         self.session_path = self.root / 'session.dpapi'
+        self.sessions = self.root / 'sessions'
         self.state_path = self.root / 'state.json'
         self.snapshots = self.root / 'snapshots'
+
+    @staticmethod
+    def session_ref(session):
+        identity = '|'.join((
+            str(session.get('platform', '')).strip().lower(),
+            str(session.get('area', '')).strip().lower(),
+            str(session.get('account', '')).strip().lower(),
+        ))
+        if identity == '||':
+            raise ValueError('登录会话缺少账号信息。')
+        return hashlib.sha256(identity.encode('utf-8')).hexdigest()[:32]
+
+    def session_file(self, session_ref):
+        if not isinstance(session_ref, str) or len(session_ref) != 32 \
+                or any(char not in '0123456789abcdef' for char in session_ref):
+            raise ValueError('登录会话引用无效。')
+        return self.sessions / (session_ref + '.dpapi')
 
     def save_session(self, session):
         # Do not retain cookies, unrelated headers, or the original HAR path.
@@ -75,14 +94,44 @@ class Store:
                  ('url', 'account', 'session', 'area', 'protocol_key', 'platform')}
         clean['headers'] = {k: v for k, v in session['headers'].items() if k in COPY_HEADERS}
         encrypted = self.protector.protect(json.dumps(clean).encode())
-        atomic_write(self.session_path, encrypted)
+        session_ref = self.session_ref(clean)
+        atomic_write(self.session_file(session_ref), encrypted)
+        return session_ref
 
-    def load_session(self):
-        if not self.session_path.exists():
-            return None
-        return json.loads(self.protector.unprotect(self.session_path.read_bytes()))
+    def load_session(self, session_ref=None):
+        if session_ref:
+            path = self.session_file(session_ref)
+            if not path.exists():
+                return None
+            return json.loads(self.protector.unprotect(path.read_bytes()))
+        # One-time compatibility with releases that only kept the latest session.
+        if self.session_path.exists():
+            session = json.loads(self.protector.unprotect(self.session_path.read_bytes()))
+            self.save_session(session)
+            return session
+        return None
 
-    def save_snapshot(self, data, platform, area, version):
+    def session_for_snapshot(self, row, data=None):
+        session_ref = row.get('session_ref')
+        if session_ref:
+            return self.load_session(session_ref)
+        # Old snapshots did not record a reference. Match their EncryptID to a
+        # migrated legacy session without exposing the account in meta.json.
+        data = data if data is not None else self.load_snapshot(row['id'])
+        account = data.get('EncryptID') if isinstance(data, dict) else None
+        if account:
+            derived = self.session_ref(dict(platform=row.get('platform'), area=row.get('area'),
+                                            account=account))
+            session = self.load_session(derived)
+            if session:
+                return session
+        legacy = self.load_session()
+        if legacy and account and self.session_ref(legacy) == self.session_ref(dict(
+                platform=row.get('platform'), area=row.get('area'), account=account)):
+            return legacy
+        return None
+
+    def save_snapshot(self, data, platform, area, version, session_ref=None):
         from datetime import datetime, timezone
         self.snapshots.mkdir(exist_ok=True)
         ident = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + uuid.uuid4().hex[:10]
@@ -90,6 +139,9 @@ class Store:
         meta = dict(id=ident, nick=(data.get('MainRole') or {}).get('Name') or '未命名角色',
                     platform=platform, area=str(area), version=str(version), fields=len(data),
                     downloaded_at=datetime.now().astimezone().isoformat(timespec='seconds'))
+        if session_ref:
+            self.session_file(session_ref)  # Validate before persisting metadata.
+            meta['session_ref'] = session_ref
         try:
             atomic_write(pending / 'dat.json', json.dumps(data, ensure_ascii=False).encode())
             atomic_write(pending / 'meta.json', json.dumps(meta, ensure_ascii=False).encode())

@@ -189,6 +189,18 @@
     font-weight: 600;
 }
 
+.neijin-reference-table {
+    table-layout: fixed;
+    min-width: 38rem;
+}
+
+.neijin-reference-note {
+    margin: 0.65rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    line-height: 1.5;
+}
+
 .talent-list {
     display: flex;
     flex-direction: column;

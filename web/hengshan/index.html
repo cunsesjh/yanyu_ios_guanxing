@@ -169,11 +169,19 @@
                     <input id="asFilter" class="as-filter" type="search" placeholder="搜索天赋名（如：一臂之力）">
                     <select id="asScope" class="as-scope">
                         <option value="shop">扫描范围：商店候选</option>
+                        <option value="future-shop">扫描范围：未来商店候选</option>
                         <option value="all">扫描范围：全部弟子</option>
                         <option value="enrolled">扫描范围：在册弟子</option>
                     </select>
+                    <select id="asFutureShopDays" class="as-scope" aria-label="未来商店候选天数" hidden>
+                        <option value="3">未来 3 天</option>
+                        <option value="5" selected>未来 5 天</option>
+                        <option value="10">未来 10 天</option>
+                        <option value="30">未来 30 天</option>
+                    </select>
                     <button id="btnAutoSimRun" class="btn btn-wash-gold" type="button">开始扫描</button>
                 </div>
+                <p class="as-scan-note">默认每天不使用免费刷新，因此每天按 5 名候选计算。</p>
                 <label class="as-check"><input id="asSkipMax" type="checkbox" checked> 跳过已满级（100 级）弟子</label>
                 <label class="as-check"><input id="asAllowSwap" type="checkbox"> 允许清障 / 换运（搜得更全，但明显更慢；那一步要真花 1 次洗的额度）</label>
                 <p id="asRuleSummary" class="hengshan-message"></p>

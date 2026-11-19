@@ -76,7 +76,7 @@
         if (used >= DAILY_REFRESH_LIMIT) return [];   // 今日刷新机会已用完
         var nextState = {
             seed: Number(state.seed),
-            refreshes: used + 1,
+            refreshes: used,
             npc: state.npc || {}
         };
         var raw;
@@ -95,19 +95,68 @@
      * 这里只做标记：source 改成 shop-preview（供界面标注「刷新」、
      * 并让 prepareRecruit 生效），其余一律沿用引擎返回值。
      */
-    function withTemplate(student, index) {
+    function withTemplate(student, index, day) {
         if (!student) return null;
         var seed = Number(student.seed);
         /* 没有有效种子就不合成，避免产生"预测必然出错"的候选 */
         if (!Number.isFinite(seed) || seed <= 0) return null;
         var merged = Object.assign({}, student);
         merged.source = 'shop-preview';
-        merged.key = String(student.key || ('preview-' + index + '-' + seed));
+        merged.key = String(day ? ('future-' + day + '-') : '')
+            + String(student.key || ('preview-' + index + '-' + seed));
         merged.name = student.name || ('刷新候选 ' + (index + 1));
         merged.level = Math.max(1, Number(student.level) || 1);
         merged.exp = Math.max(0, Number(student.exp) || 0);
         merged.talents = ((student.talents) || []).map(Number).filter(function (id) { return id > 0; });
+        if (day) merged.shopDay = day;
         return merged;
+    }
+
+    function normalizeRefreshResult(raw, fallbackState) {
+        var students = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.students) ? raw.students : []);
+        var returnedState = raw && !Array.isArray(raw) && (raw.nextState || raw.next_state || raw.state);
+        var seed = Number(returnedState && returnedState.seed);
+        if (!(seed > 0)) seed = Number(raw && !Array.isArray(raw) && (raw.nextSeed || raw.next_seed || raw.seed));
+        /* 商店候选在刷新时共用刷新后的占位种子；旧内核只返回候选数组时以此继续推演。 */
+        if (!(seed > 0) && students.length) seed = Number(students[0] && students[0].seed);
+        return {
+            students: students,
+            state: {
+                seed: seed > 0 ? seed : Number(fallbackState && fallbackState.seed),
+                refreshes: 0,
+                npc: (returnedState && returnedState.npc)
+                    || (raw && !Array.isArray(raw) && raw.npc)
+                    || (fallbackState && fallbackState.npc)
+                    || {}
+            }
+        };
+    }
+
+    function predictFutureShopStudents(days, initialState) {
+        var count = [3, 5, 10, 30].indexOf(Number(days)) >= 0 ? Number(days) : 5;
+        var start = initialState || getShopState();
+        if (!E || typeof E.shopRefresh !== 'function') return [];
+        if (!start || !(Number(start.seed) > 0)) return [];
+        var state = { seed: Number(start.seed), refreshes: 0, npc: start.npc || {} };
+        var result = [];
+        for (var day = 1; day <= count; day += 1) {
+            var raw;
+            try {
+                raw = E.shopRefresh(DATA, SHOP_DATA, {
+                    seed: state.seed,
+                    refreshes: 0,
+                    npc: state.npc
+                });
+            } catch (error) { break; }
+            var normalized = normalizeRefreshResult(raw, state);
+            if (!normalized.students.length || !(Number(normalized.state.seed) > 0)) break;
+            normalized.students.forEach(function (student, index) {
+                var prepared = withTemplate(student, index, day);
+                if (prepared) result.push(prepared);
+            });
+            state = normalized.state;
+        }
+        return result;
     }
 
     /* 供自动模拟取用：当前候选 + （未刷新时）推算批 */
@@ -151,6 +200,8 @@
         getShopScanStudents: getShopScanStudents,
         getCurrentCandidates: getCurrentCandidates,
         predictRefreshBatch: predictRefreshBatch,
+        predictFutureShopStudents: predictFutureShopStudents,
+        normalizeRefreshResult: normalizeRefreshResult,
         getShopState: getShopState
     });
 

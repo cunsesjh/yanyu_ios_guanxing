@@ -14,6 +14,8 @@ vm.runInContext(fs.readFileSync(path.join(root, 'auto_wash2_worker.js'), 'utf8')
 const model = sandbox.AutoWash2Model;
 assert.equal(typeof sandbox.AutoWash2UnifiedRouteConstructor.constructBest, 'function',
     'the latest upstream unified route constructor must be part of the worker search');
+assert.equal(typeof sandbox.AutoWash2RouteConstructor.pityCarrierExchangeSeeds, 'function',
+    'the pity-carrier seed route must be exposed to the isolated worker');
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(), 120000);
 assert.equal(sandbox.AutoWash2SearchPolicy.initialSearchWindow(1000), 400);
 assert.equal(sandbox.AutoWash2SearchPolicy.searchTimeLimit(4), 900000,
@@ -79,6 +81,55 @@ async function send(type, payload) {
     assert.equal(threeTargetScope.searchScope.maxMainRawWashes, 6000000);
     assert.equal(threeTargetScope.searchScope.maxEventDepth, 160);
     assert.ok(Array.isArray(threeTargetScope.searchScope.limitReasons));
+    // Acquiring a target must retain the earlier low-grade conflict vein.
+    // The 4,802-pill Bu Jingyun route keeps 体壮如牛 while temporarily
+    // replacing the target 岿然顶天.
+    {
+        const sacrificeRaw = {...converted, zizhi:154, talents:[
+            {id:250, locked:true}, {id:179, locked:true},
+            {id:272, locked:true}, {id:243, locked:false},
+        ]};
+        const sacrificeEngine = new sandbox.AutoWash2Engine.Engine(
+            sandbox.TALENT_DATA, sacrificeRaw);
+        const sacrificeState = sacrificeEngine.initialState(sacrificeRaw);
+        const retained = sandbox.AutoWash2Optimizer.retainedLocksAfterTargetGain(
+            sacrificeState, [250, 179], [250, 268, 271, 272]);
+        assert.deepEqual(JSON.parse(JSON.stringify(retained)), [250, 179, 272]);
+        assert.ok(sacrificeEngine.replaceablePositions(sacrificeState, retained)
+            .includes(sacrificeState.talents.indexOf(272)),
+        'retaining the earlier conflict vein must allow temporary target sacrifice');
+    }
+    // End-to-end regression for the documented Bu Jingyun route. The public
+    // optimizer must discover the route, not merely accept its target swap.
+    {
+        const buJingyunRaw = {
+            seed:1877921107, born_talent_rc:19,
+            luck_seed:0, luck_seed_inited:false, tal_lucky:3,
+            zizhi:153, role_id:10060, sex:1, role_level:90,
+            salt:960291, vip:1,
+            role_stats:{str_val:260, con:118, dex:8, int_val:10},
+            global_vars:{repute:854}, save_channel:'',
+            talents:[
+                {id:193, locked:false},
+                {id:250, locked:true},
+                {id:184, locked:false},
+            ],
+        };
+        const automatic = await sandbox.AutoWash2Optimizer.searchWashRoutes({
+            initialState: buJingyunRaw,
+            talentData: sandbox.TALENT_DATA,
+            targetIds: [250, 268, 271, 272],
+            options: {maxTotalPills:6000, searchIntensity:4},
+        });
+        const route4802 = automatic.routes.find(route => route.totalPills === 4802);
+        assert.ok(route4802, 'automatic search must discover the 4,802-pill Bu Jingyun route');
+        assert.equal(route4802.totalWashes, 713);
+        assert.equal(route4802.exchangeCount, 5);
+        assert.deepEqual(JSON.parse(JSON.stringify(
+            route4802.finalTalents.map(talent => talent.id).sort((a, b) => a - b))),
+        [250, 268, 271, 272]);
+        assert.equal(route4802.verified, true);
+    }
     const input = {initialState: converted, targetIds: [271], compatibleGroups: [], bagPills: 100,
         hasBagPills: true, options: {maxTotalPills: 0}};
     rows = await send('search', {input});
@@ -172,6 +223,58 @@ async function send(type, payload) {
     const predicted = engine.wash(engine.initialState(initial), []);
     const purple = predicted.state.talents.find(id => sandbox.TALENT_DATA[id].weight === 4);
     assert.ok(purple);
+    const pityCarrierRaw = {...converted, seed:1705411653, born_talent_rc:10,
+        luck_seed:0, luck_seed_inited:false, tal_lucky:2, zizhi:153,
+        role_id:10031, salt:780148, vip:1,
+        role_stats:{str_val:129, con:117, dex:10, int_val:101},
+        talents:[{id:272,locked:false},{id:189,locked:false},{id:247,locked:false}]};
+    const U = sandbox.AutoWash2RouteConstructor;
+    const shangTargets = [250, 271, 272, 268];
+    const shangSequence = U.readSequence(pityCarrierRaw, {zi:153, count:80});
+    const pitySeed = U.pityCarrierExchangeSeeds(
+        pityCarrierRaw, shangTargets, 153,
+        {budget:2600, maxWash:1500, leadWindow:45})
+        .find(seed => Number(seed.seed) === 2007551897);
+    assert.ok(pitySeed, 'must enumerate the verified Shang Haoqian pity-carrier seed');
+    pitySeed.chain = [Number(pitySeed.first)]
+        .concat(U.queueOf(pityCarrierRaw, 153, Number(pitySeed.seed), 24));
+    const shangTail = U.tailCandidates(shangSequence.seq, shangTargets, 0, 0)
+        .find(item => Number(item.no) === 10 && Number(item.id) === 272);
+    assert.ok(shangTail, 'must retain O#10 岿然顶天 as the tail target');
+    const shangCheck = U.chainChecks(shangSequence, shangTargets, pitySeed.chain,
+        pitySeed, shangTail, 'combined', [250, 268], true);
+    assert.equal(shangCheck.ok, true, shangCheck.reason);
+    const sameAnchor = (shangCheck.fullInsertMapVariants || []).find(items =>
+        items.filter(item => Number(item.anchorNo) === 9).length === 2
+        && items.some(item => Number(item.idx) === 5)
+        && items.some(item => Number(item.idx) === 6));
+    assert.ok(sameAnchor, 'must keep C#6/C#7 on the same O#9 anchor');
+    const shangRoute = U.execute(pityCarrierRaw, shangTargets, pitySeed, {
+        budget:5000, bestCost:0, headBudget:5000, maxWash:7000, M:16, lead:14,
+        tailTarget:shangCheck.tailTarget, seq:shangSequence.seq,
+        chainEnd:shangCheck.endFull, planAnchorId:sameAnchor[0].anchor,
+        insertMap:sameAnchor,
+        executionChain:shangCheck.executionChainFull || shangCheck.executionChain,
+        chainIsFull:true,
+        strictTargetOccurrences:!!shangCheck.strictTargetOccurrences,
+        naturalFixedTargets:shangCheck.naturalFixedTargets || [],
+        targetActivationNo:shangCheck.targetActivationNo || {},
+        targetActivationOrdinal:shangCheck.targetActivationOrdinal || {},
+    });
+    assert.equal(shangRoute.ok, true, shangRoute.note);
+    assert.equal(shangRoute.cost, 4807);
+    assert.equal(shangRoute.washes, 1210);
+    assert.equal(U.verify(pityCarrierRaw, shangTargets, shangRoute.steps, 153).ok,
+        true, 'the 4807-pill route must independently replay');
+    const automaticShang = U.planBest(pityCarrierRaw, shangTargets, {
+        zi:153, budget:6000, methodMs:300000, onlyPaths:['E'],
+        count:80, maxWash:7000,
+    });
+    assert.equal(automaticShang.ok, true, automaticShang.note);
+    assert.ok(automaticShang.cost <= 4807,
+        'the public automatic entry must discover the verified route or a cheaper one');
+    assert.equal(U.verify(pityCarrierRaw, shangTargets, automaticShang.steps, 153).ok,
+        true, 'the automatic result must independently replay');
     rows = await send('search', {input: {...input, initialState: initial, targetIds: [purple], options: {maxTotalPills: predicted.cost}}});
     result = rows.find(r => r.type === 'result').result;
     const route = result.routes.find(r => r.totalPills === predicted.cost);

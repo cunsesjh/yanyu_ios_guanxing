@@ -106,6 +106,19 @@ function formatPropValue(prop, v) {
     return `${Math.floor(v * 100 + 0.001)}%`;
 }
 
+function summarizeExtTotals(exts) {
+    const totals = new Map();
+    for (const item of exts || []) {
+        if (!item || !item.prop) continue;
+        const value = Number(item.value);
+        if (!Number.isFinite(value)) continue;
+        totals.set(item.prop, (totals.get(item.prop) || 0) + value);
+    }
+    return Array.from(totals, ([prop, value]) => (
+        `${propLabel(prop)}+${formatPropValue(prop, value)}`
+    )).join(' · ');
+}
+
 /** 判断是否按百分比格式展示（与 shared/simulator.js 的 equipAutoUsesPercentFormat 同规则） */
 function mangjingUsesPercentFormat(prop, value) {
     const number = Number(value);
@@ -3590,6 +3603,7 @@ function refreshXilianPlan() {
                 + (mk ? '🔒' : '');
         }).join(' · ')
         : '—';
+    const extTotalTxt = summarizeExtTotals(exts) || '—';
 
     const cutoffLine = cutoffTotal
         ? `<div><strong>${costExact ? '截止花费' : '估算花费'}</strong>：${cutoffTxt}</div>`
@@ -3605,12 +3619,14 @@ function refreshXilianPlan() {
         ${cutoffLine}
         <div class="plan-gap"></div>
         <div class="swap-line"><strong>最终附加</strong>：${extTxt}</div>
+        <div class="swap-line"><strong>属性合计</strong>：${extTotalTxt}</div>
         <div class="warn">※ 每次精炼均消耗；仅勾选「保留」的结果会替换对应槽并标记（后续消耗翻倍）。勾选后「截止花费」按最后一条保留记录统计。</div>
     `;
 
     lastXilianPlan = {
         equipKey: xilianPlanEquipKey,
         exts,                 // 最终附加 [{prop, value}]
+        extTotalText: extTotalTxt,
         slotLastIndex,        // {槽位: 精炼序号}
         slotLastCum,          // {槽位: 累积连金泥}（算最大值用，不能用序号）
         costTotal: total,

@@ -452,6 +452,7 @@
         var gridRoot = el('asTalentGrid');
         var filterInput = el('asFilter');
         var scopeSelect = el('asScope');
+        var futureShopDaysSelect = el('asFutureShopDays');
         var skipMaxInput = el('asSkipMax');
         var allowSwapInput = el('asAllowSwap');
         var runBtn = el('btnAutoSimRun');
@@ -574,6 +575,17 @@
             return [];
         }
 
+        function futureShopPool() {
+            try {
+                if (window.HengshanShopView && typeof window.HengshanShopView.predictFutureShopStudents === 'function') {
+                    return window.HengshanShopView.predictFutureShopStudents(
+                        Number(futureShopDaysSelect && futureShopDaysSelect.value) || 5
+                    ) || [];
+                }
+            } catch (error) { /* 由空候选提示统一处理 */ }
+            return [];
+        }
+
         function getStudents() {
             var scope = scopeSelect && scopeSelect.value || 'shop';
             var list = [];
@@ -596,6 +608,9 @@
                 return applySkipMax(list.filter(function (s) { return isShopSource(String(s.source)); }));
             }
 
+
+            if (scope === 'future-shop') return applySkipMax(futureShopPool());
+
             if (scope === 'enrolled') {
                 /* 与卡片上的来源标注保持同一口径：在册 = 非商店来源 */
                 return applySkipMax(list.filter(function (s) { return !isShopSource(String(s.source)); }));
@@ -614,7 +629,8 @@
         function studentLabel(s) {
             var src = s && s.source;
             /* 商店候选的 seed 是占位值，预测的是「招募进队伍之后」的路线，标注清楚免误解 */
-            var sourceName = isShopSource(src) ? '商店候选 · 按招募后推演' : '在册';
+            var dayLabel = s && s.shopDay ? ' · 未来第' + s.shopDay + '天' : '';
+            var sourceName = isShopSource(src) ? '商店候选' + dayLabel + ' · 按招募后推演' : '在册';
             var level = s && s.level ? s.level + '级' : '—';
             var current = (s && s.talents || []).map(nameOf).join('、') || '暂无';
             return { sourceName: sourceName, level: level, current: current, raw: s };
@@ -784,6 +800,9 @@
         });
         if (pickNInput) pickNInput.addEventListener('change', renderSummary);
         if (filterInput) filterInput.addEventListener('input', function () { filterGrid(filterInput.value); });
+        if (scopeSelect) scopeSelect.addEventListener('change', function () {
+            if (futureShopDaysSelect) futureShopDaysSelect.hidden = scopeSelect.value !== 'future-shop';
+        });
         if (resetBtn) resetBtn.addEventListener('click', function () {
             must = [];
             pick = [];

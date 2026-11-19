@@ -70,6 +70,7 @@
 .as-mode-bar .btn { border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-secondary); padding: 0.4rem 0.9rem; border-radius: 6px; font-size: 0.82rem; cursor: pointer; }
 .as-mode-bar .btn.is-active { border-color: var(--purple-bright); color: var(--purple-bright); background: rgba(135, 91, 221, 0.14); }
 .as-tool-row { display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center; margin: 0.7rem 0 0.4rem; }
+.as-scan-note { margin: -0.1rem 0 0.55rem; color: var(--text-muted); font-size: 0.7rem; }
 .as-filter { flex: 1 1 200px; min-width: 160px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 0.45rem 0.6rem; }
 .as-scope { flex: 0 1 auto; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 4px; padding: 0.45rem 0.6rem; }
 .as-grid { display: grid; gap: 0.8rem; margin-top: 0.6rem; }

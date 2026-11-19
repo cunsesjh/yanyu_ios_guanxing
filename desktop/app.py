@@ -370,10 +370,6 @@ class MainWindow(QMainWindow):
 
     def restore(self):
         message = ''
-        try:
-            self.session = self.store.load_session()
-        except (OSError, RuntimeError, ValueError):
-            message = '保存的会话无法读取，请重新导入 HAR；历史存档仍可查看。'
         row = self.store.selected()
         if row:
             try:
@@ -438,9 +434,9 @@ class MainWindow(QMainWindow):
         self.update_button.setEnabled(self.update_worker is None)
         if self.session:
             platform = 'iOS' if self.session['platform'] == 'ios' else 'Android'
-            self.session_label.setText('当前下载会话\n%s · %s 区\n有效期由游戏服务器决定' % (platform, self.session['area']))
+            self.session_label.setText('当前存档下载会话\n%s · %s 区\n有效期由游戏服务器决定' % (platform, self.session['area']))
         else:
-            self.session_label.setText('尚未导入登录会话\n导入 HAR 后可手动刷新')
+            self.session_label.setText('当前存档没有下载会话\n请重新导入该账号 HAR')
 
     def select_file(self):
         if self.worker:
@@ -483,9 +479,12 @@ class MainWindow(QMainWindow):
         self.worker.start()
 
     def download_complete(self, result):
-        self.session = result['session']
         try:
             self.open_snapshot(result['row'])
+            # Keep the newly imported in-memory session usable even when Windows
+            # could not persist it with DPAPI.
+            self.session = result['session']
+            self.update_buttons()
             self.show_status(result['warning'] or '下载成功 · 完整存档已保存，正在载入观星主页')
         except (OSError, ValueError):
             self.show_status('下载已保存，但页面载入失败。请从历史存档重新打开。', True)
@@ -506,6 +505,10 @@ class MainWindow(QMainWindow):
 
     def open_snapshot(self, row):
         data = self.store.load_snapshot(row['id'])
+        try:
+            self.session = self.store.session_for_snapshot(row, data)
+        except (OSError, RuntimeError, ValueError):
+            self.session = None
         self.site.set_snapshot(data, row['platform'])
         self.store.select(row['id'])
         self.current = row
@@ -608,7 +611,7 @@ class MainWindow(QMainWindow):
         title = QLabel('选择已下载的存档')
         title.setObjectName('pageTitle')
         layout.addWidget(title)
-        note = QLabel('打开历史存档不会联网；“下载最新”使用侧栏显示的当前会话。')
+        note = QLabel('打开历史存档不会联网；“下载最新”会自动使用这份存档所属账号的会话。')
         note.setObjectName('muted')
         layout.addWidget(note)
         items = QListWidget()
@@ -670,7 +673,10 @@ class MainWindow(QMainWindow):
         if dialog.exec() == QDialog.Accepted and items.currentRow() >= 0:
             try:
                 self.open_snapshot(rows[items.currentRow()])
-                self.show_status('已打开历史存档 · 离线查看')
+                if self.session:
+                    self.show_status('已打开历史存档 · 下载会话已切换到该账号')
+                else:
+                    self.show_status('已打开历史存档 · 此账号尚无可用下载会话，请重新导入该账号 HAR', True)
             except (OSError, ValueError):
                 self.show_status('这份存档无法读取，请选择其他历史记录。', True)
 

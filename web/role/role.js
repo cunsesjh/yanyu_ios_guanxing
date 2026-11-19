@@ -389,8 +389,28 @@ function equipCombatStat(eq, baseField, keys) {
     return v;
 }
 
+function refinedMainBonus(xlLevel, kind) {
+    const tiers = kind === 'gangqi'
+        ? [[0, 10, 1], [10, 20, 1.5], [20, 30, 2], [30, 40, 2.5], [40, 50, 3],
+            [50, 60, 2.5], [60, 70, 2], [70, 80, 1.5], [80, 200, 1]]
+        : [[0, 10, 1], [10, 20, 2], [20, 30, 3], [30, 40, 4], [40, 50, 5],
+            [50, 60, 4], [60, 70, 3], [70, 80, 2], [80, 300, 1]];
+    const level = Math.max(0, num(xlLevel));
+    let sum = 0;
+    for (const [lo, hi, rate] of tiers) {
+        if (level >= hi) sum += (hi - lo) * rate;
+        else if (level > lo) {
+            sum += (level - lo) * rate;
+            break;
+        }
+    }
+    return Math.floor(sum);
+}
+
 function equipNeijin(eq) {
-    let v = num(eq.Neijin) + num(eq.ExtraNeij);
+    const base = num(eq.Neijin);
+    const main = base > 0 ? Math.min(300, base + refinedMainBonus(eq.XLLevel, 'neijin')) : 0;
+    let v = main + num(eq.ExtraNeij);
     for (const p of collectEquipProps(eq)) {
         if (p.prop === 'neij' || p.prop === 'neijin') v += num(p.value);
     }
@@ -398,7 +418,9 @@ function equipNeijin(eq) {
 }
 
 function equipGangqi(eq) {
-    let v = num(eq.Gangqi) + num(eq.ExtraGangqi);
+    const base = num(eq.Gangqi);
+    const main = base > 0 ? Math.min(200, base + refinedMainBonus(eq.XLLevel, 'gangqi')) : 0;
+    let v = main + num(eq.ExtraGangqi);
     for (const p of collectEquipProps(eq)) {
         if (p.prop === 'gangqi' || p.prop === 'gq_base') v += num(p.value);
     }
@@ -533,6 +555,22 @@ function lifeRateSum(entries, key) {
     return s;
 }
 
+function lifeNjGqBonus(entries, kind, base) {
+    const flatKey = kind === 'neijin' ? 'neij' : 'gangqi';
+    const rateKey = kind === 'neijin' ? 'neijper' : 'gangqiper';
+    let flat = 0;
+    let rate = 0;
+    for (const entry of entries) {
+        for (const ef of lifeSkillEffects(entry)) {
+            const steps = Math.floor(entry.level / num(ef[1], 1));
+            if (ef[0] === flatKey) flat += steps * num(ef[2]);
+            if (ef[0] === rateKey) rate += steps * num(ef[2]);
+        }
+    }
+    const percent = Math.floor((base + flat) * rate + 1e-6);
+    return { flat, rate, percent, total: flat + percent };
+}
+
 function sumEquipPropKey(equips, keys) {
     const set = new Set(Array.isArray(keys) ? keys : [keys]);
     let s = 0;
@@ -577,6 +615,23 @@ function collectTeamHpMaxRate(role, partyRoles) {
     return selfIn ? rate : 0;
 }
 
+function collectTeamNjGqRate(role, partyRoles, key) {
+    const list = Array.isArray(partyRoles) ? partyRoles : [];
+    if (!list.some(r => r && num(r.ID) === num(role.ID))) return 0;
+    let rate = 0;
+    for (const r of list) {
+        if (!r) continue;
+        for (const raw of Array.isArray(r.HeDaoSkill) ? r.HeDaoSkill : asPropList(r.HeDaoSkill)) {
+            const cfg = hedaoCfg(raw.ID);
+            if (!cfg) continue;
+            for (const row of cfg.effects) {
+                if (row[0] === `team_${key}`) rate += num(row[1]);
+            }
+        }
+    }
+    return rate;
+}
+
 function hedaoModOnKey(effects, key, sub) {
     const keys = key === 'hp' ? ['hp', 'hp_max'] : (key === 'speed' ? ['speed', 'spd'] : [key]);
     let add = 0;
@@ -618,6 +673,27 @@ function convertZhaoValue(value, dims) {
     else scale = (factor - 1) * (2.2 * attr / (400 + attr)) + 1;
     const v = base * scale;
     return Math.abs(v) > 1 ? Math.floor(v + 1e-6) : v;
+}
+
+function neijinInfluenceRate(neijin) {
+    const value = Math.max(0, num(neijin));
+    return 3 * value / (4000 + value);
+}
+
+function neijinReferenceRows(currentNeijin) {
+    const current = Math.max(0, Math.floor(num(currentNeijin)));
+    const currentRate = neijinInfluenceRate(current);
+    return [0, 50, 100, 150].map(add => {
+        const neijin = current + add;
+        const rate = neijinInfluenceRate(neijin);
+        return {
+            add,
+            neijin,
+            rate,
+            delta: rate - currentRate,
+            factor2Scale: 1 + rate,
+        };
+    });
 }
 
 function findActiveWg(list) {
@@ -1009,7 +1085,18 @@ function computeFinalStats(role, partyRoles) {
         speed: hedaoModOnKey(hedaoEffects, 'speed', sub.speed),
         ren: hedaoModOnKey(hedaoEffects, 'renxing', sub.ren),
         gangqi: hedaoModOnKey(hedaoEffects, 'gangqi', sub.gangqi),
+        neijin: hedaoModOnKey(hedaoEffects, 'neij', sub.neijin),
     };
+    const lifeGangqi = lifeNjGqBonus(lifeEntries, 'gangqi', sub.gangqi);
+    const lifeNeijin = lifeNjGqBonus(lifeEntries, 'neijin', sub.neijin);
+    const teamGangqiRate = collectTeamNjGqRate(role, partyRoles, 'gangqi');
+    const teamNeijinRate = collectTeamNjGqRate(role, partyRoles, 'neij');
+    const teamGangqi = Math.floor(
+        (sub.gangqi + lifeGangqi.total + hedaoPersonal.gangqi) * teamGangqiRate + 1e-6
+    );
+    const teamNeijin = Math.floor(
+        (sub.neijin + lifeNeijin.total + hedaoPersonal.neijin) * teamNeijinRate + 1e-6
+    );
     const baseBeforeTeam = {
         hp: sub.hp + lifeAdd.hp + hedaoPersonal.hp + talentModOnSub(talents, 'hp', sub.hp) + jjPctPart.hp,
         atk: sub.atk + lifeAdd.atk + hedaoPersonal.atk + talentModOnSub(talents, 'atk', sub.atk) + jjPctPart.atk + Math.floor(taolu.rawAtk * tlMore),
@@ -1164,8 +1251,8 @@ function computeFinalStats(role, partyRoles) {
         parry: Math.floor(sub.parry + lifeAdd.parry + hedao.parry + talAdd.parry + jjPctPart.parry),
         speed: Math.floor(sub.speed + lifeAdd.speed + hedao.speed + talAdd.speed + jjPctPart.speed),
         ren: Math.floor(sub.ren + jmRen + lifeAdd.ren + hedaoPersonal.ren + talAdd.ren + Math.floor(sub.ren * jjPct('ren'))),
-        gangqi: Math.floor(sub.gangqi + hedao.gangqi),
-        neijin: Math.floor(sub.neijin),
+        gangqi: Math.floor(sub.gangqi + lifeGangqi.total + hedao.gangqi + teamGangqi),
+        neijin: Math.floor(sub.neijin + lifeNeijin.total + hedao.neijin + teamNeijin),
         mp_back: mpBack,
         mp_first: mpFirst,
         blood,
@@ -1188,6 +1275,11 @@ function computeFinalStats(role, partyRoles) {
             gangqi: Math.floor(eqGang), neijin: Math.floor(eqNeij),
             mp_back: Math.floor(eqMpBack),
             mp_first: Math.floor(eqMpFirst + fumo.mp_f),
+        },
+        njgq: {
+            lifeGangqi: Math.floor(lifeGangqi.total), lifeNeijin: Math.floor(lifeNeijin.total),
+            hedaoGangqi: Math.floor(hedaoPersonal.gangqi), hedaoNeijin: Math.floor(hedaoPersonal.neijin),
+            teamGangqi, teamNeijin,
         },
         fumo: {
             hp: Math.floor(fumo.hp), atk: Math.floor(fumo.atk), def: Math.floor(fumo.def),
@@ -1396,6 +1488,19 @@ function renderFinalStats(role, partyRoles) {
         f.mpFirstDetail.life ? `秘技${f.mpFirstDetail.life}` : '',
         f.mpFirstDetail.hedao ? `合道${f.mpFirstDetail.hedao}` : '',
     );
+    const tipNjGq = key => {
+        const isNeijin = key === 'neijin';
+        const n = f.njgq;
+        return tipParts(
+            `人物${f.body[key]}`, `装备${f.equip[key]}`,
+            (isNeijin ? n.lifeNeijin : n.lifeGangqi)
+                ? `秘技${isNeijin ? n.lifeNeijin : n.lifeGangqi}` : '',
+            (isNeijin ? n.hedaoNeijin : n.hedaoGangqi)
+                ? `合道${isNeijin ? n.hedaoNeijin : n.hedaoGangqi}` : '',
+            (isNeijin ? n.teamNeijin : n.teamGangqi)
+                ? `全队${isNeijin ? n.teamNeijin : n.teamGangqi}` : '',
+        );
+    };
     const skillHint = [
         f.skill.neiName ? `内功 ${f.skill.neiName}` : '',
         f.skill.taoluName ? `套路 ${f.skill.taoluName}` : '',
@@ -1422,8 +1527,8 @@ function renderFinalStats(role, partyRoles) {
         ['韧性', String(f.ren), tipRen],
         ['聚气', String(f.mp_back), tipMpBack],
         ['真元', String(f.mp_first), tipMpFirst],
-        ['罡气', String(f.gangqi), `底${f.body.gangqi}+装${f.equip.gangqi}`],
-        ['内劲', String(f.neijin), `底${f.body.neijin}+装${f.equip.neijin}`],
+        ['罡气', String(f.gangqi), tipNjGq('gangqi')],
+        ['内劲', String(f.neijin), tipNjGq('neijin')],
         ['吸血', fmtPct(f.blood), tipRatio(f.ratio.blood)],
         ['免伤', fmtPct(f.dmg_off), tipRatio(f.ratio.dmg_off)],
         ['穿甲', fmtPct(f.def_ign), tipRatio(f.ratio.def_ign)],
@@ -1437,6 +1542,33 @@ function renderFinalStats(role, partyRoles) {
             ${tip ? `<span class="sub">${escapeHtml(tip)}</span>` : ''}
         </div>
     `).join('');
+}
+
+function renderNeijinReference(role, partyRoles) {
+    const root = document.getElementById('neijinReference');
+    const meta = document.getElementById('neijinReferenceMeta');
+    if (!root) return;
+    const finalStats = computeFinalStats(role, partyRoles);
+    const rows = neijinReferenceRows(finalStats.neijin);
+    const skillName = finalStats.skill.neiName || '当前未装备内功';
+    if (meta) {
+        const n = finalStats.njgq;
+        meta.textContent = `${skillName} · 当前 ${Math.floor(finalStats.neijin)}`
+            + `（底${finalStats.body.neijin}+装${finalStats.equip.neijin}`
+            + `+秘${n.lifeNeijin}+合${n.hedaoNeijin}+队${n.teamNeijin}）`;
+    }
+    const pct = value => `${(value * 100).toFixed(2).replace(/\.00$/, '')}%`;
+    root.innerHTML = `<table class="role-table neijin-reference-table">
+        <thead><tr><th>方案</th><th>内劲</th><th>作用率</th><th>较当前</th><th>系数 2.0 时倍率</th></tr></thead>
+        <tbody>${rows.map(row => `<tr>
+            <td>${row.add ? `+${row.add}` : '当前'}</td>
+            <td class="num">${row.neijin}</td>
+            <td class="num est">${pct(row.rate)}</td>
+            <td class="num">${row.add ? `+${pct(row.delta)}` : '—'}</td>
+            <td class="num">${row.factor2Scale.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')} 倍</td>
+        </tr>`).join('')}</tbody>
+    </table>
+    <p class="neijin-reference-note">作用率 R = 3 × 内劲 ÷ (4000 + 内劲)。仅用于配置明确按内劲缩放的招式；实际数值仍取决于该招式的基础值和配置系数。</p>`;
 }
 
 function cell(label, value, accent = false) {
@@ -1852,6 +1984,7 @@ function renderRole(entry) {
         party = saveData.Hezhao.Roles;
     }
     renderFinalStats(role, party);
+    renderNeijinReference(role, party);
     renderAttrs(role, party);
     renderXiuwei(role);
     renderCombat(role);
