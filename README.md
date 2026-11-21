@@ -17,6 +17,12 @@ Windows 10/11 x64 下载 Release 中的 `iosGuanxing.exe`，直接运行。
 <img width="1382" height="932" alt="QQ20261108-101424" src="https://github.com/user-attachments/assets/defbd3b7-8997-47bc-a04f-f9243ef885d7" />
 
 
+### 自动模拟（自用）洗脉
+
+进入「自动模拟 → 自动模拟（自用）」，选角色、VIP、允许开启的槽数、保留天赋和目标紫脉。可用洗髓丹默认读取存档，也可手动修改。最大耗丹数量用于限制每条候选路线的总花费。
+
+点击「开始七层搜索」。搜索比较锁脉、垫洗、开槽和置换的组合，按达成整套目标的总丹耗排序。全部必选脉和每个兼容组要求的脉需要在路线结束时同时保留。每条可用路线会从当前存档回放核对，可暂停、继续、停止并导出已找到的结果。TXT 或 Markdown 参考路线可以载入同一起点参与比较。当前支持国服和先行服。
+
 ## iOS抓包
 
 - 安装免费开源抓包工具 ProxyPin ，手机直接去AppStore即可安装
@@ -43,6 +49,8 @@ Windows 10/11 x64 下载 Release 中的 `iosGuanxing.exe`，直接运行。
 Python 3.11，安装 `requirements-desktop.txt` 后执行 `python desktop_main.py`。正式目标为 Windows，其他平台开发预览不持久化登录会话。
 
 离线测试：`python -m unittest discover -s tests -v`；内置网页验证：`python dev/smoke_desktop.py`。
+
+洗脉自用测试使用 `node tests/test_personal_wash.cjs`，界面与工作线程测试使用 `python dev/check_auto_wash2.py`。
 
 Windows 打包：安装 PyInstaller 6.x，运行 `python -m PyInstaller --noconfirm iosGuanxing.spec`。推送 `v*` 标签自动构建预览 Release，发布 EXE 与 SHA256 校验文件。
 

@@ -62,7 +62,11 @@ def received(value):
         elif stage == 3:
             if Store(temp.name).theme() != 'light':
                 return fail('Native theme button did not persist preference')
-            print('PASS: worker result, native theme, legacy tab isolation and cancellation', flush=True)
+            stage = 4
+        elif stage < len(scripts) - 1:
+            stage += 1
+        else:
+            print('PASS: both workers, personal seven-layer search, pause/resume, bag, export and tab isolation', flush=True)
             window.close()
             app.exit(0)
     except Exception as error:
@@ -72,6 +76,7 @@ scripts = [r'''JSON.stringify((()=>{
     if (!window.AutoWash2 || !state.saveData || !state.saveRoles?.length) {
         return {waiting:'save import', autoWash2:!!window.AutoWash2,
             saveData:!!state.saveData, saveRoles:state.saveRoles?.length || 0,
+            stored:!!window.loadShareStore?.()?.data,
             url:location.href, readyState:document.readyState,
             pageError:document.querySelector('.error-message, #errorMessage')?.textContent || ''};
     }
@@ -80,6 +85,9 @@ scripts = [r'''JSON.stringify((()=>{
     // ready yet (especially on Windows CI). Wait for the actual tab activation.
     document.getElementById('btnAutoWash2Mode').click();
     if (document.getElementById('autoWash2ModePanel').hidden) return {waiting:'tab initialization'};
+    if (document.getElementById('w2Depth') || document.getElementById('w2Reference') ||
+        document.getElementById('wpDepth') || !document.getElementById('wpReference'))
+        return {error:'Personal settings must only exist on the personal tab'};
     window.AutoWash2.refresh();
     const r = document.getElementById('w2Role');
     if (r.disabled || !Array.from(r.options).some(o => o.value === state.saveRoles[0].key)) return {waiting:'role options'};
@@ -112,7 +120,8 @@ scripts = [r'''JSON.stringify((()=>{
     if (document.documentElement.dataset.theme !== 'light') return {waiting:'native theme application'};
     if (JSON.stringify(state) !== w2Baseline) return {error:'Search mutated legacy simulator state'};
     const tabs = [['btnAutoEquipMode','autoEquipModePanel'], ['btnAutoJianwangMode','autoJianwangModePanel'],
-        ['btnAutoWashMode','autoWashModePanel'], ['btnAutoWash2Mode','autoWash2ModePanel']];
+        ['btnAutoWashMode','autoWashModePanel'], ['btnPersonalWashMode','personalWashModePanel'],
+        ['btnAutoWash2Mode','autoWash2ModePanel']];
     for (const [button, panel] of tabs) {
         document.getElementById(button).click();
         if (document.getElementById(panel).hidden || tabs.filter(([,p])=>!document.getElementById(p).hidden).length !== 1)
@@ -126,6 +135,82 @@ scripts = [r'''JSON.stringify((()=>{
     if (document.getElementById('w2Run').disabled || !document.getElementById('w2Stop').hidden) return {error:'Stop failed'};
     return {ready:true};
 })())''']
+
+scripts.extend([r'''JSON.stringify((()=>{
+    const el=id=>document.getElementById(id);
+    el('btnPersonalWashMode').click();
+    if (el('personalWashModePanel').hidden || !el('autoWash2ModePanel').hidden) return {error:'personal tab visibility'};
+    if (el('wpRole').value || el('wpBudget').value === '1') return {error:'settings shared between tabs'};
+    if (el('wpDepth') || el('wpAutoExact') || el('wpExact') || !el('wpRun').textContent.includes('七层')) return {error:'Unexpected search controls'};
+    if (!el('wpPreset').disabled) return {error:'Preset enabled before role inspection'};
+    el('wpVip').value='0';
+    el('wpRole').value=state.saveRoles[0].key;
+    el('wpRole').dispatchEvent(new Event('change'));
+    el('wpBudget').dispatchEvent(new Event('input'));
+    if (!el('wpPreset').disabled) return {error:'Preset enabled during role inspection'};
+    return {ready:true};
+})())''', r'''JSON.stringify((()=>{
+    const el=id=>document.getElementById(id);
+    if (el('wpPreset').disabled) return {waiting:el('wpStatus').textContent};
+    el('wpPreset').click();
+    if (!['混元奇脉','VIP 1+'].every(text=>el('wpStatus').textContent.includes(text)))
+        return {error:'Missing VIP requirement for preset'};
+    el('wpVip').value='1'; el('wpVip').dispatchEvent(new Event('change'));
+    if (!el('wpPreset').disabled) return {error:'Stale preset after VIP change'};
+    return {ready:true};
+})())''', r'''JSON.stringify((()=>{
+    const el=id=>document.getElementById(id);
+    if (el('wpStatus').classList.contains('w2-error')) return {error:el('wpStatus').textContent};
+    if (el('wpRun').disabled) return {waiting:el('wpStatus').textContent};
+    if (el('wpBag').value !== '5000') return {error:'Personal bag did not load from save'};
+    el('wpBag').value='-1'; el('wpBag').dispatchEvent(new Event('input'));
+    if (!el('wpStatus').classList.contains('w2-error')) return {error:'Negative bag accepted'};
+    el('wpResetBag').click();
+    if (el('wpBag').value !== '5000') return {error:'Personal bag reset failed'};
+    el('wpBag').value='1234'; el('wpBag').dispatchEvent(new Event('input'));
+    if (state.saveData.Items.find(item=>item.ID===2601).Num !== 5000)
+        return {error:'Personal bag changed imported save'};
+    el('wpBudget').value=0;
+    el('wpBudget').dispatchEvent(new Event('input'));
+    el('wpRun').click();
+    return {ready:true};
+})())''', r'''JSON.stringify((()=>{
+    const el=id=>document.getElementById(id);
+    if (el('wpStatus').classList.contains('w2-error')) return {error:el('wpStatus').textContent};
+    if (el('wpStatusBox').dataset.state !== 'done') return {waiting:el('wpStatus').textContent};
+    if (el('wpBest').textContent !== '0 丹' || !el('wpDetail').textContent.includes('0 丹'))
+        return {error:'Missing zero-cost result'};
+    el('btnAutoWash2Mode').click(); el('btnPersonalWashMode').click();
+    if (!el('wpResults').querySelector('details') || el('wpExport').disabled) return {error:'missing exportable result'};
+    if (el('wpBag').value !== '1234' || !el('wpResults').textContent.includes('余1234 丹'))
+        return {error:'Personal bag not retained in result'};
+    if (el('w2Budget').value !== '1') return {error:'modified other tabs budget'};
+    el('wpBudget').value=9000;
+    el('wpBudget').dispatchEvent(new Event('input'));
+    el('wpPreset').click();
+    el('wpRun').click();
+    return {ready:true};
+})())''', r'''JSON.stringify((()=>{
+    const el=id=>document.getElementById(id);
+    if (el('wpStatus').classList.contains('w2-error')) return {error:el('wpStatus').textContent};
+    if (el('wpStatusBox').dataset.state !== 'strategy') return {waiting:el('wpStatus').textContent};
+    el('wpPause').click();
+    return {ready:true};
+})())''', r'''JSON.stringify((()=>{
+    const el=id=>document.getElementById(id);
+    if (el('wpStatus').classList.contains('w2-error')) return {error:el('wpStatus').textContent};
+    if (el('wpPause').textContent !== '继续') return {waiting:el('wpStatus').textContent};
+    el('btnAutoWash2Mode').click(); el('btnPersonalWashMode').click();
+    el('wpPause').click();
+    return {ready:true};
+})())''', r'''JSON.stringify((()=>{
+    const el=id=>document.getElementById(id);
+    if (el('wpPause').textContent !== '暂停') return {waiting:el('wpStatus').textContent};
+    el('wpStop').click();
+    if(!el('wpPause').hidden || el('wpRun').disabled) return {error:'cancel failed'};
+    if(JSON.stringify(state)!==w2Baseline) return {error:'modified imported simulation state'};
+    return {ready:true};
+})())'''])
 
 pending = False
 def tick():
@@ -147,7 +232,16 @@ timer = QTimer()
 timer.setInterval(500)
 timer.timeout.connect(tick)
 def start():
-    window.view.setUrl(QUrl(window.site.url + 'auto/index.html'))
-    timer.start()
+    def loaded(value):
+        if value == 'ready':
+            window.view.setUrl(QUrl(window.site.url + 'auto/index.html'))
+            timer.start()
+        elif home_tries[0] < 120:
+            home_tries[0] += 1
+            QTimer.singleShot(250, start)
+        else:
+            fail('Home did not finish importing its snapshot')
+    window.page.runJavaScript("window.loadShareStore?.()?.data ? 'ready' : 'loading'", 0, loaded)
+home_tries = [0]
 QTimer.singleShot(500, start)
 sys.exit(app.exec())
