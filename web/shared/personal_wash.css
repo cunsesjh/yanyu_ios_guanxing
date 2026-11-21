@@ -1,0 +1,138 @@
+#personalWashModePanel { color: var(--text-primary, #e6edf6); }
+#personalWashModePanel .w2-note { display: flex; flex-wrap: wrap; gap: 8px 20px; border: 1px solid #356459; background: #142e2b; padding: 16px; border-radius: 12px; line-height: 1.7; }
+#personalWashModePanel .w2-note strong { color: #8de3cb; }
+#personalWashModePanel .w2-section { margin-top: 18px; padding: 20px; border: 1px solid var(--border-color, #2b3c53); border-radius: 12px; background: var(--bg-card, #121b28); }
+#personalWashModePanel h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 16px; font-size: 16px; }
+#personalWashModePanel h3 > span { color: #68dbc0; font-size: 13px; }
+#personalWashModePanel h3 > strong { margin-left: auto; font-size: 13px; color: #b7a0eb; }
+#personalWashModePanel .w2-fields { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; }
+#personalWashModePanel label { display: grid; gap: 8px; flex: 1; min-width: 145px; font-size: 13px; color: #c1cde0; }
+#personalWashModePanel select, #personalWashModePanel input { width: 100%; min-height: 40px; box-sizing: border-box; border: 1px solid #2b3c53; border-radius: 8px; padding: 8px 12px; color: #e6edf6; background: #151f2e; }
+#personalWashModePanel .w2-stock { display: grid; gap: 10px; padding: 0 14px 8px; font-size: 12px; color: #9babc2; }
+#personalWashModePanel .w2-stock strong { font-size: 20px; color: #e8c075; }
+#personalWashModePanel .w2-muted { font-size: 13px; line-height: 1.8; color: #9babc2; margin: 12px 0; }
+#personalWashModePanel .w2-locks, #personalWashModePanel .w2-targets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+#personalWashModePanel .w2-lock, #personalWashModePanel .w2-target { border: 1px solid #2b3c53; background: #151f2e; border-radius: 9px; padding: 12px; text-align: left; color: #e6edf6; cursor: pointer; }
+#personalWashModePanel .w2-lock { display: grid; gap: 9px; }
+#personalWashModePanel .w2-lock span { font-size: 12px; color: #9babc2; }
+#personalWashModePanel .w2-target { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+#personalWashModePanel .w2-target small { font-size: 11px; white-space: nowrap; color: #9babc2; }
+#personalWashModePanel .is-selected { background: #2b233c; border-color: #8063ad; color: #dbc7ff; }
+#personalWashModePanel button:disabled { cursor: default; opacity: .65; }
+#personalWashModePanel button:focus-visible { outline: 2px solid #68dbc0; outline-offset: 3px; }
+#personalWashModePanel .w2-requirements { color: #b7a0eb; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+#personalWashModePanel .w2-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+#personalWashModePanel #wpStatus { font-size: 13px; line-height: 1.8; color: #9babc2; }
+#personalWashModePanel #wpStatus.w2-error { color: #ff9389; }
+#personalWashModePanel .w2-route { border: 1px solid #2b3c53; background: #121b28; border-radius: 12px; padding: 16px; margin-top: 14px; }
+#personalWashModePanel .w2-route summary { cursor: pointer; line-height: 1.8; }
+#personalWashModePanel .w2-route summary > span { display: inline-block; margin-left: 20px; color: #68dbc0; font-size: 13px; }
+#personalWashModePanel .w2-route > p { font-size: 13px; color: #c1cde0; line-height: 1.8; }
+#personalWashModePanel .w2-table { overflow-x: auto; }
+#personalWashModePanel table { width: 100%; min-width: 620px; border-collapse: collapse; text-align: left; font-size: 13px; }
+#personalWashModePanel th, #personalWashModePanel td { padding: 12px; border-bottom: 1px solid #2b3c53; vertical-align: top; }
+#personalWashModePanel td p { margin: 8px 0; line-height: 1.7; }
+#personalWashModePanel td small { color: #b7a0eb; }
+@media (max-width: 650px) {
+    #personalWashModePanel .w2-section { padding: 14px; }
+    #personalWashModePanel .w2-targets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.w2-credit{margin:8px 0 0;padding:7px 10px;border-left:3px solid #b88a42;background:rgba(184,138,66,.09);color:var(--muted,#6f685f);font-size:12px;line-height:1.5}
+
+html[data-theme="light"] #personalWashModePanel {
+    color: var(--text-primary, #202d40);
+}
+html[data-theme="light"] #personalWashModePanel .w2-note {
+    border: 1px solid #a3cbbd;
+    background: #e7f4ee;
+}
+html[data-theme="light"] #personalWashModePanel .w2-note strong {
+    color: #156b57;
+}
+html[data-theme="light"] #personalWashModePanel .w2-section {
+    border: 1px solid var(--border-color, #d1dcea);
+    background: var(--bg-card, #ffffff);
+}
+html[data-theme="light"] #personalWashModePanel h3 > span {
+    color: #137c69;
+}
+html[data-theme="light"] #personalWashModePanel h3 > strong {
+    color: #7752aa;
+}
+html[data-theme="light"] #personalWashModePanel label {
+    color: #435a76;
+}
+html[data-theme="light"] #personalWashModePanel select,
+html[data-theme="light"] #personalWashModePanel input {
+    border: 1px solid #d1dcea;
+    color: #202d40;
+    background: #f2f5fa;
+}
+html[data-theme="light"] #personalWashModePanel .w2-stock {
+    color: #5d7089;
+}
+html[data-theme="light"] #personalWashModePanel .w2-stock strong {
+    color: #906114;
+}
+html[data-theme="light"] #personalWashModePanel .w2-muted {
+    color: #5d7089;
+}
+html[data-theme="light"] #personalWashModePanel .w2-lock,
+html[data-theme="light"] #personalWashModePanel .w2-target {
+    border: 1px solid #d1dcea;
+    background: #f2f5fa;
+    color: #202d40;
+}
+html[data-theme="light"] #personalWashModePanel .w2-lock span {
+    color: #5d7089;
+}
+html[data-theme="light"] #personalWashModePanel .w2-target small {
+    color: #5d7089;
+}
+html[data-theme="light"] #personalWashModePanel .is-selected {
+    background: #eee7f8;
+    border-color: #a58ac6;
+    color: #694294;
+}
+html[data-theme="light"] #personalWashModePanel button:focus-visible {
+    outline: 2px solid #137c69;
+}
+html[data-theme="light"] #personalWashModePanel .w2-requirements {
+    color: #7752aa;
+}
+html[data-theme="light"] #personalWashModePanel #wpStatus.w2-error {
+    color: #b7352c;
+}
+html[data-theme="light"] #personalWashModePanel .w2-route {
+    border: 1px solid #d1dcea;
+    background: #ffffff;
+}
+html[data-theme="light"] #personalWashModePanel .w2-route summary > span {
+    color: #137c69;
+}
+html[data-theme="light"] #personalWashModePanel .w2-route > p {
+    color: #435a76;
+}
+html[data-theme="light"] #personalWashModePanel th,
+html[data-theme="light"] #personalWashModePanel td {
+    border-bottom: 1px solid #d1dcea;
+}
+html[data-theme="light"] #personalWashModePanel td small {
+    color: #7752aa;
+}
+
+#personalWashModePanel .wp-status-box {
+    --accent: #71d9c1; --surface: #182a2c;
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px;
+    padding: 16px 20px; border-inline-start: 5px solid var(--accent); border-radius: 8px;
+    background: var(--surface); color: var(--text-primary, #e6edf6);
+}
+#personalWashModePanel .wp-status-box[data-state="error"] { --accent: #ff9898; }
+html[data-theme="light"] #personalWashModePanel .wp-status-box { --accent: #137764; --surface: #e6f3ef; }
+html[data-theme="light"] #personalWashModePanel .wp-status-box[data-state="error"] { --accent: #ae3333; }
+#personalWashModePanel .wp-status-box #wpStatus, #personalWashModePanel .wp-best strong {
+    font-size: 20px; line-height: 1.35; font-weight: 700; color: var(--accent);
+}
+#personalWashModePanel #wpDetail { margin: 6px 0 0; font-size: 14px; line-height: 1.6; }
+#personalWashModePanel .wp-best span { display: block; margin-bottom: 4px; font-size: 12px; }
+#personalWashModePanel .wp-best strong { font-variant-numeric: tabular-nums; }

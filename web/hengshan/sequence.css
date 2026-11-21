@@ -1,0 +1,77 @@
+/* The other Hengshan tabs supply .panel-header, .btn, .config-group, .as-check,
+   .as-talent and the route-list typography. Keep local rules about layout here. */
+.seq [hidden] { display: none !important; }
+.seq fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.seq #sqSetup { display: grid; gap: 1rem; }
+.seq .config-panel { margin: 0; }
+.seq .panel-header { gap: .45rem 1rem; flex-wrap: wrap; }
+.seq h3, .seq h4 { margin: 0 0 .4rem; padding: 0; color: var(--text-primary); font-family: var(--font-serif); font-size: .96rem; }
+.seq h4 { font-size: .86rem; }
+.seq h3 small, .seq .seq-meta { color: var(--text-muted); font: normal .76rem var(--font-sans); }
+.seq .seq-guide { list-style: decimal outside; padding-inline-start: 1.6rem; margin: 0; }
+.seq .seq-guide li { display: list-item; }
+.seq .hengshan-ledger-note, .seq #sqRoute p, .seq .seq-roster { font-size: .84rem; line-height: 1.6; color: var(--text-secondary); }
+.seq .hengshan-ledger-note { margin: .35rem 0 .6rem; }
+.seq .seq-guide a { color: var(--text-primary); font-weight: 600; text-decoration: underline; text-underline-offset: .15em; }
+.seq .seq-columns { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,22rem),1fr)); align-items: start; gap: .9rem 1.25rem; }
+.seq .seq-columns > *, .seq .config-group { min-width: 0; }
+.seq .seq-subpanel { padding: .8rem .9rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); }
+.seq .seq-subpanel h4 { margin-top: .7rem; }
+.seq .seq-divider, .seq #sqRoute { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--border-color); }
+.seq .seq-row, .seq .seq-groups, .seq .seq-check-grid { display: flex; flex-wrap: wrap; gap: .4rem .6rem; align-items: center; margin: .55rem 0; }
+.seq .seq-row .btn { flex: 0 1 auto; }
+.seq .seq-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,9rem),1fr)); gap: .55rem .75rem; margin: .55rem 0; }
+.seq .seq-shop-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.seq .seq-shop-fields .config-group:first-child { grid-column: 1 / -1; max-width: 14rem; }
+.seq .seq-date-field {
+    width: 100%; justify-content: space-between; gap: .4rem;
+    padding: .5rem .65rem; border-radius: 6px; font-size: .88rem; font-weight: normal;
+}
+.seq .seq-date-field[aria-invalid=true] { border-color: var(--red); }
+.seq .seq-calendar-icon {
+    flex: 0 0 auto; width: .9em; height: .86em;
+    border: 1px solid currentColor; border-top-width: .23em; border-radius: .13em;
+}
+.seq .seq-calendar {
+    width: min(22rem, calc(100% - 2rem)); max-height: calc(100% - 2rem);
+    margin: auto; padding: 1rem; overflow: auto;
+    border: 1px solid var(--border-accent); border-radius: 9px;
+    background: var(--bg-secondary); color: var(--text-primary);
+}
+.seq .seq-calendar::backdrop { background: rgba(8, 14, 23, .52); }
+.seq .seq-calendar-nav { display: flex; align-items: center; justify-content: space-between; gap: .45rem; font-size: .88rem; }
+.seq .seq-calendar-nav .btn { min-width: 2.4rem; font-size: 1rem; line-height: 1.15; }
+.seq .seq-calendar-days { width: 100%; table-layout: fixed; border-spacing: .2rem; }
+.seq .seq-calendar-days th { padding: .4rem 0 .15rem; color: var(--text-secondary); font-size: .8rem; font-weight: normal; }
+.seq .seq-calendar-days .btn { width: 100%; min-height: 2rem; padding: .2rem 0; border-radius: 5px; font-variant-numeric: tabular-nums; }
+.seq .seq-calendar-days .btn.is-beyond-forecast { border-style: dashed; }
+.seq .seq-calendar-days .btn[aria-pressed=true] { border-color: var(--purple-bright); background: var(--bg-card-hover); }
+.seq .seq-calendar-days .btn:disabled { border-color: transparent; background: transparent; }
+.seq .seq-calendar .btn:disabled, .seq .seq-date-field:disabled { opacity: .48; cursor: default; }
+@media (max-width: 400px) {
+    .seq .seq-shop-fields { grid-template-columns: 1fr; }
+}
+.seq .seq-filterbar { align-items: end; }
+.seq .seq-filterbar .config-group:first-child { flex: 2 1 15rem; }
+.seq .seq-filterbar .config-group:nth-child(2) { flex: 1 1 8rem; }
+.seq button.seq-person[aria-pressed=true] { color: var(--text-primary); border-color: var(--border-accent); background: var(--bg-card-hover); }
+.seq input[type=radio], .seq input[type=checkbox] { width: auto; margin: 0; accent-color: var(--purple-bright); }
+.seq .seq-roster, .seq .seq-check-grid { overflow: auto; scrollbar-gutter: stable; }
+.seq .seq-roster { max-height: 22rem; }
+.seq .seq-roster label { display: flex; width: 100%; gap: .45rem; padding: .28rem 0; line-height: 1.4; }
+.seq .seq-check-grid { max-height: 7.5rem; margin-bottom: .65rem; }
+.seq .seq-check-grid label { flex: 0 0 auto; }
+.seq .seq-group { display: inline-flex; align-items: center; gap: .25rem; }
+.seq .seq-talent-category { margin: .55rem 0; }
+.seq .seq-talent-category .as-talent-grid { grid-template-columns: repeat(auto-fit,minmax(6.5rem,1fr)); margin-top: .25rem; }
+.seq .seq-talent-category .as-talent { font-family: var(--font-sans); }
+.seq .as-talent[aria-pressed=true] { border-color: var(--purple-bright); color: var(--text-primary); background: var(--bg-card-hover); }
+.seq #sqDraft { margin: 0; }
+.seq .seq-result-browser { margin-top: .8rem; }
+.seq button.seq-person, .seq button.seq-plan { display: flex; align-items: baseline; justify-content: space-between; gap: .45rem; width: 100%; margin: .22rem 0; padding: .4rem .55rem; text-align: left; overflow-wrap: anywhere; }
+.seq .seq-person-label { display: grid; gap: .12rem; min-width: 0; }
+.seq .seq-person .seq-meta, .seq .seq-plan .seq-meta { font-weight: normal; }
+.seq .seq-plan[aria-pressed=true] { border-color: var(--purple-bright); }
+.seq .seq-result-source { margin: .55rem 0 .25rem; }
+.seq #sqRoute p { margin: .3rem 0; }
+.seq :is(button,input,a,select):focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

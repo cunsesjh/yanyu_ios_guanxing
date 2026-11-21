@@ -248,7 +248,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(app_icon())
         self.resize(1380, 900)
         self.setMinimumSize(1000, 680)
-        self.site = LocalSite(web_root)
+        self.site = LocalSite(web_root, journal_root=store.root)
         self.setStyleSheet(STYLE)
         root = QWidget()
         self.setCentralWidget(root)
@@ -509,7 +509,8 @@ class MainWindow(QMainWindow):
             self.session = self.store.session_for_snapshot(row, data)
         except (OSError, RuntimeError, ValueError):
             self.session = None
-        self.site.set_snapshot(data, row['platform'])
+        self.site.set_snapshot(data, row['platform'], sequence_owner=row.get('session_ref') or (
+            self.store.session_ref(self.session) if self.session else None))
         self.store.select(row['id'])
         self.current = row
         self.page_title.setText('%s  ·  %s 区' % (row['nick'], row['area']))
@@ -656,8 +657,7 @@ class MainWindow(QMainWindow):
                 self.current = None
                 self.view.stop()
                 self.view.setUrl(QUrl('about:blank'))
-                with self.site.lock:
-                    self.site.payload = b''
+                self.site.clear_snapshot()
                 self.stack.setCurrentWidget(self.welcome)
                 self.page_title.setText('欢迎使用 iosGuanxing')
                 remaining = self.store.selected()

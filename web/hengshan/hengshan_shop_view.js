@@ -14,7 +14,7 @@
     var SHOP_DATA = window.HENGSHAN_SHOP_DATA;
     var E = window.HengshanStudentEngine;
 
-    var TOOLS = ['manual', 'auto'];
+    var TOOLS = ['manual', 'auto', 'sequence'];
 
     /* 每日可刷新次数（游戏内商店每天可手动刷新 1 次） */
     var DAILY_REFRESH_LIMIT = 1;
