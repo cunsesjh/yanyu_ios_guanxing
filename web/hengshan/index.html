@@ -7,6 +7,7 @@
     <meta name="description" content="烟雨江湖恒山弟子升级与天赋刷新本地推演（官方内核离线版）">
     <link rel="stylesheet" href="../shared/simulator.css">
     <link rel="stylesheet" href="./hengshan.css">
+    <link rel="stylesheet" href="./sequence.css">
     <style>
         .wasm-loading-overlay { position: fixed; inset: 0; z-index: 99; display: grid; place-items: center; background: rgba(10, 11, 16, 0.88); }
         .wasm-loading-dialog { max-width: 420px; padding: 1.4rem 1.6rem; border: 1px solid var(--border-accent, #3a2f57); border-radius: 10px; background: var(--bg-primary, #eaf2fd); text-align: center; }
@@ -43,6 +44,7 @@
             <nav id="tabBar" class="hengshan-tabs" aria-label="恒山工具">
                 <button type="button" class="is-active" data-hengshan-tool="manual">弟子推演</button>
                 <button type="button" data-hengshan-tool="auto">自动推演弟子</button>
+                <button type="button" data-hengshan-tool="sequence">弟子洗髓序列（自用）</button>
             </nav>
 
             <div class="hengshan-view" data-hengshan-view="manual">
@@ -193,6 +195,113 @@
                 <div id="asResults" class="as-results"></div>
             </section>
             </div>
+            <div class="hengshan-view seq" data-hengshan-view="sequence" hidden>
+                <section class="config-panel">
+                    <div class="panel-header"><h2 id="sqGuide">弟子洗髓序列（自用） · 使用步骤</h2></div>
+                    <ol class="seq-guide as-plan-list" aria-labelledby="sqGuide">
+                        <li><a href="#sqRosterSection">选择弟子</a>　勾选要推演的在册或商店弟子。商店默认从存档游戏日起预测 7 天。</li>
+                        <li><a href="#sqGroupsSection">选择天赋组</a>　勾选常用方案，或点三个天赋保存新组。三个目标须同时在身上，等级和顺序不限。</li>
+                        <li><a href="#sqSearchSection">设定搜索范围</a>　填写最多洗几次、每项最多检查多少状态。默认从 0 次洗到 4 次，优先找少洗的路线。</li>
+                        <li><a href="#sqRunSection">开始推演</a>　按天赋组依次跑所选弟子。可以暂停；关掉页面后，回到同一存档点「继续上次批次」。</li>
+                        <li><a href="#sqResultSection">查看和导出</a>　先选弟子，再选天赋方案看路线。在结果区最下方可以把多条路线一次导出。</li>
+                    </ol>
+                    <p id="sqNotice" class="hengshan-message" role="status">正在读取存档…</p>
+                </section>
+                <fieldset id="sqSetup" disabled>
+                    <section id="sqRosterSection" class="config-panel">
+                        <div class="panel-header"><h2>1 · 选择弟子</h2><span id="sqSelected" class="as-result-skip"></span></div>
+                        <div class="seq-columns">
+                            <div>
+                                <div class="config-group"><label for="sqFind">按姓名或已有天赋找弟子</label><input id="sqFind" type="search" placeholder="输入弟子名或天赋名"></div>
+                                <p class="hengshan-ledger-note">「全选」「仅在册」「仅商店」按当前列表重新勾选。「全选取消」清空所有勾选。</p>
+                                <div class="seq-row">
+                                    <button class="btn btn-wash-custom" type="button" id="sqAll">全选</button>
+                                    <button class="btn btn-reset" type="button" id="sqNone">全选取消</button>
+                                    <button class="btn btn-wash-custom" type="button" id="sqOnlyEnrolled">仅在册</button>
+                                    <button class="btn btn-wash-custom" type="button" id="sqOnlyShop">仅商店</button>
+                                </div>
+                                <div id="sqStudents" class="seq-roster"></div>
+                            </div>
+                            <div id="sqShop" class="seq-subpanel">
+                                <h3>商店招募与刷新 <small>仅商店需要</small></h3>
+                                <p id="sqCoverage" class="hengshan-message" aria-live="polite">导入存档后显示可预测的招募日期。</p>
+                                <p class="hengshan-ledger-note">北京时间 05:00 换日，存档日算第 1 天。招募日期含首尾。只查一天时，两栏都选这一天。</p>
+                                <div class="seq-fields seq-shop-fields">
+                                    <div class="config-group"><label for="sqDays">预测天数（1～120）</label><input id="sqDays" type="number" min="1" max="120" value="7"></div>
+                                    <div class="config-group">
+                                        <label for="sqFromPick" id="sqFromLabel">招募开始日</label>
+                                        <input type="date" id="sqFrom" hidden>
+                                        <button class="btn seq-date-field" type="button" id="sqFromPick" aria-haspopup="dialog" aria-controls="sqCalendar" aria-labelledby="sqFromLabel sqFromValue" aria-describedby="sqDateHint"><span id="sqFromValue">选择开始日</span><span class="seq-calendar-icon" aria-hidden="true"></span></button>
+                                    </div>
+                                    <div class="config-group">
+                                        <label for="sqToPick" id="sqToLabel">招募结束日</label>
+                                        <input type="date" id="sqTo" hidden>
+                                        <button class="btn seq-date-field" type="button" id="sqToPick" aria-haspopup="dialog" aria-controls="sqCalendar" aria-labelledby="sqToLabel sqToValue" aria-describedby="sqDateHint"><span id="sqToValue">选择结束日</span><span class="seq-calendar-icon" aria-hidden="true"></span></button>
+                                    </div>
+                                </div>
+                                <div class="seq-row"><button class="btn btn-reset" type="button" id="sqClearDates">清空日期</button><button class="btn btn-wash-custom" type="button" id="sqExtend" hidden></button></div>
+                                <p id="sqDateHint" class="hengshan-message" role="status"></p>
+                                <h4>逐日刷新计划</h4><p class="hengshan-ledger-note">勾选表示当天会手动刷新一次。新配置默认每天手刷；改一天会影响后续人选。</p>
+                                <div class="seq-row"><button class="btn btn-wash-custom" id="sqManualAll" type="button">每天手动刷新</button><button class="btn btn-wash-custom" id="sqManualNone" type="button">每天只自动刷新</button></div>
+                                <div id="sqManualDays" class="seq-check-grid"></div>
+                                <label class="as-check"><input id="sqReconcile" type="checkbox"> 已确认游戏换日、存档仍是昨天名单，补算一次今日自动刷新</label>
+                            </div>
+                        </div>
+                    </section>
+                    <section id="sqGroupsSection" class="config-panel">
+                        <div class="panel-header"><h2>2 · 选择天赋组</h2></div>
+                        <p class="hengshan-ledger-note">可以同时勾多组。第一组的所有弟子跑完后，再跑下一组。</p>
+                        <div id="sqGroups" class="seq-groups"></div>
+                        <div id="sqEditor" class="seq-divider"><h3>新增自定义天赋组</h3>
+                            <div class="seq-fields"><div class="config-group"><label for="sqGroupName">方案名称</label><input id="sqGroupName" maxlength="64" placeholder="不填则使用天赋名"></div>
+                                <div class="config-group"><label for="sqTalentFind">搜索天赋</label><input id="sqTalentFind" type="search" placeholder="输入天赋名"></div></div>
+                            <div id="sqTalents"></div><div class="seq-row"><span id="sqDraft" class="hengshan-message"></span><button id="sqAddGroup" class="btn btn-wash-custom" type="button">保存这组</button></div>
+                        </div>
+                    </section>
+                    <section id="sqSearchSection" class="config-panel">
+                        <div class="panel-header"><h2>3 · 设定搜索范围</h2></div>
+                        <div class="seq-fields"><div class="config-group"><label for="sqBudget">每人每组最多洗练次数（0～100）</label><input id="sqBudget" type="number" value="4" min="0" max="100"></div>
+                            <div class="config-group"><label for="sqCap">每项搜索状态上限</label><input id="sqCap" type="number" value="500000" min="1" max="100000000"></div></div>
+                        <p class="hengshan-ledger-note">逐日成长至 100 级，排除「刻苦训练」。达到状态上限表示尚未搜完；可提高上限后继续。</p>
+                        <div class="seq-row"><button class="btn btn-wash-custom" id="sqCfgOut" type="button">导出当前配置</button><button class="btn btn-wash-custom" id="sqCfgIn" type="button">载入配置</button><input id="sqCfgFile" type="file" accept="application/json,.json" hidden></div>
+                    </section>
+                </fieldset>
+                <section id="sqRunSection" class="config-panel"><div class="panel-header"><h2>4 · 开始推演</h2></div>
+                    <div class="seq-row"><button id="sqStart" type="button" class="btn btn-wash-gold" disabled>开始批量推演</button><button class="btn btn-wash-custom" id="sqResume" type="button" disabled>继续上次批次</button><button class="btn btn-wash-custom" id="sqPause" type="button" disabled>暂停</button><button class="btn btn-reset" id="sqStop" type="button" disabled>停止</button></div>
+                    <p id="sqProgress" class="hengshan-message" role="status">尚未开始</p><p id="sqCounts" class="hengshan-ledger-note"></p>
+                </section>
+                <section id="sqResultSection" class="config-panel">
+                    <div class="panel-header"><h2>5 · 查看已复验路线</h2><span id="sqResultCount" class="as-result-skip" aria-live="polite"></span></div>
+                    <div class="seq-row seq-filterbar"><div class="config-group"><label for="sqResultsFind">查找弟子、日期、方案或天赋</label><input id="sqResultsFind" type="search" placeholder="例如：姓名、招募日期或胆小鬼"></div>
+                        <div class="config-group"><label for="sqResultSource">结果来源</label><select id="sqResultSource"><option value="all">全部来源</option><option value="enrolled">在册弟子</option><option value="shop">商店弟子</option></select></div></div>
+                    <div id="sqResults" class="seq-columns seq-result-browser">
+                        <div><h3>弟子目录</h3><div id="sqPeople"></div>
+                            <nav class="seq-row" id="sqPager" aria-label="弟子目录分页" hidden><button type="button" class="btn btn-wash-custom" id="sqPrev">上一页</button><span id="sqPage" class="as-result-skip"></span><button type="button" class="btn btn-wash-custom" id="sqNext">下一页</button></nav></div>
+                        <div class="seq-subpanel"><h3 id="sqPlansTitle">天赋方案</h3><div id="sqPlans"></div><article id="sqRoute" hidden></article></div>
+                    </div>
+                    <div class="seq-divider" id="sqBulk"><h3>批量导出</h3>
+                        <p class="hengshan-ledger-note">一个 ZIP 包含弟子索引、每条路线的操作步骤和完整 JSON。</p>
+                        <div class="seq-row"><label class="as-check"><input type="radio" name="sqExportScope" value="filtered" checked> 当前筛选（跨所有页）<span id="sqExportFiltered">0 条</span></label>
+                            <label class="as-check"><input type="radio" name="sqExportScope" value="all"> 全部已复验 <span id="sqExportAll">0 条</span></label>
+                            <button class="btn btn-wash-custom" id="sqBulkExport" type="button" disabled>批量导出 ZIP</button></div>
+                        <p id="sqExportNote" class="hengshan-message" role="status"></p>
+                    </div>
+                </section>
+                <dialog id="sqCalendar" class="seq-calendar" aria-labelledby="sqCalendarTitle">
+                    <div class="panel-header"><h2 id="sqCalendarTitle">选择招募日期</h2><button class="btn btn-wash-custom" type="button" id="sqCalendarClose">关闭</button></div>
+                    <div class="seq-calendar-nav">
+                        <button class="btn btn-wash-custom" type="button" id="sqCalendarPrev" aria-label="上个月">‹</button>
+                        <p id="sqCalendarMonth" aria-live="polite"></p>
+                        <button class="btn btn-wash-custom" type="button" id="sqCalendarNext" aria-label="下个月">›</button>
+                    </div>
+                    <table class="seq-calendar-days" aria-labelledby="sqCalendarMonth">
+                        <thead><tr><th scope="col">一</th><th scope="col">二</th><th scope="col">三</th><th scope="col">四</th><th scope="col">五</th><th scope="col">六</th><th scope="col">日</th></tr></thead>
+                        <tbody id="sqCalendarDays"></tbody>
+                    </table>
+                    <p class="hengshan-ledger-note" id="sqCalendarHint"></p>
+                    <button class="btn btn-reset" type="button" id="sqCalendarClear">清空本栏</button>
+                </dialog>
+            </div>
         </main>
 
         <footer class="app-footer"><p>数据来源于 <a href="https://wiki.biligame.com/yanyu/" target="_blank" rel="noopener">烟雨江湖 Wiki</a> · 恒山算法内核离线运行，无网络请求</p></footer>
@@ -212,5 +321,10 @@
     <script src="./hengshan_day_advance.js"></script>
     <script src="./hengshan_auto_sim.js"></script>
     <script src="./hengshan_shop_view.js"></script>
+    <script src="./sequence_core.js"></script>
+    <script src="./sequence_verify.js"></script>
+    <script src="./sequence_results.js"></script>
+    <script src="./sequence_calendar.js"></script>
+    <script src="./sequence_view.js"></script>
 </body>
 </html>

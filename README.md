@@ -23,6 +23,12 @@ Windows 10/11 x64 下载 Release 中的 `iosGuanxing.exe`，直接运行。
 
 点击「开始七层搜索」。搜索比较锁脉、垫洗、开槽和置换的组合，按达成整套目标的总丹耗排序。全部必选脉和每个兼容组要求的脉需要在路线结束时同时保留。每条可用路线会从当前存档回放核对，可暂停、继续、停止并导出已找到的结果。TXT 或 Markdown 参考路线可以载入同一起点参与比较。当前支持国服和先行服。
 
+### 恒山弟子洗髓序列（自用）
+
+打开「恒山模拟 → 弟子洗髓序列（自用）」。左侧默认勾选 0 名弟子，可逐个勾选在册或商店人选，也可用「全选」「全选取消」「仅在册」「仅商店」。右侧从存档游戏日起预测 7 天，可在日历中点选招募起止日。区间含首尾，也可按游戏实际安排逐日设置手动刷新。
+
+勾选一个或多个三天赋目标组，设置洗练次数和状态检查上限后开始推演。程序优先检查洗练次数更少的路线，并按手动页的操作逐步复验。达到检查上限的项目可提高上限后点「继续上次批次」。已复验结果按弟子查看，可将当前筛选或全部路线批量导出为 ZIP。解压后打开 `索引.html`，可按弟子查阅操作步骤和路线 JSON。
+
 ## iOS抓包
 
 - 安装免费开源抓包工具 ProxyPin ，手机直接去AppStore即可安装
@@ -42,7 +48,7 @@ Windows 10/11 x64 下载 Release 中的 `iosGuanxing.exe`，直接运行。
 
 下载失败时，完整诊断（错误类型、HTTP 状态码、响应片段、堆栈）会写入数据目录的 `last_error.log`，仅保存在本机；排障时可把它发给维护者。界面提示只显示安全摘要，不展示账号、请求头和原始响应。
 
-内置网页仅访问程序自己的本机随机端口。关闭程序时停止服务。网页运行状态保存在内存中，退出后清除；存档快照单独保留。界面设置、模拟器临时操作在首版中不会跨重启保存。
+内置网页仅访问程序自己的本机随机端口。关闭程序时停止服务。网页运行状态保存在内存中，退出后清除；存档快照单独保留。恒山自用的批次和已复验路线存入本地 `hengshan-sequences.sqlite3`，批次可以在同一份快照上续跑。
 
 ## 开发与构建
 
@@ -51,6 +57,8 @@ Python 3.11，安装 `requirements-desktop.txt` 后执行 `python desktop_main.p
 离线测试：`python -m unittest discover -s tests -v`；内置网页验证：`python dev/smoke_desktop.py`。
 
 洗脉自用测试使用 `node tests/test_personal_wash.cjs`，界面与工作线程测试使用 `python dev/check_auto_wash2.py`。
+
+恒山自用测试使用 `node tests/test_hengshan_sequence.cjs` 和 `python dev/check_hengshan_sequence.py`。
 
 Windows 打包：安装 PyInstaller 6.x，运行 `python -m PyInstaller --noconfirm iosGuanxing.spec`。推送 `v*` 标签自动构建预览 Release，发布 EXE 与 SHA256 校验文件。
 
