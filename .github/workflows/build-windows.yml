@@ -110,13 +110,12 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v3.1.0-beta.1 测试版更新公告
+            ## v4.0-beta.1 测试版更新公告
 
-            适配先行服 v1.125.73618：接口迁移至新域名（HTTPS），导入 HAR 时请在 ProxyPin 开启 HTTPS 解密后再抓包。
-
-            存档内层密钥改为随下载自动下发（extra 字段），游戏更新密钥后无需等待工具更新即可导入。
-
-            修复先行服更新后 HAR 导入失败的问题。
+            - 桌面端支持选择应用数据与存档位置，并提供应用内自动更新。
+            - 删除历史存档时直接从本机永久删除。
+            - 优化自动打造结果展示、橙装图纸筛选和材料排序。
+            - 统一使用“芒晶”名称，并优化 Windows 桌面打包内容。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt

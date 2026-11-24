@@ -40,8 +40,9 @@ def exercise():
         assert window.current is None and window.stack.currentWidget() is window.welcome
         assert window.site.payload == b'' and not window.history_button.isEnabled()
         assert not button.isEnabled()
-        assert len(list((store.root / '.deleted-snapshots').iterdir())) == 2
-        print('PASS: deletion cancel, active snapshot fallback, last record clears embedded save, recoverable files', flush=True)
+        assert not store.snapshots.exists() or not any(store.snapshots.iterdir()), 'deleted snapshot files remain on disk'
+        assert not (store.root / '.deleted-snapshots').exists(), 'legacy deleted-snapshot folder was created'
+        print('PASS: deletion cancel, active snapshot fallback, last record clears embedded save, files permanently removed', flush=True)
     except Exception as error:
         failed.append(str(error) or type(error).__name__)
         print('FAIL: ' + failed[-1], flush=True)
