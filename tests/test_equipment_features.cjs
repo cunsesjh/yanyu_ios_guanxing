@@ -67,6 +67,10 @@ assert.ok(orangePapers.some(paper => Number(paper.id) === 3478), '炎火戒图�
 const html = fs.readFileSync(path.join(root, 'web/equip/index.html'), 'utf8');
 assert.ok((html.match(/value="orange"/g) || []).length >= 2,
     'both linked equipment category selectors must expose orange blueprints');
+assert.equal(vm.runInContext('DEFAULT_MAKE_COLOR_FILTER', context), '',
+    'craft prediction must show all qualities by default');
+assert.match(html, /<option value="" selected>全部<\/option>/,
+    'the craft quality selector must visibly default to all qualities');
 
 assert.equal(
     vm.runInContext('summarizeExtTotals([{prop:"atk",value:100},{prop:"atk",value:80},{prop:"blood",value:0.02}])', context),

@@ -20,7 +20,7 @@ const PREVIEW_MAX = 5000;
 const XILIAN_MAX = 1000;
 const MANGJING_MAX = 500;
 const MANGJING_DEFAULT = 30;
-const DEFAULT_MAKE_COLOR_FILTER = '4';   // 「预测序列」后默认只看紫装（4 = 紫）
+const DEFAULT_MAKE_COLOR_FILTER = '';    // 「预测序列」后默认显示全部品质
 const LOG_PAGE_SIZE = 40;
 const PATH_PAGE_SIZE = 12;
 const CRAFTED_MJ_SEED_PAPER_MULTIPLIER = 198;
