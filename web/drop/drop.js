@@ -294,10 +294,11 @@
     async function init() {
         var shared = typeof loadShareStore === 'function' ? loadShareStore() : null;
         var data = shared && shared.data;
-        if (typeof renderArchiveState === 'function') renderArchiveState(data);
         saveState = extractState(data);
-        $('seedStatus').textContent = saveState ? '可精确推演' : '缺少诱虎种子';
         $('btnSearch').disabled = !saveState;
+        $('searchMessage').textContent = saveState
+            ? '已读取诱虎状态。路线会按实际执行顺序列出，普通生肉与虎肉不可随意调换。'
+            : '当前存档缺少衡山诱虎随机状态，请先在首页导入有效存档。';
         $('btnSearch').addEventListener('click', search);
         $('targetBones').addEventListener('keydown', function (event) {
             if (event.key === 'Enter') search();
@@ -306,8 +307,8 @@
             link.addEventListener('click', function () { if (typeof markNavTransition === 'function') markNavTransition(); });
         });
         try { await HomesteadEngine.ensure(); } catch (error) {
-            $('seedStatus').textContent = '引擎加载失败';
             $('btnSearch').disabled = true;
+            $('searchMessage').textContent = '虎骨推演引擎加载失败，请重新打开页面。';
         }
     }
 

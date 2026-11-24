@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>烟雨江湖 · 装备规划</title>
+    <meta name="description" content="按连金泥预算规划90级紫装打造与精炼结果">
+    <link rel="stylesheet" href="../shared/simulator.css">
+    <link rel="stylesheet" href="./planner.css">
+</head>
+<body>
+    <div class="app-container planner-app">
+        <header class="app-header">
+            <h1>装备规划</h1>
+            <p class="subtitle">90级紫装 · 打造、升炼与精炼综合评分</p>
+            <nav class="sim-nav">
+                <a href="../index.html">首页</a><span class="nav-sep">·</span>
+                <a href="../equip/index.html">装备模拟</a><span class="nav-sep">·</span>
+                <a href="../auto/index.html">自动模拟</a><span class="nav-sep">·</span>
+                <a href="./index.html" class="active" aria-current="page">装备规划</a><span class="nav-sep">·</span>
+                <a href="../drop/index.html">虎骨掉落</a>
+            </nav>
+        </header>
+
+        <main class="planner-main">
+            <section class="config-panel" aria-labelledby="plannerConfigTitle">
+                <div class="feature-section-head">
+                    <div><span class="section-step">01</span><div><small>EQUIPMENT PLANNER</small><h2 id="plannerConfigTitle">规划条件</h2></div></div>
+                    <span class="local-badge">本地计算</span>
+                </div>
+                <div class="planner-config-grid">
+                    <label>连金泥预算
+                        <span class="input-with-unit"><input id="mudBudget" type="number" min="10" max="1000" value="200" inputmode="numeric"><span>个</span></span>
+                    </label>
+                    <label>每条路线打造
+                        <span class="input-with-unit"><input id="craftCount" type="number" min="1" max="500" value="100" inputmode="numeric"><span>件</span></span>
+                    </label>
+                    <button id="btnPlan" class="btn btn-primary" type="button">开始规划</button>
+                    <button id="btnCancel" class="btn btn-reset" type="button" hidden>计算完当前部位后停止</button>
+                </div>
+                <p class="field-hint">泥预算包含90级紫装升炼所需的10个连金泥和后续精炼实际消耗。每个地点与图纸均从当前存档的同一份打造状态独立推演。</p>
+                <div id="planProgress" class="planner-progress" hidden aria-live="polite">
+                    <div><span id="progressText">准备计算</span><strong id="progressPercent">0%</strong></div>
+                    <div class="planner-progress-track"><span id="progressFill"></span></div>
+                </div>
+                <p id="planMessage" class="field-hint" role="status" aria-live="polite">载入存档后即可开始规划。</p>
+            </section>
+
+            <section class="result-panel planner-results-panel" aria-labelledby="plannerResultTitle">
+                <div class="planner-result-head">
+                    <div class="planner-title-wrap"><span class="section-step">02</span><div><h2 id="plannerResultTitle">神器与极品</h2><span id="resultMeta">等待规划</span></div></div>
+                    <div class="planner-filters">
+                        <label for="partFilter">部位</label>
+                        <select id="partFilter">
+                            <option value="all">全部部位</option>
+                        </select>
+                        <label class="attach-only"><input id="attachOnly" type="checkbox"><span>仅附加装备</span></label>
+                    </div>
+                </div>
+                <div id="resultEmpty" class="result-empty">只展示最终评分达到神器或极品、且实际泥耗不超过预算的全部装备。</div>
+                <div id="resultGroups" class="planner-result-groups" aria-live="polite"></div>
+            </section>
+
+            <section class="scoring-panel" aria-labelledby="scoringTitle">
+                <div class="panel-title"><span class="section-step">03</span><h2 id="scoringTitle">评分口径</h2></div>
+                <p><strong>最终分 = 精炼基础分 + 地区附加分。</strong>精炼基础分按实际三槽属性相对该装备三槽理论满值计算；96分起为神器，91分起为极品。</p>
+                <p>地区附加按战斗价值折算并封顶30分，例如2%免伤加25分、69攻击约加13.8分、12臂力加15分、10真元加20分。结果卡会分别列出基础分、附加分和最终分。</p>
+                <p>只列出实际总泥耗不超过预算的精炼方案。不同地点、图纸和部位均独立推演，不会修改存档或装备模拟背包。</p>
+            </section>
+        </main>
+    </div>
+
+    <script src="../shared/equip_data.js"></script>
+    <script src="../shared/equipment_engine_b64.js"></script>
+    <script src="../shared/equipment_offline_boot.js"></script>
+    <script src="../shared/algorithm_wasm_bridge.js"></script>
+    <script src="../shared/wasm_algorithm_api.js"></script>
+    <script src="../shared/pako.min.js"></script>
+    <script src="../shared/sql-wasm.js"></script>
+    <script src="../shared/sql-wasm-embed.js"></script>
+    <script src="../shared/save_decrypt.js"></script>
+    <script src="../shared/archive_state.js"></script>
+    <script src="./planner.js"></script>
+</body>
+</html>

@@ -21,17 +21,12 @@
             </nav>
         </header>
 
-        <section class="archive-summary" aria-label="存档信息">
-            <div class="archive-summary-info">
-                <div class="archive-summary-item"><span>存档状态</span><strong id="saveStatus">未导入</strong></div>
-                <div class="archive-summary-item"><span>主角</span><strong id="archiveMainRole">—</strong></div>
-                <div class="archive-summary-item"><span>诱虎状态</span><strong id="seedStatus">等待读取</strong></div>
-            </div>
-        </section>
-
         <main class="drop-main">
             <section class="config-panel" aria-labelledby="tigerConfigTitle">
-                <div class="section-title"><h2 id="tigerConfigTitle" class="section-heading">目标设置</h2></div>
+                <div class="feature-section-head">
+                    <div><span class="section-step">01</span><div><small>ROUTE PLANNER</small><h2 id="tigerConfigTitle">目标设置</h2></div></div>
+                    <span class="local-badge">本地计算</span>
+                </div>
                 <div class="config-row tiger-config-row">
                     <div class="config-group target-count">
                         <label for="targetBones">目标虎骨数</label>
@@ -47,7 +42,7 @@
             </section>
 
             <section id="resultPanel" class="result-panel" aria-labelledby="resultTitle">
-                <div class="panel-header"><h2 id="resultTitle">省肉投喂路线</h2><span id="resultMeta" class="result-meta">等待推演</span></div>
+                <div class="panel-header"><div class="panel-title"><span class="section-step">02</span><h2 id="resultTitle">省肉投喂路线</h2></div><span id="resultMeta" class="result-meta">等待推演</span></div>
                 <div id="resultEmpty" class="result-empty">输入目标虎骨数后开始推演。</div>
                 <div id="resultContent" hidden>
                     <div id="summaryGrid" class="summary-grid"></div>
@@ -57,7 +52,7 @@
             </section>
 
             <section class="precision-panel" aria-labelledby="precisionTitle">
-                <h2 id="precisionTitle">推演口径</h2>
+                <div class="panel-title"><span class="section-step">03</span><h2 id="precisionTitle">推演口径</h2></div>
                 <p><strong>精确状态：</strong>每次投喂都会推进猛虎/白虎、掉落和虎骨保底状态；路线中的肉类与顺序必须照做。</p>
                 <p><strong>优化条件：</strong>目标不超过20个时比较完整混合分支，保证总投喂次数最少，并在同长度下少用虎肉。目标超过20个时分段滚动优化，路线及掉落仍然准确，但不标注为全局最优。</p>
                 <p><strong>存档不变：</strong>本页只读取当前存档并推演，不会修改存档或页面中的其他模拟状态。</p>
