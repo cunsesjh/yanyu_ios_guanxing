@@ -71,6 +71,13 @@ jobs:
           if-no-files-found: ignore
       - name: Build executable
         run: python -m PyInstaller --noconfirm --clean iosGuanxing.spec
+      - name: Record packaged size and archive contents
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/package-report | Out-Null
+          $exe = Get-Item dist/iosGuanxing.exe
+          "iosGuanxing.exe`t$($exe.Length) bytes" | Set-Content build/package-report/size.txt
+          pyi-archive_viewer --list dist/iosGuanxing.exe | Set-Content build/package-report/archive.txt
       - name: Packaged executable startup and embedded page test
         shell: pwsh
         run: |
@@ -88,12 +95,14 @@ jobs:
           $hash = (Get-FileHash dist/iosGuanxing.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  iosGuanxing.exe" | Set-Content dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
+        if: always()
         continue-on-error: true
         with:
           name: iosGuanxing-Windows-x64
           path: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
+            build/package-report/
           retention-days: 14
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
