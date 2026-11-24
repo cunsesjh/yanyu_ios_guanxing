@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>烟雨江湖 · 虎骨掉落</title>
+    <meta name="description" content="衡山诱虎的虎骨最省投喂路线推演">
+    <link rel="stylesheet" href="../shared/simulator.css">
+    <link rel="stylesheet" href="./drop.css">
+</head>
+<body>
+    <div class="app-container drop-app">
+        <header class="app-header">
+            <h1>虎骨掉落</h1>
+            <p class="subtitle">衡山诱虎 · 普通生肉与虎肉混合路线</p>
+            <nav class="sim-nav">
+                <a href="../index.html">首页</a><span class="nav-sep">·</span>
+                <a href="../equip/index.html">装备模拟</a><span class="nav-sep">·</span>
+                <a href="../auto/index.html">自动模拟</a><span class="nav-sep">·</span>
+                <a href="../drop/index.html" class="active" aria-current="page">虎骨掉落</a>
+            </nav>
+        </header>
+
+        <section class="archive-summary" aria-label="存档信息">
+            <div class="archive-summary-info">
+                <div class="archive-summary-item"><span>存档状态</span><strong id="saveStatus">未导入</strong></div>
+                <div class="archive-summary-item"><span>主角</span><strong id="archiveMainRole">—</strong></div>
+                <div class="archive-summary-item"><span>诱虎状态</span><strong id="seedStatus">等待读取</strong></div>
+            </div>
+        </section>
+
+        <main class="drop-main">
+            <section class="config-panel" aria-labelledby="tigerConfigTitle">
+                <div class="section-title"><h2 id="tigerConfigTitle" class="section-heading">目标设置</h2></div>
+                <div class="config-row tiger-config-row">
+                    <div class="config-group target-count">
+                        <label for="targetBones">目标虎骨数</label>
+                        <input id="targetBones" type="number" min="1" max="20" value="5" inputmode="numeric">
+                    </div>
+                    <div class="objective-copy">
+                        <strong>最省路线</strong>
+                        <span>优先让总投喂次数最少；次数相同时，选择消耗虎肉更少的路线。</span>
+                    </div>
+                    <div class="action-buttons"><button id="btnSearch" class="btn btn-primary" type="button">开始推演</button></div>
+                </div>
+                <p id="searchMessage" class="field-hint" role="status" aria-live="polite">路线会按实际执行顺序列出，普通生肉与虎肉不可随意调换。</p>
+            </section>
+
+            <section id="resultPanel" class="result-panel" aria-labelledby="resultTitle">
+                <div class="panel-header"><h2 id="resultTitle">最省投喂路线</h2><span id="resultMeta" class="result-meta">等待推演</span></div>
+                <div id="resultEmpty" class="result-empty">输入目标虎骨数后开始推演。</div>
+                <div id="resultContent" hidden>
+                    <div id="summaryGrid" class="summary-grid"></div>
+                    <div class="route-overview"><span>执行顺序</span><strong id="routeOverview"></strong></div>
+                    <div id="resultList" class="result-list" aria-live="polite"></div>
+                </div>
+            </section>
+
+            <section class="precision-panel" aria-labelledby="precisionTitle">
+                <h2 id="precisionTitle">推演口径</h2>
+                <p><strong>精确状态：</strong>每次投喂都会推进猛虎/白虎、掉落和虎骨保底状态；路线中的肉类与顺序必须照做。</p>
+                <p><strong>最优条件：</strong>虎骨每次最多掉落一个。搜索会比较普通生肉和虎肉的混合分支，找到总投喂次数最少的路线，再以少用虎肉作为同长度路线的优先条件。</p>
+                <p><strong>存档不变：</strong>本页只读取当前存档并推演，不会修改存档或页面中的其他模拟状态。</p>
+            </section>
+        </main>
+    </div>
+
+    <script src="../homestead/wasm_b64.js"></script>
+    <script src="../homestead/engine.js?v=20261124tiger1"></script>
+    <script src="../shared/pako.min.js"></script>
+    <script src="../shared/sql-wasm.js"></script>
+    <script src="../shared/sql-wasm-embed.js"></script>
+    <script src="../shared/save_decrypt.js"></script>
+    <script src="../shared/archive_state.js"></script>
+    <script src="./drop.js"></script>
+</body>
+</html>

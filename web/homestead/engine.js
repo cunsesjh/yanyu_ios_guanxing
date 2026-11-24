@@ -75,10 +75,14 @@
     function homeRolePools(roleIds) {
         return ensure().then(function () { return callWasm('home.rolePools', roleIds); });
     }
+    function wildPreview(input) {
+        return ensure().then(function () { return callWasm('drop.wildPreview', { input: input }); });
+    }
 
     window.HomesteadEngine = {
         ensure: ensure,
         homePredict: homePredict,
-        homeRolePools: homeRolePools
+        homeRolePools: homeRolePools,
+        wildPreview: wildPreview
     };
 })();
