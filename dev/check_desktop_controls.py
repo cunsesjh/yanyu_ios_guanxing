@@ -16,7 +16,8 @@ temporary = tempfile.TemporaryDirectory()
 window = MainWindow(Store(temporary.name), ROOT / 'web')
 window.show()
 pages = ['wash/index.html', 'equip/index.html', 'hengshan/index.html',
-         'role/index.html', 'role/status.html', 'auto/index.html', 'guishi/index.html']
+         'role/index.html', 'role/status.html', 'auto/index.html',
+         'drop/index.html', 'guishi/index.html']
 results = []
 SCRIPT = r'''JSON.stringify((()=>{
     try {
