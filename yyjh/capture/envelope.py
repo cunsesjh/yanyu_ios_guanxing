@@ -24,7 +24,8 @@ from ..game import savefmt
 MAX_SAVE_BYTES = 32 * 1024 * 1024
 COMMANDS = frozenset(('upload3', 'upload_auto3', 'download3'))
 PLATFORM_HOSTS = {'ios.wlfy.blue8.cn': 'ios', 'andr.wlfy.blue8.cn': 'android',
-                  'pre.wlfy.blue8.cn': 'ios'}   # 先行服（同域名也走安卓，下面按 plat 头兜底）
+                  'pre.wlfy.blue8.cn': 'ios',    # 先行服（同域名也走安卓，下面按 plat 头兜底）
+                  'wlfypre.whalegame.cn': 'ios'}  # 先行服新域名（v73618+/1.125.73618+，同样按 plat 头兜底）
 # 兜底内层密钥（psw + 渠道后缀）；优先还试 keytables 的版本化候选
 INNER_KEYS_FALLBACK = {
     'android': ('xi9iz9h4po06ewkx',),
@@ -124,8 +125,11 @@ def key_stream(platform, session, anchor, window=5):
         yield offset, hashlib.md5(raw).hexdigest()[:16]
 
 
-def open_full(cipher, key, platform='ios', version_hint=None):
-    """传输层解密 -> (完整存档 dict, 版本号, 内层密钥)。失败返回 None。"""
+def open_full(cipher, key, platform='ios', version_hint=None, inner_keys=()):
+    """传输层解密 -> (完整存档 dict, 版本号, 内层密钥)。失败返回 None。
+
+    inner_keys：优先尝试的内层密钥候选（如 download3 extra 字段随下载
+    下发的新 psw × 渠道后缀 —— 比等密钥表更新更可靠）。"""
     stage1 = _raw_decrypt(cipher, key)
     if not stage1:
         return None
@@ -134,7 +138,7 @@ def open_full(cipher, key, platform='ios', version_hint=None):
         return None
     version = int(env[:8])
     inner = env[8:]
-    cands = list(INNER_KEYS_FALLBACK.get(platform, ()))
+    cands = list(inner_keys) + list(INNER_KEYS_FALLBACK.get(platform, ()))
     try:
         # 版本号统一按工具约定的 8 位字符串查表（keytables 的键是 '00073580'，
         # int 会全部落空、只剩后缀兑底候选）

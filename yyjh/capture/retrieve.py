@@ -28,6 +28,7 @@ RSA_N = int(
     'b6b3d66819e26c2b674f0a9ddefe934243ce87ad', 16)
 HOSTS = frozenset(('ios.wlfy.blue8.cn', 'andr.wlfy.blue8.cn',
                    'pre.wlfy.blue8.cn',           # 先行服（ios/android 同域名，按渠道头判平台）
+                   'wlfypre.whalegame.cn',        # 先行服新域名（v1.125.73618+/73618+，HTTPS）
                    'yanyuonline.novastargame.net'))  # 国际服（xinma 等，按渠道头判平台）
 COPY_HEADERS = ('ver', 'appver', 'channel', 'realchannel', 'whale', 'lang',
                 'blue', 'green', 'user-agent', 'plat', 'sn', 'sn2', 'sn3')
@@ -137,6 +138,28 @@ def prepare(session):
     return body, headers, key
 
 
+def _extra_inner_keys(payload, session):
+    """download3 extra 字段 -> 内层密钥候选。
+
+    v73618+（1.125.73618）：内层 psw 由 extra 随下载下发
+    （extra = base64(XXTEA(psw(8), realKey))），比等密钥表更新更可靠。
+    返回 psw × 各渠道后缀的候选（顺序即优先级）。"""
+    extra = payload.get('extra') if isinstance(payload, dict) else None
+    if not extra:
+        return ()
+    from ..config import keytables
+    try:
+        blob = base64.b64decode(extra, validate=True)
+        psw_b = xxtea.decrypt(blob, session['protocol_key'])
+        psw = (psw_b or b'').decode('ascii')
+    except (ValueError, TypeError, UnicodeError):
+        return ()
+    if len(psw) != 8:
+        return ()
+    return tuple((psw + suf)[:16]
+                 for suf in list(keytables.CHANNEL_SUFFIXES) + ['00000000'])
+
+
 def decode_response(payload, key, session):
     if not isinstance(payload, dict) or payload.get('code') != 0:
         if isinstance(payload, dict) and payload.get('code') == 6:
@@ -146,7 +169,8 @@ def decode_response(payload, key, session):
         cipher = base64.b64decode(payload['data'], validate=True)
     except (ValueError, KeyError, TypeError):
         raise ValueError('download3 响应缺少合法存档数据') from None
-    got = envelope.open_full(cipher, key, session['platform'])
+    got = envelope.open_full(cipher, key, session['platform'],
+                             inner_keys=_extra_inner_keys(payload, session))
     if not got:
         raise ValueError('响应未能通过本地内层解码校验；未回退到远端服务或残缺存档')
     data, version, inner_key = got

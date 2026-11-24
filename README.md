@@ -23,7 +23,7 @@ Windows 10/11 x64 下载 Release 中的 `iosGuanxing.exe`，直接运行。
 
 ### 抓包流程
 
-1.打开proxyin，点击右下角开始，开启抓包（无需开启HTTPS代理）  
+1.打开proxyin，点击右下角开始，开启抓包，并**开启HTTPS解密**（安装并信任ProxyPin的CA证书；v1.125.73618起先行服接口改为 https://wlfypre.whalegame.cn ，不解密抓不到）  
 2.进入游戏主页面，（未登录请先登录，为防止丢失数据请先点击左下角[上传]），点击左下角[下载]  
 3.回到proxypin，点击右下角停止，结束抓包  
 4.proxypin右上角三点 —— 视图导出 —— （新版本要选择HAR格式）  
