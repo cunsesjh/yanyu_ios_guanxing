@@ -126,7 +126,7 @@ function mangjingUsesPercentFormat(prop, value) {
 }
 
 /** 百分比 → 百分比点（0.055 → 5.5），与 shared/simulator.js 的 equipAutoPercentagePoints 同规则。
- *  装备自动模拟的「盲晶筛选」就是这么比对的，打造页保持同一套，避免两处行为不一致。 */
+ *  装备自动模拟的「芒晶筛选」就是这么比对的，打造页保持同一套，避免两处行为不一致。 */
 function mangjingPercentagePoints(value) {
     const number = Number(value);
     if (!Number.isFinite(number)) return 0;
@@ -134,8 +134,8 @@ function mangjingPercentagePoints(value) {
     return Math.floor(number * 100 + 0.001);
 }
 
-/** 盲晶「显示数值」：武器是百分比小数（0.055 → 5.5），防具是原始点数（16 → 16）。
- *  「盲晶≥」按用户看到的显示值输入，避免武器要输 0.055 这种反直觉操作。 */
+/** 芒晶「显示数值」：武器是百分比小数（0.055 → 5.5），防具是原始点数（16 → 16）。
+ *  「芒晶≥」按用户看到的显示值输入，避免武器要输 0.055 这种反直觉操作。 */
 function mangjingDisplayValue(prop, v) {
     const num = Number(v);
     if (!Number.isFinite(num)) return NaN;
@@ -706,7 +706,7 @@ function resetXilianSession() {
     xilianPlanEquipKey = null;
     xilianPlanItems = [];
     // 这两份快照的消费者是「加入成品背包」，切换装备/重置时一并清掉，
-    // 否则会把上一件装备的词条、花费、盲晶信息错记到当前选中的装备名下。
+    // 否则会把上一件装备的词条、花费、芒晶信息错记到当前选中的装备名下。
     lastXilianPlan = null;
     lastMangjingResult = null;
     const box = document.getElementById('xilianPlanSummary');
@@ -999,6 +999,101 @@ function orangePapersForNpc(npcId) {
     return papersForNpc(npcId).filter(isOrangePaper);
 }
 
+function isFixedOrangeMakeRequest(req) {
+    return !!req && Number(req.min_color) === 5 && Number(req.max_color) === 5;
+}
+
+function isFreePaperMakeRequest(req) {
+    if (!req) return false;
+    const craftsman = EQUIP_DATA.craftsman[String(req.npc_id)];
+    return !!craftsman && (craftsman.pf || []).map(Number).includes(Number(req.select_id));
+}
+
+function usesOrangePadSequence(req) {
+    const equip = req ? EQUIP_DATA.equipment[String(req.equip_id)] : null;
+    return isFixedOrangeMakeRequest(req)
+        && !isFreePaperMakeRequest(req)
+        && Number(equip?.lv) < 100;
+}
+
+// 可在商店取得、适合作为橙装序列垫装的常规图纸。90 级与自动装备规划共用同一清单；
+// 低等级按当前橙装覆盖的等级补齐常规图纸，排除修罗、止水、黑杀、灵蛇、昀霜等特殊来源。
+const PURCHASABLE_MAKE_PAD_PAPER_IDS = new Set([
+    2581, 2584, 2580, 3461, 3439, 3449, 3460, 2586, 2585,
+    2587, 2583, 2582, 3458, 3454, 3429, 3456, 3409, 3419, // 90 级（AUTO_PAPER_IDS）
+    2511, 2531, 2541, 2577, 3428, 3448, // 80 级
+    2540, 2576,                         // 70 级
+    2509, 2529, 2519, 2539, 2575, 3406, 3426, 3446, // 60 级
+    2507, 2527, 2537, 2573, 3414, 3444, // 40 级
+]);
+
+function isCraftableOrdinaryPadPaper(item) {
+    return !!item?.paper
+        && !!item?.equip
+        && Number(item.paper.max_color) <= 4
+        && PURCHASABLE_MAKE_PAD_PAPER_IDS.has(Number(item.paper.id));
+}
+
+function makePadCandidatesFor(req) {
+    if (!usesOrangePadSequence(req)) return [];
+    const target = EQUIP_DATA.equipment[String(req.equip_id)];
+    return papersForNpc(Number(req.npc_id)).filter(item => (
+        isCraftableOrdinaryPadPaper(item)
+        && Number(item.equip.id) !== Number(req.equip_id)
+        && Number(item.equip.type) === Number(target.type)
+        && Number(item.equip.lv) === Number(target.lv)
+    ));
+}
+
+function fillMakePadSelect(preserveSelection = true) {
+    const group = document.getElementById('makePadGroup');
+    const select = document.getElementById('makePadPaperSelect');
+    if (!select) return;
+    const previous = preserveSelection ? select.value : '';
+    const items = makePadCandidatesFor(currentMakeRequest());
+    select.innerHTML = '';
+    for (const item of items) {
+        const option = document.createElement('option');
+        option.value = String(item.selectId);
+        option.textContent = item.paper.name || item.equip.name || String(item.selectId);
+        select.appendChild(option);
+    }
+    if (previous && [...select.options].some(option => option.value === previous)) {
+        select.value = previous;
+    }
+    if (group) group.hidden = items.length === 0;
+}
+
+function makePadCandidateFor(req) {
+    const items = makePadCandidatesFor(req);
+    if (!items.length) return null;
+    const selectedId = Number(document.getElementById('makePadPaperSelect')?.value || 0);
+    const selected = items.find(item => Number(item.selectId) === selectedId) || items[0];
+    return {
+        npc_id: Number(req.npc_id),
+        select_id: Number(selected.selectId),
+        equip_id: Number(selected.equipId),
+        special_id: 0,
+        min_color: Number(selected.paper.min_color),
+        max_color: Number(selected.paper.max_color),
+    };
+}
+
+function predictFixedOrangeByOrdinaryPads(req, count) {
+    if (!usesOrangePadSequence(req)) return wasmMakePreview(req, count);
+    const padReq = makePadCandidateFor(req);
+    if (!padReq) return { items: [], error: '当前橙装找不到同等级、同类型的普通装备用于垫装' };
+    return wasmMakeOrangePadSequence(req, padReq, count, true);
+}
+
+function advanceFixedOrangeByOrdinaryPads(req, targetIndex) {
+    if (!usesOrangePadSequence(req)) return null;
+    const padReq = makePadCandidateFor(req);
+    if (!padReq) return { error: '当前橙装找不到同等级、同类型的普通装备用于垫装' };
+    const result = wasmMakeOrangePadSequence(req, padReq, targetIndex, false);
+    return result.error ? result : result.item;
+}
+
 function fillNpcSelect() {
     const sel = document.getElementById('npcSelect');
     sel.innerHTML = '';
@@ -1122,6 +1217,8 @@ function findPaperByEquipName(name, lv) {
 /** 按分类填 paperSelect：tie→12 铁匠武器，xiu→6 绣庄防具，all→旧逻辑
  *  全局找 paper，不受当前工匠限制（确保 12/6 件齐） */
 function fillPaperSelectByCategory(category) {
+    const orangeLevelSelect = document.getElementById('orangeLevelFilter');
+    if (orangeLevelSelect) orangeLevelSelect.hidden = category !== 'orange';
     if (category === 'all' || !category) {
         fillPaperSelect();
         return;
@@ -1131,9 +1228,11 @@ function fillPaperSelectByCategory(category) {
     const filter = (document.getElementById('paperFilter')?.value || '').trim().toLowerCase();
     if (category === 'orange') {
         const npcId = Number(document.getElementById('npcSelect')?.value);
+        const level = Number(orangeLevelSelect?.value || 0);
         const prev = sel.value;
         sel.innerHTML = '';
         const items = orangePapersForNpc(npcId).filter(item => {
+            if (level && Number(item.equip?.lv) !== level) return false;
             if (!filter) return true;
             return `${item.label} ${item.equip?.name || ''}`.toLowerCase().includes(filter);
         });
@@ -1154,6 +1253,7 @@ function fillPaperSelectByCategory(category) {
             sel.value = prev;
         }
         fillSpecialSelect();
+        fillMakePadSelect();
         updateMakeHints();
         return;
     }
@@ -1200,6 +1300,7 @@ function fillPaperSelectByCategory(category) {
         sel.value = prev;
     }
     fillSpecialSelect();
+    fillMakePadSelect();
     updateMakeHints();
 }
 
@@ -1248,6 +1349,7 @@ function fillPaperSelect() {
         if (still) sel.value = prev;
     }
     fillSpecialSelect();
+    fillMakePadSelect();
     autoSelectMangjingDefault();   // 必须在 fillSpecialSelect 之后，specialSelect 才有 options
     updateMakeHints();
 }
@@ -1294,8 +1396,9 @@ function saveMakeFormState() {
         const paper = document.getElementById('paperSelect')?.value || '';
         const filter = document.getElementById('paperFilter')?.value || '';
         const category = document.getElementById('npcCategoryFilter')?.value || '';
-        if (npc || paper || filter || category) {
-            sessionStorage.setItem(EQUIP_FORM_KEY, JSON.stringify({ npc, paper, filter, category }));
+        const orangeLevel = document.getElementById('orangeLevelFilter')?.value || '';
+        if (npc || paper || filter || category || orangeLevel) {
+            sessionStorage.setItem(EQUIP_FORM_KEY, JSON.stringify({ npc, paper, filter, category, orangeLevel }));
         }
     } catch (e) { /* 忽略 */ }
 }
@@ -1311,9 +1414,13 @@ function restoreMakeFormState() {
     const npcSel = document.getElementById('npcSelect');
     const paperSel = document.getElementById('paperSelect');
     const filter = document.getElementById('paperFilter');
+    const orangeLevel = document.getElementById('orangeLevelFilter');
 
     if (saved && saved.npc && npcSel) {
         if ([...npcSel.options].some(o => o.value === saved.npc)) npcSel.value = saved.npc;
+    }
+    if (saved && orangeLevel && [...orangeLevel.options].some(o => o.value === saved.orangeLevel)) {
+        orangeLevel.value = saved.orangeLevel;
     }
     // 两个分类下拉同步（默认 'tie'）
     syncMakeCategory(saved?.category || 'tie');
@@ -1328,6 +1435,7 @@ function restoreMakeFormState() {
         if ([...paperSel.options].some(o => o.value === saved.paper)) paperSel.value = saved.paper;
     }
     if (typeof fillSpecialSelect === 'function') fillSpecialSelect();
+    if (typeof fillMakePadSelect === 'function') fillMakePadSelect(false);
     if (typeof updateMakeHints === 'function') updateMakeHints();
 }
 
@@ -1426,7 +1534,7 @@ function updateMakeHints() {
 function setMakeHead() {
     setPreviewTableKind('make');
     document.getElementById('previewHead').innerHTML = `<tr>
-        <th>#</th><th>品质</th><th>基础</th><th>蓝词条</th><th>地区附加</th><th>盲晶最高</th><th>红词条</th><th>种子</th><th>标记</th><th>选</th><th>操作</th>
+        <th>#</th><th>品质</th><th>基础</th><th>蓝词条</th><th>地区附加</th><th>芒晶最高</th><th>红词条</th><th>种子</th><th>标记</th><th>选</th><th>操作</th>
     </tr>`;
 }
 
@@ -1482,7 +1590,7 @@ function makeFilterMatch(it) {
     if (mjMin) {
         const best = it.mangjingBest;
         if (!best) return false;
-        // 盲晶值不统一（武器百分比 0~1 / 防具原始点数 1~30），
+        // 芒晶值不统一（武器百分比 0~1 / 防具原始点数 1~30），
         // 统一换算成「用户看到的显示值」再比较：武器 0.055 → 5.5（输 5.5 即可），防具 16 → 16。
         const disp = mangjingDisplayValue(best.prop, best.value);
         if (!(disp >= Number(mjMin))) return false;
@@ -1536,7 +1644,7 @@ function renderMakePage() {
     document.querySelectorAll('#previewBody .make-row-mark').forEach(flagMarkMismatch);
 }
 
-/* ── 打造预测结果：逐件跑盲晶 ─────────────────────────────── */
+/* ── 打造预测结果：逐件跑芒晶 ─────────────────────────────── */
 
 /** 当前预览的目标装备类型（同一次预测所有件都是同一件装备） */
 function currentMakeEquipType() {
@@ -1555,7 +1663,7 @@ function currentMakePaperId() {
     } catch (e) { return 0; }
 }
 
-/** 盲晶材料默认：用户没选特殊材料(id=0)时，按装备类型自动选龙骨(2021)/紫玉髓(2023)
+/** 芒晶材料默认：用户没选特殊材料(id=0)时，按装备类型自动选龙骨(2021)/紫玉髓(2023)
  *  用户已选了非零材料就不动 */
 function autoSelectMangjingDefault() {
     const sel = document.getElementById('specialSelect');
@@ -1570,7 +1678,7 @@ function autoSelectMangjingDefault() {
     }
 }
 
-/** 盲晶材料：优先「特殊材料」下拉（需与装备匹配），否则武器=龙骨(2021)、防具=紫玉髓(2023) */
+/** 芒晶材料：优先「特殊材料」下拉（需与装备匹配），否则武器=龙骨(2021)、防具=紫玉髓(2023) */
 function pickMangjingMaterial(equipType, equip) {
     const sel = document.getElementById('specialSelect');
     const id = sel ? Number(sel.value) : 0;
@@ -1589,7 +1697,7 @@ function pickMangjingMaterial(equipType, equip) {
     return EQUIP_DATA.special[String(isArmor ? 2023 : 2021)] || null;
 }
 
-/** 造一个能跑盲晶的 equip，并复刻自动页的「先升炼到 100 级」步骤。
+/** 造一个能跑芒晶的 equip，并复刻自动页的「先升炼到 100 级」步骤。
  *  自动页 L5954 用的是 specialAttachEquips（升炼后 100 级）的 equip，
  *  所以材料数值查 lvs['lv100']；直接用 90 级会查 lv90，紫玉髓等材料没有该档 → 抛错。
  *  MJSeed 在升炼中不变（upgradeEquip 是 ...clone(equip)），只改 id/name/need_lv/typ。 */
@@ -1621,7 +1729,7 @@ function buildMangjingEquip(it, equipType) {
     return equip;
 }
 
-/** 逐件跑盲晶，把「最高那次」挂到 item.mangjingBest（同值取第一次） */
+/** 逐件跑芒晶，把「最高那次」挂到 item.mangjingBest（同值取第一次） */
 function computeMangjingForItems(items, count) {
     const equipType = currentMakeEquipType();
     const paperId = currentMakePaperId();
@@ -1629,17 +1737,17 @@ function computeMangjingForItems(items, count) {
     for (const it of items || []) {
         it.mangjingBest = null;
         if (!it) continue;
-        // make 预览项自带 CZSeed，据此算出盲晶必需的 MJSeed
+        // make 预览项自带 CZSeed，据此算出芒晶必需的 MJSeed
         if (Number.isSafeInteger(paperId) && paperId > 0) {
             try {
                 it.MJSeed = craftedMJSeedFromMakeResult(it, paperId);
             } catch (e) {
-                console.warn('[盲晶] MJSeed 算不出来，preview 项可能没有 CZSeed。paperId=' + paperId + ', item keys=' + Object.keys(it).join(','));
+                console.warn('[芒晶] MJSeed 算不出来，preview 项可能没有 CZSeed。paperId=' + paperId + ', item keys=' + Object.keys(it).join(','));
                 it.MJSeed = 0;
             }
         }
         if (!Number.isSafeInteger(it.MJSeed) || it.MJSeed <= 0) continue;
-        // 构造可跑盲晶的 equip（含升炼到 100 级），预览项本身缺 typ/need_lv/name
+        // 构造可跑芒晶的 equip（含升炼到 100 级），预览项本身缺 typ/need_lv/name
         const mjEquip = buildMangjingEquip(it, equipType);
         if (!mjEquip) continue;
         let material = pickMangjingMaterial(mjEquip.typ, mjEquip);
@@ -1667,7 +1775,7 @@ function computeMangjingForItems(items, count) {
     }
 }
 
-/** 盲晶预测单元格：两行结构，主值加粗 + 第 N 次小灰字，无则「—」 */
+/** 芒晶预测单元格：两行结构，主值加粗 + 第 N 次小灰字，无则「—」 */
 function mangjingBestText(it) {
     const best = it?.mangjingBest;
     if (!best) return '—';
@@ -1717,7 +1825,7 @@ function renderMakePreview(resp) {
         document.getElementById('makeFilterProp').value = '';
         document.getElementById('makeFilterMangjing').value = '';
     }
-    // 逐件跑盲晶（默认全跑），取最高那次用于展示 + 筛选
+    // 逐件跑芒晶（默认全跑），取最高那次用于展示 + 筛选
     computeMangjingForItems(items, Number(document.getElementById('mangjingCount')?.value) || MANGJING_DEFAULT);
     applyMakeFilter(true);
 }
@@ -4017,7 +4125,7 @@ function doMakePreview() {
     const req = requireCurrentMakeRequest();
     if (!req) return;
     const n = Math.max(1, Math.min(PREVIEW_MAX, Number(document.getElementById('previewCount').value) || 100));
-    renderMakePreview(wasmMakePreview(req, n));
+    renderMakePreview(predictFixedOrangeByOrdinaryPads(req, n));
     updateMakeHints();
 }
 
@@ -4204,7 +4312,7 @@ function addRefinedToBag() {
 
     /*
      * 这两份快照都是「上次对某一件装备」算出来的。若中途在下拉框换了装备却没重新预测，
-     * 直接加背包就会把 A 的精炼词条/花费/盲晶记到 B 的名字下（名字取当前选中、属性取快照）。
+     * 直接加背包就会把 A 的精炼词条/花费/芒晶记到 B 的名字下（名字取当前选中、属性取快照）。
      * 所以必须核对装备标识，不一致就拦下来。
      */
     if (plan && plan.equipKey && plan.equipKey !== equipKey) {
@@ -4223,7 +4331,7 @@ function addRefinedToBag() {
         if (!confirm('当前没有勾选任何「保留」项，最终附加为空。\n仍要加入成品背包吗？')) return;
     }
     if (!mj) {
-        if (!confirm('尚未运行「芒晶序列」，盲晶信息会为空。\n仍要加入成品背包吗？')) return;
+        if (!confirm('尚未运行「芒晶序列」，芒晶信息会为空。\n仍要加入成品背包吗？')) return;
     }
 
     const mark = String(equip._mark || '').trim();
@@ -4247,8 +4355,8 @@ function addRefinedToBag() {
             .join(' · ');
     }
     const mjText = mj
-        ? `盲晶 ${mj.materialName} · 最高 ${propLabel(mj.prop)} ${formatPropValue(mj.prop, mj.value)} · 第 ${mj.index} 次`
-        : '盲晶 —（未运行芒晶序列）';
+        ? `芒晶 ${mj.materialName} · 最高 ${propLabel(mj.prop)} ${formatPropValue(mj.prop, mj.value)} · 第 ${mj.index} 次`
+        : '芒晶 —（未运行芒晶序列）';
 
     refinedBag.push({
         id: `rb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -4347,7 +4455,7 @@ function renderRefinedBag() {
             </div>
             ${renderRefinedBagLine('最终附加', e.extText, 'extText')}
             ${renderRefinedBagLine('消耗', e.costText, 'costText')}
-            ${renderRefinedBagLine('盲晶', e.mjText, 'mjText')}
+            ${renderRefinedBagLine('芒晶', e.mjText, 'mjText')}
             <div class="refined-bag-line refined-bag-note-line">
                 <span>备注</span>
                 <input type="text" class="rb-note" maxlength="100" placeholder="选填，最多 100 字" value="${escapeHtml(note)}">
@@ -4558,7 +4666,7 @@ function doMakeOnce() {
     if (!saveLoaded) { alert('请先导入存档'); return; }
     const req = requireCurrentMakeRequest();
     if (!req) return;
-    const r = wasmMakeOnce(req);
+    const r = advanceFixedOrangeByOrdinaryPads(req, 1) || wasmMakeOnce(req);
     if (r.error) { alert(r.error); return; }
     r.index = 1;
     const mark = getDefaultMakeMark();
@@ -4583,16 +4691,23 @@ function doMakeAdvanceTo(targetIndex, mark) {
         alert(`目标序号无效（1–${PREVIEW_MAX}）`);
         return;
     }
-    let last = null;
-    for (let i = 1; i <= n; i++) {
-        const r = wasmMakeOnce(req);
-        if (r.error) {
-            alert(`推进至第 ${i} 次失败：${r.error}`);
-            updateMakeHints();
-            return;
+    let last = advanceFixedOrangeByOrdinaryPads(req, n);
+    if (last?.error) {
+        alert(`推进至第 ${n} 次失败：${last.error}`);
+        updateMakeHints();
+        return;
+    }
+    if (!last) {
+        for (let i = 1; i <= n; i++) {
+            const r = wasmMakeOnce(req);
+            if (r.error) {
+                alert(`推进至第 ${i} 次失败：${r.error}`);
+                updateMakeHints();
+                return;
+            }
+            r.index = i;
+            last = r;
         }
-        r.index = i;
-        last = r;
     }
     const crafted = addCraftedFromMakeResult(last, mark != null ? mark : getDefaultMakeMark(), req.select_id, req.npc_id);
     setMakeAdvanceNotice(last, crafted, n);
@@ -5047,8 +5162,14 @@ async function initApp() {
         fillPaperSelectByCategory(cat);
         saveMakeFormState();
     });
+    document.getElementById('orangeLevelFilter')?.addEventListener('change', () => {
+        fillPaperSelectByCategory('orange');
+        saveMakeFormState();
+        clearPreview('橙装等级已变更，请点击「预测序列」');
+    });
     document.getElementById('paperSelect').addEventListener('change', () => {
         fillSpecialSelect();
+        fillMakePadSelect(false);
         updateMakeHints();
         saveMakeFormState();
         clearPreview('目标已变更，请点击「预测序列」');
@@ -5056,6 +5177,9 @@ async function initApp() {
     document.getElementById('specialSelect').addEventListener('change', () => {
         updateMakeHints();
         clearPreview('材料已变更，请点击「预测序列」');
+    });
+    document.getElementById('makePadPaperSelect')?.addEventListener('change', () => {
+        clearPreview('普通垫装图纸已变更，请点击「预测序列」');
     });
     document.getElementById('specialAttachEquipSelect')?.addEventListener('change', () => {
         fillSpecialAttachMaterialSelect(false);
@@ -5240,7 +5364,7 @@ async function initApp() {
     document.getElementById('makeFilterSeed')?.addEventListener('change', onMakeFilterChange);
     document.getElementById('makeFilterProp')?.addEventListener('change', onMakeFilterChange);
     document.getElementById('makeFilterMangjing')?.addEventListener('input', onMakeFilterChange);
-    // 改盲晶次数 → 只对已预测结果重算盲晶，不用重跑打造预测
+    // 改芒晶次数 → 只对已预测结果重算芒晶，不用重跑打造预测
     document.getElementById('mangjingCount')?.addEventListener('change', () => {
         if (tablePager.mode !== 'make' || !tablePager.makeAllItems?.length) return;
         computeMangjingForItems(

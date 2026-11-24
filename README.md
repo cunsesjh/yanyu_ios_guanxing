@@ -32,7 +32,9 @@ Windows 10/11 x64 下载 Release 中的 `iosGuanxing.exe`，直接运行。
 
 ## 本地数据
 
-数据位于 `%LOCALAPPDATA%\iosGuanxing`。每次成功下载建立独立快照，失败保留原有记录。HAR 原文件不复制；复用所需的登录会话使用 Windows DPAPI 加密，仅当前 Windows 用户可解密。快照是本地明文游戏数据，请自行保管。
+数据默认位于 `%LOCALAPPDATA%\iosGuanxing`。桌面版侧栏的“数据存储位置”可把历史存档、登录会话、设置、日志和更新临时文件完整迁移到其他磁盘；复制后逐文件校验，切换成功后可删除 C 盘旧副本。程序只在 `%LOCALAPPDATA%` 保留一个很小的目录位置配置。自定义磁盘暂时不可用时不会静默改回 C 盘，以免生成两套数据。
+
+每次成功下载建立独立快照，失败保留原有记录。HAR 原文件不复制；复用所需的登录会话使用 Windows DPAPI 加密，仅当前 Windows 用户可解密。移动到其他盘不会影响当前 Windows 用户解密，但把数据盘连接到另一台电脑后登录会话无法解密。快照是本地明文游戏数据，请自行保管。历史存档确认删除后会直接从本机永久删除，不进入隐藏回收目录。
 
 下载失败时，完整诊断（错误类型、HTTP 状态码、响应片段、堆栈）会写入数据目录的 `last_error.log`，仅保存在本机；排障时可把它发给维护者。界面提示只显示安全摘要，不展示账号、请求头和原始响应。
 
@@ -45,5 +47,7 @@ Python 3.11，安装 `requirements-desktop.txt` 后执行 `python desktop_main.p
 离线测试：`python -m unittest discover -s tests -v`；内置网页验证：`python dev/smoke_desktop.py`。
 
 Windows 打包：安装 PyInstaller 6.x，运行 `python -m PyInstaller --noconfirm iosGuanxing.spec`。推送 `v*` 标签自动构建预览 Release，发布 EXE 与 SHA256 校验文件。
+
+桌面版按当前发布渠道检查更新：测试版读取 `cunsesjh/iosGuanxing` 的预发布版本，正式版读取 `cunsesjh/yanyu_ios_guanxing`。用户可在应用内下载完整 EXE；下载包先写入数据目录的 `updates/`，校验 Release 附带的 SHA256 后由独立更新进程替换。新版窗口未能在 30 秒内启动时自动恢复旧 EXE；成功启动后删除旧版备份和下载目录。启动时还会清理超过 7 天的更新残留。当前 EXE 未做代码签名，SHA256 用于检测下载损坏，正式公开分发前仍建议增加 Windows 代码签名。
 
 首版使用临时图标，EXE 未签名。自动测试使用合成存档和模拟下载，不连接游戏服务器；实际账号下载需要使用者在 Windows 上验收。

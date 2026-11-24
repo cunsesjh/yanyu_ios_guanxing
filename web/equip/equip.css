@@ -18,6 +18,10 @@
     background: #525b6e;
 }
 
+.equip-app .config-row[hidden] {
+    display: none !important;
+}
+
 .pager-bar {
     display: flex;
     flex-wrap: wrap;
@@ -210,7 +214,7 @@
     text-align: center;
 }
 
-/* 盲晶预测列：强制两行（主值加粗 + 副值小灰字），统一左对齐 */
+/* 芒晶预测列：强制两行（主值加粗 + 副值小灰字），统一左对齐 */
 .preview-table td .mj-val,
 .preview-table td .mj-idx {
     display: block;

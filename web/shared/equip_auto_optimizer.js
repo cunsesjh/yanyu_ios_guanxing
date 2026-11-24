@@ -695,6 +695,33 @@
         };
     }
 
+    function refinementActualTotal(refinement) {
+        const maxima = refinement && refinement.maxima || {};
+        const values = [1, 2, 3]
+            .map(slot => Number(maxima[slot] && maxima[slot].value))
+            .filter(Number.isFinite);
+        if (values.length) return values.reduce((sum, value) => sum + value, 0);
+        return Math.max(0, finiteNumber(refinement && refinement.total));
+    }
+
+    function costTotals(...costs) {
+        let silver = 0;
+        let lianjin = 0;
+        const addMaterial = (material, amount) => {
+            if (!material) return;
+            if (Number(material.id) === 8801 || String(material.name || '') === '连金泥') {
+                lianjin += Math.max(0, finiteNumber(amount));
+            }
+        };
+        costs.filter(Boolean).forEach(cost => {
+            silver += Math.max(0, finiteNumber(cost.silver));
+            lianjin += Math.max(0, finiteNumber(cost.lianjin));
+            (cost.materials || []).forEach(item => addMaterial(item, item.amount));
+            addMaterial(cost.mainMaterial, cost.mainAmount);
+        });
+        return { silver, lianjin };
+    }
+
     function compareCandidates(a, b) {
         return (a.craftIndex - b.craftIndex)
             || String(a.location).localeCompare(String(b.location), 'zh')
@@ -944,6 +971,8 @@
         predictSpecialAttachSequence,
         buildMakeRequest,
         craftCost,
+        refinementActualTotal,
+        costTotals,
         compareCandidates,
         simulateEquipmentRoutes,
     });

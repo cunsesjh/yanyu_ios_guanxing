@@ -2,7 +2,7 @@ import io
 import json
 import unittest
 
-from desktop.update import LATEST_RELEASE, check_update, parse_release, version_tuple
+from desktop.update import BETA_RELEASES, LATEST_RELEASE, check_update, parse_release, version_tuple
 
 
 class Response(io.BytesIO):
@@ -47,6 +47,19 @@ class UpdateTests(unittest.TestCase):
     def test_invalid_version_is_rejected(self):
         with self.assertRaises(ValueError):
             parse_release({'tag_name': 'latest'}, '3.0.2')
+
+    def test_beta_channel_uses_test_repository_assets(self):
+        captured = {}
+        def open_release(request, timeout):
+            captured['url'] = request.full_url
+            return Response(json.dumps([
+                {'tag_name': 'v3.2.0-beta.1', 'prerelease': True, 'draft': False, 'body': '测试'},
+            ]).encode())
+        result = check_update('3.1.0-beta.1', open_release, channel='测试版')
+        self.assertEqual(captured['url'], BETA_RELEASES)
+        self.assertIn('/cunsesjh/iosGuanxing/releases/download/v3.2.0-beta.1/',
+                      result['download_url'])
+        self.assertEqual(result['gitee_url'], '')
 
 
 if __name__ == '__main__':

@@ -2594,10 +2594,16 @@ html.auto-simulator-view #simulatorConfigPanel {
 }
 
 .equip-auto-max-summary,
-.equip-auto-region-summary {
+.equip-auto-region-summary,
+.equip-auto-consumption-summary {
     display: inline-flex;
     align-items: baseline;
     gap: 0.2rem;
+}
+
+.equip-auto-consumption-summary strong {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
 }
 
 .equip-auto-max-summary strong,

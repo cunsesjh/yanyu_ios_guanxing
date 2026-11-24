@@ -6445,6 +6445,7 @@ let equipAutoResultPageSize = 30;
 let equipAutoResultLocationFilter = '';
 let equipAutoResultPaperFilter = '';
 let equipAutoResultQualityFilter = '';
+let equipAutoResultSort = '';
 let equipAutoResultAttachFilter = '';
 let equipAutoResultAttachOnly = false;
 let equipAutoManualAttachStates = new Map();
@@ -6504,6 +6505,7 @@ function invalidateEquipAutoPrediction(message) {
     equipAutoResultLocationFilter = '';
     equipAutoResultPaperFilter = '';
     equipAutoResultQualityFilter = '';
+    equipAutoResultSort = '';
     equipAutoResultAttachFilter = '';
     equipAutoManualAttachStates = new Map();
     if (equipAutoRunning) equipAutoCancelRequested = true;
@@ -6869,12 +6871,12 @@ function equipAutoRefinementShownValue(maximum) {
 }
 
 function equipAutoFormatRefinementTotal(refinement) {
-    const total = Number(refinement && refinement.total);
+    const total = equipAutoRefinementTotal(refinement);
     if (!Number.isFinite(total) || !equipAutoUsesPercentFormat(refinement && refinement.prop, total)) {
-        return equipAutoFormatPropValue(refinement && refinement.prop, refinement && refinement.total);
+        return equipAutoFormatPropValue(refinement && refinement.prop, total);
     }
     const slotValues = [1, 2, 3]
-        .map(slot => equipAutoRefinementShownValue(refinement && refinement.maxima && refinement.maxima[slot]))
+        .map(slot => Number(refinement && refinement.maxima && refinement.maxima[slot] && refinement.maxima[slot].value))
         .filter(Number.isFinite);
     if (!slotValues.length) return equipAutoFormatPropValue(refinement.prop, total);
     const displayedTotal = slotValues.reduce((sum, value) => sum + equipAutoPercentagePoints(value), 0);
@@ -6953,7 +6955,7 @@ function equipAutoRefinementHtml(refinement, upgradeCost = null) {
     const accepts = plan ? plan.accepts.map(item => `#${item.index}（槽${item.slot}）`).join(' → ') : '无';
     const totalCost = mergeEquipAutoCosts(upgradeCost, plan && plan.cost);
     return `<div class="equip-auto-refine-card">
-        <div class="equip-auto-refine-title"><strong>精炼 · ${escapeAiHtml(label)}</strong><span class="equip-auto-max-value">最高${escapeAiHtml(label)} ${escapeAiHtml(equipAutoFormatRefinementTotal(refinement))}</span></div>
+        <div class="equip-auto-refine-title"><strong>精炼 · ${escapeAiHtml(label)}</strong><span class="equip-auto-max-value">实际${escapeAiHtml(label)} ${escapeAiHtml(equipAutoFormatRefinementTotal(refinement))}</span></div>
         <div class="equip-auto-slot-list">${slots}</div>
         <div>状态回放：${accepts}${plan ? `，做到第 ${plan.cutoff} 次为止` : ''}</div>
         <div class="equip-auto-cost-line">消耗（精炼消耗）：${plan ? equipAutoFormatCost(plan.cost) : '无'}</div>
@@ -7024,7 +7026,7 @@ function equipAutoAttachCount() {
     return clampEquipAutoNumber('autoEquipAttachCount', 1, 5000, 50);
 }
 
-// 候选装备盲晶洗练的「全局最高值」摘要：取升炼后 N 次中 value 最大的那次（含词条、数值、第几次）
+// 候选装备芒晶洗练的「全局最高值」摘要：取升炼后 N 次中 value 最大的那次（含词条、数值、第几次）
 function equipAutoAttachPeak(candidate) {
     const state = equipAutoManualAttachState(candidate);
     const items = Array.isArray(state.result && state.result.items) ? state.result.items : [];
@@ -7095,7 +7097,12 @@ const EQUIP_AUTO_REFINEMENT_THEORETICAL_MAX_MULTIPLIER = 1.25;
 const EQUIP_AUTO_REFINEMENT_SLOT_MULTIPLIERS = Object.freeze([1, 0.75, 0.5]);
 
 function equipAutoRefinementTotal(refinement) {
-    const slotValues = [1, 2, 3].map(slot => equipAutoRefinementShownValue(refinement && refinement.maxima && refinement.maxima[slot]))
+    if (typeof EquipmentAutoOptimizer !== 'undefined'
+        && typeof EquipmentAutoOptimizer.refinementActualTotal === 'function') {
+        return EquipmentAutoOptimizer.refinementActualTotal(refinement);
+    }
+    const slotValues = [1, 2, 3]
+        .map(slot => Number(refinement && refinement.maxima && refinement.maxima[slot] && refinement.maxima[slot].value))
         .filter(Number.isFinite);
     if (slotValues.length) return slotValues.reduce((sum, value) => sum + value, 0);
     return Math.max(0, Number(refinement && refinement.total) || 0);
@@ -7151,12 +7158,36 @@ function equipAutoCandidateRating(candidate, reference = equipAutoRatingReferenc
     return equipAutoRatingForPercent(ratings.length ? Math.max(...ratings.map(item => item.percent)) : 0);
 }
 
+function equipAutoCostTotals(...costs) {
+    if (typeof EquipmentAutoOptimizer !== 'undefined'
+        && typeof EquipmentAutoOptimizer.costTotals === 'function') {
+        return EquipmentAutoOptimizer.costTotals(...costs);
+    }
+    return { silver: 0, lianjin: 0 };
+}
+
+function equipAutoCandidateBestRefinement(candidate, reference = equipAutoRatingReference(candidate)) {
+    return (candidate && candidate.refinements || []).reduce((best, refinement) => {
+        const rating = equipAutoRefinementRating(candidate, refinement, reference);
+        return !best || rating.percent > best.rating.percent ? { refinement, rating } : best;
+    }, null);
+}
+
+function equipAutoCandidateConsumption(candidate) {
+    const best = equipAutoCandidateBestRefinement(candidate);
+    return equipAutoCostTotals(
+        candidate && candidate.craftCost,
+        candidate && candidate.upgradeCost,
+        best && best.refinement && best.refinement.plan && best.refinement.plan.cost,
+    );
+}
+
 function equipAutoCandidateHtml(candidate) {
     const ratingReference = equipAutoRatingReference(candidate);
     const rating = equipAutoCandidateRating(candidate, ratingReference);
     const targetSummary = candidate.refinements.map(refinement => {
         const refinementRating = equipAutoRefinementRating(candidate, refinement, ratingReference);
-        return `<span class="equip-auto-max-summary" title="${escapeAiHtml(equipAutoPropertyLabel(refinement.prop))}品质：${refinementRating.label} ${refinementRating.roundedPercent}%"><span>最高${escapeAiHtml(equipAutoPropertyLabel(refinement.prop))}</span><strong class="is-${refinementRating.key}">${escapeAiHtml(equipAutoFormatRefinementTotal(refinement))}</strong></span>`;
+        return `<span class="equip-auto-max-summary" title="${escapeAiHtml(equipAutoPropertyLabel(refinement.prop))}实际结果品质：${refinementRating.label} ${refinementRating.roundedPercent}%"><span>实际${escapeAiHtml(equipAutoPropertyLabel(refinement.prop))}</span><strong class="is-${refinementRating.key}">${escapeAiHtml(equipAutoFormatRefinementTotal(refinement))}</strong></span>`;
     }).join('<span class="equip-auto-summary-separator">·</span>');
     const locationSummary = candidate.location ? `<span class="equip-auto-summary-separator">·</span><span class="equip-auto-location-summary">${escapeAiHtml(candidate.location)}</span>` : '';
     const regionSummary = candidate.region.length
@@ -7164,12 +7195,14 @@ function equipAutoCandidateHtml(candidate) {
         : '<span class="equip-auto-region-summary is-empty">无地区附加</span>';
     const attachPeak = equipAutoAttachPeak(candidate);
     const attachPeakSummary = attachPeak
-        ? `<span class="equip-auto-attach-peak-summary" title="盲晶洗练 ${equipAutoAttachCount()} 次全局最高值"><span>盲晶最高</span><strong>${escapeAiHtml(equipAutoPropertyLabel(attachPeak.prop))} ${escapeAiHtml(equipAutoFormatPropValue(attachPeak.prop, attachPeak.value))}</strong><small>第 ${Number(attachPeak.index)} 次</small></span>`
+        ? `<span class="equip-auto-attach-peak-summary" title="芒晶洗练 ${equipAutoAttachCount()} 次全局最高值"><span>芒晶最高</span><strong>${escapeAiHtml(equipAutoPropertyLabel(attachPeak.prop))} ${escapeAiHtml(equipAutoFormatPropValue(attachPeak.prop, attachPeak.value))}</strong><small>第 ${Number(attachPeak.index)} 次</small></span>`
         : '';
+    const consumption = equipAutoCandidateConsumption(candidate);
+    const consumptionSummary = `<span class="equip-auto-consumption-summary" title="打造至该件装备 + 升炼 + 达到当前最高品质精炼结果的实际总消耗"><span>实际总消耗</span><strong>银两${equipAutoFormatSilver(consumption.silver)}</strong><strong>连金泥×${Number(consumption.lianjin).toLocaleString()}</strong></span>`;
     return `<details class="equip-auto-candidate">
         <summary>
-            <span class="equip-auto-rating is-${rating.key}" title="精炼评级：${rating.label} ${rating.roundedPercent}%（按三槽理论满值）"><strong>${rating.label}</strong><small>${rating.roundedPercent}%</small></span>
-            <span class="equip-auto-candidate-title"><b>${escapeAiHtml(candidate.paperName)} · 第 ${candidate.craftIndex} 次</b><span class="equip-auto-candidate-meta"><span class="equip-auto-equip-summary">${escapeAiHtml(candidate.equipName)}</span>${locationSummary}${targetSummary ? `<span class="equip-auto-summary-separator">·</span>${targetSummary}` : ''}<span class="equip-auto-summary-separator">·</span>${regionSummary}${attachPeakSummary ? `<span class="equip-auto-summary-separator">·</span>${attachPeakSummary}` : ''}</span></span>
+            <span class="equip-auto-rating is-${rating.key}" title="精炼评级：${rating.label} ${rating.roundedPercent}%（实际结果相对三槽理论满值）"><strong>${rating.label}</strong><small>${rating.roundedPercent}%</small></span>
+            <span class="equip-auto-candidate-title"><b>${escapeAiHtml(candidate.paperName)} · 第 ${candidate.craftIndex} 次</b><span class="equip-auto-candidate-meta"><span class="equip-auto-equip-summary">${escapeAiHtml(candidate.equipName)}</span>${locationSummary}${targetSummary ? `<span class="equip-auto-summary-separator">·</span>${targetSummary}` : ''}<span class="equip-auto-summary-separator">·</span>${regionSummary}${attachPeakSummary ? `<span class="equip-auto-summary-separator">·</span>${attachPeakSummary}` : ''}<span class="equip-auto-summary-separator">·</span>${consumptionSummary}</span></span>
         </summary>
         <div class="equip-auto-candidate-body">
             <div class="equip-auto-detail-grid">
@@ -7186,10 +7219,7 @@ function equipAutoCandidateHtml(candidate) {
 }
 
 function equipAutoCandidateListHtml(candidates) {
-    const sorted = [...(candidates || [])].sort((a, b) => String(a.location).localeCompare(String(b.location), 'zh')
-        || String(a.paperName).localeCompare(String(b.paperName), 'zh')
-        || (a.craftIndex - b.craftIndex));
-    return `<div class="equip-auto-candidate-list">${sorted.map(candidate => equipAutoCandidateHtml(candidate)).join('')}</div>`;
+    return `<div class="equip-auto-candidate-list">${(candidates || []).map(candidate => equipAutoCandidateHtml(candidate)).join('')}</div>`;
 }
 
 function equipAutoResultPaperKey(candidate) {
@@ -7198,7 +7228,7 @@ function equipAutoResultPaperKey(candidate) {
 
 function equipAutoFilteredCandidates(candidates) {
     const attachThreshold = equipAutoResultAttachFilter === '' ? null : Number(equipAutoResultAttachFilter);
-    return (Array.isArray(candidates) ? candidates : []).filter(candidate => {
+    const filtered = (Array.isArray(candidates) ? candidates : []).filter(candidate => {
         if (equipAutoResultLocationFilter && String(candidate.location || '') !== equipAutoResultLocationFilter) return false;
         if (equipAutoResultPaperFilter && equipAutoResultPaperKey(candidate) !== equipAutoResultPaperFilter) return false;
         if (equipAutoResultQualityFilter && equipAutoCandidateRating(candidate).key !== equipAutoResultQualityFilter) return false;
@@ -7213,6 +7243,17 @@ function equipAutoFilteredCandidates(candidates) {
             if (!(peakValue >= attachThreshold)) return false;
         }
         return true;
+    });
+    const defaultCompare = (a, b) => String(a.location).localeCompare(String(b.location), 'zh')
+        || String(a.paperName).localeCompare(String(b.paperName), 'zh')
+        || (a.craftIndex - b.craftIndex);
+    const [field, direction] = String(equipAutoResultSort || '').split('-');
+    if (!['silver', 'lianjin'].includes(field)) return filtered.sort(defaultCompare);
+    const multiplier = direction === 'desc' ? -1 : 1;
+    return filtered.sort((a, b) => {
+        const aCost = equipAutoCandidateConsumption(a)[field];
+        const bCost = equipAutoCandidateConsumption(b)[field];
+        return (aCost - bCost) * multiplier || defaultCompare(a, b);
     });
 }
 
@@ -7244,8 +7285,17 @@ function equipAutoResultFilterOptionsHtml(candidates) {
                 ${[...EQUIP_AUTO_RATING_LEVELS].reverse().map(level => `<option value="${level.key}">${level.label}</option>`).join('')}
             </select>
         </label>
-        <label class="equip-auto-attach-filter" for="equipAutoResultAttachFilter"><span>盲晶筛选</span>
-            <input type="number" class="equip-auto-attach-input" id="equipAutoResultAttachFilter" min="0" step="any" placeholder="盲晶最高值≥">
+        <label class="equip-auto-sort-filter" for="equipAutoResultSort"><span>消耗排序</span>
+            <select id="equipAutoResultSort">
+                <option value="">默认顺序</option>
+                <option value="silver-asc">银两从少到多</option>
+                <option value="silver-desc">银两从多到少</option>
+                <option value="lianjin-asc">连金泥从少到多</option>
+                <option value="lianjin-desc">连金泥从多到少</option>
+            </select>
+        </label>
+        <label class="equip-auto-attach-filter" for="equipAutoResultAttachFilter"><span>芒晶筛选</span>
+            <input type="number" class="equip-auto-attach-input" id="equipAutoResultAttachFilter" min="0" step="any" placeholder="芒晶最高值≥">
         </label>
         <label class="equip-auto-attach-only-filter" for="equipAutoResultAttachOnlyFilter">
             <input type="checkbox" id="equipAutoResultAttachOnlyFilter" ${equipAutoResultAttachOnly ? 'checked' : ''}>
@@ -7285,6 +7335,7 @@ function renderEquipAutoResultPage() {
     const locationFilter = document.getElementById('equipAutoResultLocationFilter');
     const paperFilter = document.getElementById('equipAutoResultPaperFilter');
     const qualityFilter = document.getElementById('equipAutoResultQualityFilter');
+    const sortFilter = document.getElementById('equipAutoResultSort');
     const range = pageData.items.length ? `${pageData.start + 1}–${pageData.end}` : '0';
     const totalSuffix = filteredCandidates.length === equipAutoLastResult.candidates.length
         ? ''
@@ -7295,6 +7346,7 @@ function renderEquipAutoResultPage() {
     if (locationFilter) locationFilter.value = equipAutoResultLocationFilter;
     if (paperFilter) paperFilter.value = equipAutoResultPaperFilter;
     if (qualityFilter) qualityFilter.value = equipAutoResultQualityFilter;
+    if (sortFilter) sortFilter.value = equipAutoResultSort;
     const attachOnly = document.getElementById('equipAutoResultAttachOnlyFilter');
     if (attachOnly) attachOnly.checked = equipAutoResultAttachOnly;
     if (previous) previous.disabled = pageData.page <= 1;
@@ -7382,6 +7434,8 @@ function handleEquipAutoResultControlChange(event) {
         equipAutoResultPaperFilter = String(event.target.value || '');
     } else if (event.target.id === 'equipAutoResultQualityFilter') {
         equipAutoResultQualityFilter = String(event.target.value || '');
+    } else if (event.target.id === 'equipAutoResultSort') {
+        equipAutoResultSort = String(event.target.value || '');
     } else if (event.target.id === 'equipAutoResultAttachFilter') {
         equipAutoResultAttachFilter = String(event.target.value || '');
     } else if (event.target.id === 'equipAutoResultAttachOnlyFilter') {
@@ -7433,6 +7487,7 @@ function renderEquipAutoResults(result) {
     equipAutoResultLocationFilter = '';
     equipAutoResultPaperFilter = '';
     equipAutoResultQualityFilter = '';
+    equipAutoResultSort = '';
     equipAutoResultAttachFilter = '';
     equipAutoResultAttachOnly = false;
     equipAutoManualAttachStates = new Map();

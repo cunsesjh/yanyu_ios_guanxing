@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import Qt, QThread, Signal, QUrl, QTimer, QStandardPaths
+from PySide6.QtCore import Qt, QThread, Signal, QUrl, QTimer, QStandardPaths, QProcess
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout,
                               QLabel, QListWidget, QListWidgetItem, QMainWindow,
@@ -19,6 +19,10 @@ from .release_notes import ITEMS as RELEASE_NOTE_ITEMS, TITLE as RELEASE_NOTE_TI
 from .service import DownloadService
 from .storage import Store
 from .update import check_update
+from .updater import (cleanup_stale_updates, cleanup_successful_update,
+                      download_update, launch_update_helper)
+from .data_location import (migrate_data_root, remove_data_root,
+                            save_configured_data_root)
 
 
 STYLE = '''
@@ -171,8 +175,27 @@ class UpdateThread(QThread):
 
     def run(self):
         try:
-            self.completed.emit(check_update(VERSION))
+            self.completed.emit(check_update(VERSION, channel=RELEASE_CHANNEL))
         except (RuntimeError, ValueError) as error:
+            self.failed.emit(str(error))
+
+
+class UpdateDownloadThread(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+    progress = Signal(int, int)
+
+    def __init__(self, release, updates_root, parent=None):
+        super().__init__(parent)
+        self.release = release
+        self.updates_root = updates_root
+
+    def run(self):
+        try:
+            result = download_update(self.release, self.updates_root,
+                                     progress=lambda done, total: self.progress.emit(done, total))
+            self.completed.emit(result)
+        except (OSError, RuntimeError, ValueError) as error:
             self.failed.emit(str(error))
 
 
@@ -240,6 +263,9 @@ class MainWindow(QMainWindow):
         self.current = None
         self.worker = None
         self.update_worker = None
+        self.update_download_worker = None
+        self.update_download_result = None
+        self.update_download_error = ''
         self.update_check_automatic = False
         self.auto_update_prompted = False
         self.closing_after_download = False
@@ -278,6 +304,8 @@ class MainWindow(QMainWindow):
         sidebar.addWidget(self.import_button)
         self.history_button = self.button('◷  历史存档', self.show_history)
         sidebar.addWidget(self.history_button)
+        self.data_location_button = self.button('▣  数据存储位置', self.show_data_location)
+        sidebar.addWidget(self.data_location_button)
         sidebar.addSpacing(16)
         self.session_label = QLabel('尚未导入登录会话')
         self.session_label.setTextFormat(Qt.PlainText)
@@ -424,14 +452,15 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(1500, self.check_for_updates_automatically)
 
     def update_buttons(self):
-        busy = self.worker is not None
+        busy = self.worker is not None or self.update_download_worker is not None
         self.refresh_button.setEnabled(not busy and self.session is not None)
         self.import_button.setEnabled(not busy)
         self.history_button.setEnabled(not busy and bool(self.store.list_snapshots()))
         self.welcome.select_button.setEnabled(not busy)
         self.home_button.setEnabled(self.current is not None)
         self.back_button.setEnabled(self.view.history().canGoBack())
-        self.update_button.setEnabled(self.update_worker is None)
+        self.update_button.setEnabled(self.update_worker is None and self.update_download_worker is None)
+        self.data_location_button.setEnabled(not busy and self.update_worker is None)
         if self.session:
             platform = 'iOS' if self.session['platform'] == 'ios' else 'Android'
             self.session_label.setText('当前存档下载会话\n%s · %s 区\n有效期由游戏服务器决定' % (platform, self.session['area']))
@@ -561,20 +590,84 @@ class MainWindow(QMainWindow):
             if self.auto_update_prompted:
                 return
             self.auto_update_prompted = True
-        detail = ('发现新版本 v%s。\n\n%s\n\n请选择下载页面：'
+        detail = ('发现新版本 v%s。\n\n%s\n\n可以直接在应用内下载、校验并重启更新。'
                   % (result['version'], result['body'] or '请前往发布页面查看更新说明。'))
         dialog = QMessageBox(self)
         dialog.setWindowTitle('发现新版本')
         dialog.setText(detail)
+        install = dialog.addButton('下载并更新', QMessageBox.AcceptRole)
         github = dialog.addButton('前往 GitHub', QMessageBox.ActionRole)
-        gitee = dialog.addButton('前往 Gitee', QMessageBox.ActionRole)
+        gitee = (dialog.addButton('前往 Gitee', QMessageBox.ActionRole)
+                  if result.get('gitee_url') else None)
         dialog.addButton('取消', QMessageBox.RejectRole)
         dialog.exec()
-        if dialog.clickedButton() == github:
+        if dialog.clickedButton() == install:
+            self.start_update_download(result)
+        elif dialog.clickedButton() == github:
             QDesktopServices.openUrl(QUrl(result['github_url']))
-        elif dialog.clickedButton() == gitee:
+        elif gitee is not None and dialog.clickedButton() == gitee:
             QDesktopServices.openUrl(QUrl(result['gitee_url']))
         self.show_status('发现新版本 v%s' % result['version'])
+
+    def start_update_download(self, release):
+        if self.update_download_worker:
+            return
+        updates_root = self.store.root / 'updates'
+        cleanup_stale_updates(updates_root)
+        self.update_download_result = None
+        self.update_download_error = ''
+        self.update_download_worker = UpdateDownloadThread(release, updates_root, self)
+        self.update_download_worker.progress.connect(self.update_download_progress)
+        self.update_download_worker.completed.connect(self.update_download_complete)
+        self.update_download_worker.failed.connect(self.update_download_failed)
+        self.update_download_worker.finished.connect(self.update_download_finished)
+        self.progress.setRange(0, 0)
+        self.progress.show()
+        self.show_status('正在下载并校验新版程序…')
+        self.update_buttons()
+        self.update_download_worker.start()
+
+    def update_download_progress(self, done, total):
+        if total > 0:
+            self.progress.setRange(0, 1000)
+            self.progress.setValue(min(1000, int(done * 1000 / total)))
+            self.show_status('正在下载新版程序 · %.1f / %.1f MB' %
+                             (done / 1048576, total / 1048576))
+
+    def update_download_complete(self, result):
+        self.update_download_result = result
+
+    def update_download_failed(self, message):
+        self.update_download_error = message
+
+    def update_download_finished(self):
+        worker = self.update_download_worker
+        self.update_download_worker = None
+        if worker:
+            worker.deleteLater()
+        self.progress.hide()
+        self.update_buttons()
+        if self.update_download_error:
+            QMessageBox.warning(self, '更新下载失败', self.update_download_error)
+            self.show_status(self.update_download_error, True)
+            return
+        result = self.update_download_result
+        if not result:
+            return
+        answer = QMessageBox.question(
+            self, '新版已准备好',
+            '新版程序已下载并通过 SHA256 校验。\n\n立即退出、替换程序并重新启动？',
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if answer != QMessageBox.Yes:
+            self.show_status('新版已下载；下次检查更新时可以继续安装。')
+            return
+        try:
+            launch_update_helper(result['executable'], result['sha256'])
+        except RuntimeError as error:
+            QMessageBox.warning(self, '无法安装更新', str(error))
+            self.show_status(str(error), True)
+            return
+        QApplication.quit()
 
     def update_check_failed(self, message):
         if not self.update_check_automatic:
@@ -596,6 +689,76 @@ class MainWindow(QMainWindow):
         self.theme_button.setText('☾  切换深色模式' if theme == 'light' else '☀  切换浅色模式')
         self.page.setBackgroundColor(QColor('#f3f6fb' if theme == 'light' else '#0c111b'))
         self.page.runJavaScript('document.documentElement.dataset.theme="%s"' % theme)
+
+    def show_data_location(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('数据存储位置')
+        dialog.setMinimumWidth(640)
+        layout = QVBoxLayout(dialog)
+        title = QLabel('当前数据目录')
+        title.setObjectName('pageTitle')
+        layout.addWidget(title)
+        path_label = QLabel(str(self.store.root))
+        path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        path_label.setWordWrap(True)
+        path_label.setObjectName('muted')
+        layout.addWidget(path_label)
+        note = QLabel('历史存档、加密登录会话、设置、日志和自动更新临时文件都会迁移。迁移完成后需要重启应用。')
+        note.setWordWrap(True)
+        note.setObjectName('muted')
+        layout.addWidget(note)
+        buttons = QHBoxLayout()
+        open_button = self.button('打开当前目录',
+                                  lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.store.root))))
+        move_button = self.button('迁移到其他位置', lambda: migrate())
+        move_button.setObjectName('primary')
+        buttons.addWidget(open_button)
+        buttons.addWidget(move_button)
+        layout.addLayout(buttons)
+
+        def migrate():
+            selected = QFileDialog.getExistingDirectory(dialog, '选择一个空文件夹作为数据目录')
+            if not selected:
+                return
+            target = Path(selected).resolve()
+            answer = QMessageBox.question(
+                dialog, '迁移数据目录',
+                '将全部本地数据迁移到：\n%s\n\n复制后会逐文件校验。确认开始？' % target,
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if answer != QMessageBox.Yes:
+                return
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                migrated = migrate_data_root(self.store.root, target)
+                probe_store = Store(migrated)
+                for row in probe_store.list_snapshots():
+                    probe_store.load_snapshot(row['id'])
+                    if row.get('session_ref'):
+                        probe_store.load_session(row['session_ref'])
+                save_configured_data_root(migrated)
+            except (OSError, RuntimeError, ValueError) as error:
+                QMessageBox.warning(dialog, '迁移失败', str(error))
+                return
+            finally:
+                QApplication.restoreOverrideCursor()
+            delete_old = QMessageBox.question(
+                dialog, '迁移完成',
+                '新目录已校验并设为默认位置。\n\n是否立即删除旧目录中的原数据？',
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            if delete_old == QMessageBox.Yes:
+                try:
+                    remove_data_root(self.store.root)
+                except (OSError, ValueError) as error:
+                    QMessageBox.warning(dialog, '旧目录未删除',
+                                        '新目录已生效，但旧目录清理失败：%s' % error)
+            QMessageBox.information(dialog, '需要重启', '应用将重新启动并使用新的数据目录。')
+            if getattr(sys, 'frozen', False):
+                QProcess.startDetached(sys.executable, [])
+            else:
+                QProcess.startDetached(sys.executable, sys.argv)
+            QApplication.quit()
+
+        dialog.exec()
 
     def page_crashed(self, status, code):
         self.show_status('内置网页进程已停止，点击“观星主页”重新载入。', True)
@@ -637,7 +800,7 @@ class MainWindow(QMainWindow):
                 return
             row = rows[index]
             answer = QMessageBox.question(dialog, '删除本地历史存档',
-                '删除「%s · %s 区 · %s」？\n仅移除这份本地记录，不影响游戏云存档或登录会话。' %
+                '永久删除「%s · %s 区 · %s」？\n文件会直接从本机删除且无法恢复；不影响游戏云存档或登录会话。' %
                 (row['nick'], row['area'], row['downloaded_at'].replace('T', ' ')),
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if answer != QMessageBox.Yes:
@@ -667,7 +830,7 @@ class MainWindow(QMainWindow):
                     except (OSError, ValueError):
                         pass
             self.update_buttons()
-            self.show_status('已删除本地历史记录 · 文件已移至本地回收目录，可恢复')
+            self.show_status('已从本机永久删除这份历史存档')
 
         items.itemDoubleClicked.connect(lambda item: dialog.accept())
         if dialog.exec() == QDialog.Accepted and items.currentRow() >= 0:
@@ -698,6 +861,15 @@ class MainWindow(QMainWindow):
                 self.show_status('正在等待本次请求结束，随后自动退出…')
             event.ignore()
             return
+        if self.update_download_worker and self.update_download_worker.isRunning():
+            response = QMessageBox.question(
+                self, '正在下载更新', '等待更新下载结束后再退出？',
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            if response == QMessageBox.Yes:
+                self.update_download_worker.finished.connect(self.close)
+                self.hide()
+            event.ignore()
+            return
         if self.update_worker and self.update_worker.isRunning():
             # urllib cannot be safely interrupted mid-request. Hide immediately,
             # then close after the bounded update request has returned.
@@ -720,7 +892,20 @@ def main():
     app.setApplicationVersion(VERSION)
     app.setWindowIcon(app_icon())
     app.setFont(QFont('Segoe UI', 10))
-    root = (Path(os.environ['LOCALAPPDATA']) / 'iosGuanxing' if os.name == 'nt'
+    if os.name == 'nt' and os.environ.get('YYJH_USER_DIR_ERROR'):
+        answer = QMessageBox.question(
+            None, '数据目录不可用',
+            '之前选择的数据磁盘或目录当前不可用。程序不会自动改回 C 盘，以免产生两套数据。\n\n是否重新选择一个已有的 iosGuanxing 数据目录？',
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if answer == QMessageBox.Yes:
+            selected = QFileDialog.getExistingDirectory(None, '选择已有的 iosGuanxing 数据目录')
+            if selected and (Path(selected) / '.iosguanxing-data').is_file():
+                save_configured_data_root(selected)
+                QMessageBox.information(None, '目录已更新', '请重新启动 iosGuanxing。')
+            elif selected:
+                QMessageBox.warning(None, '无法使用', '该文件夹不是有效的 iosGuanxing 数据目录。')
+        return 1
+    root = (Path(os.environ['YYJH_USER_DIR']) if os.name == 'nt' and os.environ.get('YYJH_USER_DIR')
             else Path(QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)))
     if getattr(sys, 'frozen', False):
         web = Path(sys._MEIPASS) / 'web'
@@ -730,9 +915,20 @@ def main():
         from .smoke import run_smoke
         return run_smoke(app, web, Path(os.environ['IOSGUANXING_SMOKE_REPORT']))
     try:
-        window = MainWindow(Store(root), web)
+        store = Store(root)
+        cleanup_stale_updates(store.root / 'updates')
+        window = MainWindow(store, web)
     except OSError:
         QMessageBox.critical(None, 'iosGuanxing', '无法创建本地数据目录或启动内置页面，请检查系统权限。')
         return 1
     window.show()
+    update_marker = os.environ.get('IOSGUANXING_UPDATE_MARKER')
+    update_stage = os.environ.get('IOSGUANXING_UPDATE_STAGE')
+    if update_marker:
+        try:
+            Path(update_marker).write_text('started\n', encoding='ascii')
+        except OSError:
+            pass
+    if update_stage:
+        QTimer.singleShot(5000, lambda: cleanup_successful_update(update_stage))
     return app.exec()

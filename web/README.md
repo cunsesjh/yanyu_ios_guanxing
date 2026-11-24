@@ -1,4 +1,4 @@
-# 烟雨江湖工具（洗脉 + 盲晶）公网部署记录
+# 烟雨江湖工具（洗脉 + 芒晶）公网部署记录
 
 > 本文档记录本工具在腾讯云 CloudBase 静态网站托管的部署信息，用于后续更新与维护。
 
@@ -27,7 +27,7 @@
 ├── index.html          主页（存档导入入口）
 ├── home.js / home.css
 ├── txt-filter.html     文本过滤工具
-├── auto/               自动洗脉/盲晶
+├── auto/               自动洗脉/芒晶
 ├── wash/               洗脉模拟
 ├── equip/              装备洗练/优化
 ├── role/               角色相关
@@ -67,7 +67,7 @@
 tcb login
 
 # 部署整个目录到静态托管
-tcb hosting deploy "yanyu-utils（最新兼容最新存档，洗脉+盲晶）" -e yanyu-utils-d5gbsti2m3c6c8344
+tcb hosting deploy "yanyu-utils（最新兼容最新存档，洗脉+芒晶）" -e yanyu-utils-d5gbsti2m3c6c8344
 ```
 
 ## 费用说明

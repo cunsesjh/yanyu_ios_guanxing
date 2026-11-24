@@ -148,7 +148,7 @@ class DesktopTests(unittest.TestCase):
         self.assertTrue(result['warning'])
         self.assertEqual(self.store.load_snapshot(result['row']['id']), DATA)
 
-    def test_delete_snapshot_is_recoverable_and_preserves_session(self):
+    def test_delete_snapshot_is_permanent_and_preserves_session(self):
         session_ref = self.store.save_session(SESSION)
         session_path = self.store.session_file(session_ref)
         session = session_path.read_bytes()
@@ -158,8 +158,8 @@ class DesktopTests(unittest.TestCase):
             self.store.delete_snapshot('../session.dpapi')
         self.store.delete_snapshot(first['id'])
         self.assertEqual(self.store.selected()['id'], second['id'])
-        archived = self.store.root / '.deleted-snapshots' / first['id'] / 'dat.json'
-        self.assertEqual(json.loads(archived.read_text(encoding='utf-8')), DATA)
+        self.assertFalse((self.store.snapshots / first['id']).exists())
+        self.assertFalse((self.store.root / '.deleted-snapshots').exists())
         with self.assertRaises(ValueError):
             self.store.load_snapshot(first['id'])
         third = self.store.save_snapshot(DATA, 'ios', '1', '73580')

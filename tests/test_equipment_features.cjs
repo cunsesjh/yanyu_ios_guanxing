@@ -32,6 +32,23 @@ const ring90 = { ...ring100, name: '90级戒指', need_lv: 90 };
 const belt100 = { id: 2, name: '100级腰带', typ: 5, need_lv: 100, MJSeed: 7654321 };
 const belt90 = { ...belt100, name: '90级腰带', need_lv: 90 };
 
+assert.equal(optimizer.refinementActualTotal({
+    total: 300,
+    maxima: {
+        1: { value: 80, theoretical: 100 },
+        2: { value: 60, theoretical: 75 },
+        3: { value: 40, theoretical: 50 },
+    },
+}), 180, 'collapsed refinement result must use actual accepted values, not theoretical values');
+assert.deepEqual(
+    { ...optimizer.costTotals(
+        { silver: 1000, materials: [{ id: 8801, name: '连金泥', amount: 10 }] },
+        { silver: 2500, lianjin: 7, mainMaterial: { id: 3026, name: '昆吾石' }, mainAmount: 35 },
+    ) },
+    { silver: 3500, lianjin: 17 },
+    'candidate cost totals must combine crafting, upgrading, and one actual refinement route',
+);
+
 assert.equal(optimizer.specialMaterialSupportsEquip(redMarrow, ring100), true);
 assert.equal(optimizer.specialMaterialSupportsEquip(redMarrow, ring90), false);
 assert.equal(optimizer.specialMaterialSupportsEquip(redMarrow, belt100), false);
@@ -64,13 +81,113 @@ assert.ok(orangePapers.length > 0, 'orange blueprint category must contain entri
 assert.ok(orangePapers.every(paper => Number(paper.min_color) === 5 && Number(paper.max_color) === 5));
 assert.ok(orangePapers.some(paper => Number(paper.id) === 3478), '炎火戒图样 should be visible');
 
+const orangeRequest = vm.runInContext(`(() => {
+    const item = orangePapersForNpc(40520).find(entry => Number(entry.equip.lv) < 100 && makePadCandidatesFor({
+        npc_id: 40520,
+        select_id: entry.selectId,
+        equip_id: entry.equipId,
+        min_color: entry.paper.min_color,
+        max_color: entry.paper.max_color,
+    }).length > 0);
+    return item && ({
+        npc_id: 40520,
+        select_id: item.selectId,
+        equip_id: item.equipId,
+        min_color: item.paper.min_color,
+        max_color: item.paper.max_color,
+    });
+})()`, context);
+assert.ok(orangeRequest, 'fixture must contain a fixed orange target with ordinary pad candidates');
+context.orangeRequest = orangeRequest;
+assert.equal(vm.runInContext('usesOrangePadSequence(orangeRequest)', context), true);
+const padCandidates = vm.runInContext('makePadCandidatesFor(orangeRequest)', context);
+const orangeTarget = data.equipment[String(orangeRequest.equip_id)];
+assert.ok(padCandidates.length > 0);
+assert.ok(padCandidates.every(item => Number(item.paper.max_color) <= 4));
+assert.ok(padCandidates.every(item => Number(item.equip.type) === Number(orangeTarget.type)));
+assert.ok(padCandidates.every(item => Number(item.equip.lv) === Number(orangeTarget.lv)));
+assert.ok(padCandidates.every(item => vm.runInContext(
+    `PURCHASABLE_MAKE_PAD_PAPER_IDS.has(${Number(item.paper.id)})`, context)),
+    'every ordinary pad must come from the purchasable-paper allowlist');
+const polearmOrangeRequest = vm.runInContext(`(() => {
+    const item = orangePapersForNpc(40520).find(entry => Number(entry.equip.type) === 4 && Number(entry.equip.lv) === 90);
+    return item && ({npc_id:40520, select_id:item.selectId, equip_id:item.equipId,
+        min_color:item.paper.min_color, max_color:item.paper.max_color});
+})()`, context);
+assert.ok(polearmOrangeRequest, 'fixture must contain a level 90 orange polearm');
+context.polearmOrangeRequest = polearmOrangeRequest;
+assert.ok(vm.runInContext('makePadCandidatesFor(polearmOrangeRequest).some(item => Number(item.paper.id) === 2586)', context));
+assert.equal(vm.runInContext('makePadCandidatesFor(polearmOrangeRequest).some(item => Number(item.paper.id) === 2542)', context), false);
+const excludedSpecialPapers = [2512, 2522, 2542, 3455, 3457, 3459, 2557, 2558];
+context.excludedSpecialPapers = excludedSpecialPapers;
+assert.equal(vm.runInContext(
+    `Object.values(EQUIP_DATA.papers)
+        .filter(paper => excludedSpecialPapers.includes(Number(paper.id)))
+        .some(paper => isCraftableOrdinaryPadPaper({paper, equip:EQUIP_DATA.equipment[String(paper.dz_equip)]}))`,
+    context,
+), false, 'special-source papers must never be offered as orange pads');
+
+const expectedLevel90Pads = new Map([
+    [1, [2580, 2581]], [2, [2584, 2585]], [3, [2582, 2583]],
+    [4, [2586, 2587]], [5, [3409, 3454]], [6, [3419, 3456]],
+    [7, [3429, 3458]], [8, [3439, 3460]], [9, [3449, 3461]],
+]);
+for (const [type, expectedIds] of expectedLevel90Pads) {
+    const craftsmanId = [5, 6, 7].includes(type) ? 31230 : 40520;
+    const actualIds = vm.runInContext(
+        `papersForNpc(${craftsmanId}).filter(item => Number(item.equip.lv) === 90
+            && Number(item.equip.type) === ${type} && isCraftableOrdinaryPadPaper(item))
+            .map(item => Number(item.paper.id)).sort((a, b) => a - b)`,
+        context,
+    );
+    assert.deepEqual(Array.from(actualIds), expectedIds.slice().sort((a, b) => a - b),
+        `level 90 type ${type} pad papers must match the standard purchasable set`);
+}
+const uncoveredOrangePadGroups = vm.runInContext(`(() => {
+    const missing = [];
+    for (const npcId of [40520, 31230]) {
+        const groups = new Set();
+        for (const item of orangePapersForNpc(npcId)) {
+            if (Number(item.equip.lv) >= 100) continue;
+            const key = item.equip.lv + ':' + item.equip.type;
+            if (groups.has(key)) continue;
+            groups.add(key);
+            const req = {npc_id:npcId, select_id:item.selectId, equip_id:item.equipId,
+                min_color:item.paper.min_color, max_color:item.paper.max_color};
+            const pads = makePadCandidatesFor(req);
+            if (!pads.length || pads.some(pad => !PURCHASABLE_MAKE_PAD_PAPER_IDS.has(Number(pad.paper.id)))) {
+                missing.push(npcId + ':' + key);
+            }
+        }
+    }
+    return missing;
+})()`, context);
+assert.deepEqual(Array.from(uncoveredOrangePadGroups), [],
+    'every sub-100 orange level/type group must have only purchasable pad papers');
+context.freeOrangeRequest = { ...orangeRequest, select_id: data.craftsman['40520'].pf[0] };
+assert.equal(vm.runInContext('usesOrangePadSequence(freeOrangeRequest)', context), false,
+    'free craftsman papers must keep the normal continuous sequence');
+
 const html = fs.readFileSync(path.join(root, 'web/equip/index.html'), 'utf8');
+const autoSimulatorSource = fs.readFileSync(path.join(root, 'web/shared/simulator.js'), 'utf8');
 assert.ok((html.match(/value="orange"/g) || []).length >= 2,
     'both linked equipment category selectors must expose orange blueprints');
 assert.equal(vm.runInContext('DEFAULT_MAKE_COLOR_FILTER', context), '',
     'craft prediction must show all qualities by default');
 assert.match(html, /<option value="" selected>全部<\/option>/,
     'the craft quality selector must visibly default to all qualities');
+assert.match(html, /id="makePadPaperSelect"/,
+    'fixed orange prediction must expose the ordinary pad paper selector');
+assert.match(html, /id="orangeLevelFilter"/,
+    'orange blueprint category must expose a level filter');
+assert.match(autoSimulatorSource, /id="equipAutoResultSort"/,
+    'automatic equipment results must expose consumption sorting');
+assert.match(autoSimulatorSource, /value="silver-asc"/,
+    'automatic equipment results must support sorting by silver consumption');
+assert.match(autoSimulatorSource, /value="lianjin-asc"/,
+    'automatic equipment results must support sorting by lianjin consumption');
+assert.match(autoSimulatorSource, /实际\$\{escapeAiHtml\(equipAutoPropertyLabel\(refinement\.prop\)\)\}/,
+    'collapsed cards must label refinement values as actual results');
 
 assert.equal(
     vm.runInContext('summarizeExtTotals([{prop:"atk",value:100},{prop:"atk",value:80},{prop:"blood",value:0.02}])', context),

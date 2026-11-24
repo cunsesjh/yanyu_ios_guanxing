@@ -244,12 +244,12 @@
                                 <input type="number" id="autoEquipRefineCount" min="1" max="1000" value="500">
                                 <span>次</span>
                             </label>
-                            <label>盲晶洗练
+                            <label>芒晶洗练
                                 <input type="number" id="autoEquipAttachCount" min="1" max="5000" value="50">
                                 <span>次</span>
                             </label>
                         </div>
-                        <p>只对紫装继续分析；精炼固定使用升炼后的 100 级装备。盲晶洗练默认按「升炼后」阶段批量预测，结果为每个候选装备自动带出最高值及所在次数，无需逐个展开手动模拟；展开候选后仍可切换升炼前/后或调整次数重算。多个目标属性各自从装备原始精炼状态独立分析，不能把不同属性方案串联执行。</p>
+                        <p>只对紫装继续分析；精炼固定使用升炼后的 100 级装备。芒晶洗练默认按「升炼后」阶段批量预测，结果为每个候选装备自动带出最高值及所在次数，无需逐个展开手动模拟；展开候选后仍可切换升炼前/后或调整次数重算。多个目标属性各自从装备原始精炼状态独立分析，不能把不同属性方案串联执行。</p>
                     </details>
 
                     <div id="autoEquipSelectionMessage" class="ai-selection-message" aria-live="polite"></div>
@@ -429,7 +429,7 @@
     <script src="../shared/core_glue.js"></script>
     <script src="../shared/wash_source_engine.js?v=20260923fix3"></script>
     <script src="../shared/wash_engine_registry.js?v=20260929shen1"></script>
-    <script src="../shared/equip_auto_optimizer.js"></script>
+    <script src="../shared/equip_auto_optimizer.js?v=20261124actualcost1"></script>
     <script src="../shared/jianwang_auto_optimizer.js"></script>
     <script src="../shared/anchor_route_planner.js?v=20261006firstlock1"></script>
     <script src="../shared/anchor_route_worker_bundle.js?v=20261006firstlock1"></script>
@@ -439,7 +439,7 @@
     <script src="../shared/sql-wasm-embed.js"></script>
     <script src="../shared/save_decrypt.js"></script>
     <script src="../shared/archive_state.js"></script>
-    <script src="../shared/simulator.js?v=20260930fix1"></script>
+    <script src="../shared/simulator.js?v=20261124actualcost1"></script>
     <script src="../shared/auto_wash2_model.js"></script>
     <script src="../shared/auto_wash2.js"></script>
     <script>

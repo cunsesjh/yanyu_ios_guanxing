@@ -623,6 +623,53 @@ function wasmMakePreview(req, n) {
     }
 }
 
+/* 固定橙装的序号表示在共享类型/等级种子上垫 N-1 件普通装备后，
+   再打造一次目标橙装。预览每个序号时只提交垫装状态，目标打造本身会回滚。 */
+function wasmMakeOrangePadSequence(req, padReq, n, preview) {
+    if (!wasmReady) return { items: [], error: 'WASM 未加载' };
+    const count = Number(n);
+    if (!Number.isSafeInteger(count) || count < 1 || count > 5000) {
+        return { items: [], error: '目标序号无效（1–5000）' };
+    }
+    const originalState = wasmMakeGetState();
+    if (!originalState) return { items: [], error: '无法读取打造状态' };
+
+    try {
+        if (!preview) {
+            for (let i = 1; i < count; i++) {
+                const pad = wasmMakeOnce(padReq);
+                if (pad?.error) throw new Error(pad.error);
+            }
+            const item = wasmMakeOnce(req);
+            if (item?.error) throw new Error(item.error);
+            item.index = count;
+            return { item, sequence_mode: 'ordinary-pad-orange-pity' };
+        }
+
+        const items = [];
+        for (let i = 1; i <= count; i++) {
+            const padState = wasmMakeGetState();
+            if (!padState) throw new Error('无法读取垫装后的打造状态');
+            const item = wasmMakeOnce(req);
+            if (item?.error) throw new Error(item.error);
+            item.index = i;
+            items.push(item);
+            if (!wasmMakeSetState(padState)) throw new Error('无法恢复垫装状态');
+
+            if (i < count) {
+                const pad = wasmMakeOnce(padReq);
+                if (pad?.error) throw new Error(pad.error);
+            }
+        }
+        return { items, sequence_mode: 'ordinary-pad-orange-pity' };
+    } catch (e) {
+        wasmMakeSetState(originalState);
+        return { items: [], error: e instanceof Error ? e.message : String(e), sequence_mode: 'ordinary-pad-orange-pity' };
+    } finally {
+        if (preview) wasmMakeSetState(originalState);
+    }
+}
+
 function wasmMakeOnce(req) {
     if (!wasmReady) return { error: 'WASM 未加载' };
     try {

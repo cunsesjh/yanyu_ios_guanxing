@@ -6,7 +6,7 @@
     <title>烟雨江湖 · 装备模拟器</title>
     <meta name="description" content="烟雨江湖装备打造/精炼/淬炼序列预测">
     <link rel="stylesheet" href="../shared/simulator.css">
-    <link rel="stylesheet" href="./equip.css?v=20260907n">
+    <link rel="stylesheet" href="./equip.css?v=20261124orange2">
 </head>
 <body>
     <div class="app-container equip-app">
@@ -78,7 +78,7 @@
                         <input type="number" id="previewCount" min="1" max="5000" value="20">
                     </div>
                     <div class="config-group">
-                        <label>盲晶次数</label>
+                        <label>芒晶次数</label>
                         <input type="number" id="mangjingCount" min="1" max="500" value="30">
                     </div>
                 </div>
@@ -91,6 +91,15 @@
                             <option value="xiu">绣庄</option>
                             <option value="orange">橙装图纸</option>
                             <option value="all">全部</option>
+                        </select>
+                        <select id="orangeLevelFilter" style="margin-bottom: 0.35rem;" aria-label="橙装等级" hidden>
+                            <option value="">全部等级</option>
+                            <option value="100">100级</option>
+                            <option value="90">90级</option>
+                            <option value="80">80级</option>
+                            <option value="70">70级</option>
+                            <option value="60">60级</option>
+                            <option value="40">40级</option>
                         </select>
                         <select id="paperSelect"></select>
                     </div>
@@ -107,6 +116,13 @@
                     <div class="config-group grow">
                         <label>默认标记（加入背包时写入）</label>
                         <input type="text" id="makeDefaultMark" maxlength="40" placeholder="如：紫满攻 / 备选1" autocomplete="off">
+                    </div>
+                </div>
+                <div class="config-row" id="makePadGroup" hidden>
+                    <div class="config-group grow">
+                        <label>橙装序列垫装图纸</label>
+                        <select id="makePadPaperSelect"></select>
+                        <span class="meta-text">#N = 先打造所选普通图纸 N-1 次，再打造一次目标橙装；保底按存档状态续算。</span>
                     </div>
                 </div>
                 <!-- 原「消耗估算 / 保底种子」两行提示已移除（updateMakeHints 里做了空元素保护）；
@@ -405,7 +421,7 @@
                         <option value="">全部</option>
                     </select>
                 </label>
-                <label>盲晶≥
+                <label>芒晶≥
                     <input type="number" id="makeFilterMangjing" min="0" step="0.1" placeholder="" title="按表格显示值输入：武器输 5.5（=5.5%），防具输 16" style="width: 5.5rem;">
                 </label>
                 <label class="check-all-label" title="只勾选当前页可见的行">
@@ -473,12 +489,12 @@
 
     <script src="../shared/equip_data.js?v=20260930web"></script>
     <script src="../shared/wasm_data.js"></script>
-    <script src="../shared/core_glue.js?v=20260930web"></script>
+    <script src="../shared/core_glue.js?v=20261124orange1"></script>
     <script src="../shared/pako.min.js"></script>
     <script src="../shared/sql-wasm.js"></script>
     <script src="../shared/sql-wasm-embed.js"></script>
     <script src="../shared/save_decrypt.js"></script>
     <script src="../shared/archive_state.js"></script>
-    <script src="equip.js?v=20261116beta1"></script>
+    <script src="equip.js?v=20261124orange2"></script>
 </body>
 </html>

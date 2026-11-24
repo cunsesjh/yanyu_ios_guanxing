@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import tempfile
 import uuid
+import shutil
 
 
 def atomic_write(path, raw):
@@ -69,6 +70,8 @@ class Store:
         self.sessions = self.root / 'sessions'
         self.state_path = self.root / 'state.json'
         self.snapshots = self.root / 'snapshots'
+        from .data_location import mark_data_root
+        mark_data_root(self.root)
 
     @staticmethod
     def session_ref(session):
@@ -189,20 +192,10 @@ class Store:
         if folder.is_symlink() or folder.resolve().parent != self.snapshots.resolve():
             raise ValueError('历史存档路径无效。')
         selected = self.selected()
-        trash = self.root / '.deleted-snapshots'
-        trash.mkdir(exist_ok=True)
-        destination = trash / ident
-        if destination.exists():
-            raise ValueError('这份存档已存在于本地回收目录。')
-        # Atomic, recoverable removal; never touch session credentials or cloud data.
-        os.replace(folder, destination)
-        try:
-            if selected and selected['id'] == ident:
-                remaining = [row for row in rows if row['id'] != ident]
-                self.select(remaining[0]['id'] if remaining else None)
-        except OSError:
-            os.replace(destination, folder)
-            raise
+        shutil.rmtree(folder)
+        if selected and selected['id'] == ident:
+            remaining = [row for row in rows if row['id'] != ident]
+            self.select(remaining[0]['id'] if remaining else None)
 
     def preferences(self):
         try:
