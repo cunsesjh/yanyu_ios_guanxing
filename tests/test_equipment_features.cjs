@@ -4,6 +4,11 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
+const equipmentHtml = fs.readFileSync(path.join(root, 'web/equip/index.html'), 'utf8');
+assert.ok(equipmentHtml.indexOf('../shared/equip_auto_optimizer.js') < equipmentHtml.indexOf('equip.js'),
+    'equipment optimizer must load before equip.js');
+assert.match(equipmentHtml, /data-tab="mangjing">芒晶序列</);
+assert.match(equipmentHtml, /id="specialAttachEquipSelect"/);
 const sandbox = {
     console,
     document: { addEventListener() {} },

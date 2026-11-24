@@ -51,7 +51,8 @@
             <div class="tab-bar" id="tabBar">
                 <button type="button" class="tab-btn active" data-tab="make">打造</button>
                 <button type="button" class="tab-btn" data-tab="shenglian">升炼</button>
-                <button type="button" class="tab-btn" data-tab="xilian">精炼与芒晶序列</button>
+                <button type="button" class="tab-btn" data-tab="xilian">精炼</button>
+                <button type="button" class="tab-btn" data-tab="mangjing">芒晶序列</button>
                 <button type="button" class="tab-btn" data-tab="strong">淬炼</button>
                 <button type="button" class="tab-btn" data-tab="jianwang">剑王阁</button>
             </div>
@@ -210,17 +211,6 @@
                 <div class="action-buttons">
                     <button id="btnXilianPreview" class="btn btn-wash-gold" type="button">预测序列</button>
                 </div>
-                <div class="mangjing-actions">
-                    <label class="stack">
-                        <span>芒晶材料</span>
-                        <select id="xilianMangjingMaterial"></select>
-                    </label>
-                    <label class="stack">
-                        <span>次数</span>
-                        <input type="number" id="xilianMangjingCount" min="1" max="5000" value="30">
-                    </label>
-                    <button id="btnXilianMangjing" class="btn btn-wash" type="button">芒晶序列</button>
-                </div>
             </section>
             <section class="manual-panel" id="xilianPlanPanel">
                 <div class="panel-header">
@@ -229,13 +219,6 @@
                 </div>
                 <p class="xilian-fresh-note">※ 适用模拟打造，其余精炼可能出现较大误差</p>
                 <div id="xilianPlanSummary" class="manual-result empty">预测后勾选「保留」查看总花费与最终属性</div>
-            </section>
-            <section class="manual-panel" id="xilianMangjingPanel" hidden>
-                <div class="panel-header">
-                    <h2>芒晶洗练</h2>
-                    <span class="meta-text">默认 30 次 · 只显示最高值与逐次结果 · 只读预测，不推进 MJSeed</span>
-                </div>
-                <div id="xilianMangjingResult" class="manual-result empty">选择装备与材料后点击「芒晶序列」</div>
             </section>
             <section class="manual-panel" id="refinedBagPanel">
                 <div class="panel-header">
@@ -246,6 +229,42 @@
                     <button id="btnExportRefinedBag" class="btn btn-wash btn-row-action" type="button" style="margin-left:auto">导出 txt</button>
                 </div>
                 <div id="refinedBagList" class="refined-bag-list empty">暂无成品装备。先「预测序列」勾选保留 → 跑「芒晶序列」→ 点「加入成品背包」</div>
+            </section>
+        </section>
+
+        <section id="panelMangjing" class="tab-panel" hidden>
+            <section class="config-panel">
+                <div class="panel-header">
+                    <h2>芒晶序列</h2>
+                    <span class="meta-text">可选存档现有装备与模拟背包装备，不要求先升炼</span>
+                </div>
+                <div class="config-row">
+                    <div class="config-group grow">
+                        <label>目标装备</label>
+                        <select id="specialAttachEquipSelect"></select>
+                    </div>
+                    <div class="config-group">
+                        <label>预测次数</label>
+                        <input type="number" id="specialAttachCount" min="1" max="5000" value="30">
+                    </div>
+                </div>
+                <div class="config-row">
+                    <div class="config-group grow">
+                        <label>芒晶材料</label>
+                        <select id="specialAttachMaterialSelect"></select>
+                    </div>
+                </div>
+                <div id="specialAttachHint" class="cost-hint">选择装备和材料后预测芒晶序列</div>
+                <div class="action-buttons">
+                    <button id="btnXilianMangjing" class="btn btn-wash" type="button">预测芒晶序列</button>
+                </div>
+            </section>
+            <section class="manual-panel" id="xilianMangjingPanel">
+                <div class="panel-header">
+                    <h2>预测结果</h2>
+                    <span class="meta-text">只读预测，不推进 MJSeed；消耗按装备等级计算</span>
+                </div>
+                <div id="xilianMangjingResult" class="manual-result empty">选择装备与材料后点击「预测芒晶序列」</div>
             </section>
         </section>
 
@@ -469,6 +488,7 @@
     <script src="../shared/sql-wasm-embed.js"></script>
     <script src="../shared/save_decrypt.js"></script>
     <script src="../shared/archive_state.js"></script>
+    <script src="../shared/equip_auto_optimizer.js?v=20261124mj2"></script>
     <script src="equip.js?v=20261124orange2"></script>
 </body>
 </html>

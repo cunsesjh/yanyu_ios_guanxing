@@ -4104,6 +4104,7 @@ function switchTab(tab) {
     const sl = document.getElementById('panelShenglian');
     if (sl) sl.hidden = tab !== 'shenglian';
     document.getElementById('panelXilian').hidden = tab !== 'xilian';
+    document.getElementById('panelMangjing').hidden = tab !== 'mangjing';
     document.getElementById('panelStrong').hidden = tab !== 'strong';
     const jwg = document.getElementById('panelJianwang');
     if (jwg) jwg.hidden = tab !== 'jianwang';
@@ -4117,8 +4118,10 @@ function switchTab(tab) {
         updateJianwangHint();
         clearPreview('选择剑王阁实物或虛擬劍胚和流程后，点击「预览当前流程」');
     } else if (tab === 'xilian') {
-        fillXilianMangjingMaterials();
         clearPreview('点击预测查看结果');
+    } else if (tab === 'mangjing') {
+        fillSpecialAttachEquipSelect(true);
+        clearPreview('芒晶序列在上方独立显示');
     } else {
         clearPreview('点击预测查看结果');
     }
@@ -4163,39 +4166,6 @@ function defaultMangjingMaterialForEquip(equip) {
     // 防具类：腰带/护腕/内甲 → 紫玉髓（真元）
     if ([5, 6, 7].includes(typ)) return 2023;
     return null;
-}
-
-/** 填充芒晶材料下拉（只列适用于当前精炼装备的材料），并按部位自动选默认 */
-function fillXilianMangjingMaterials() {
-    const sel = document.getElementById('xilianMangjingMaterial');
-    if (!sel) return;
-    const previous = sel.value;
-    const equipKey = document.getElementById('xilianEquipSelect')?.value || '';
-    const equip = saveEquips.find(item => runtimeKey(item) === equipKey);
-    sel.innerHTML = '';
-    if (!equip) {
-        sel.innerHTML = '<option value="">请先选择装备</option>';
-        return;
-    }
-    const materials = specialMaterialsForEquip(equip);
-    if (!materials.length) {
-        sel.innerHTML = '<option value="">该装备无适用材料</option>';
-        return;
-    }
-    for (const m of materials) {
-        const opt = document.createElement('option');
-        opt.value = String(m.id);
-        opt.textContent = m.name || String(m.id);
-        sel.appendChild(opt);
-    }
-    // 优先保留用户上次选择；否则按部位自动选默认
-    if (previous && materials.some(m => String(m.id) === previous)) {
-        sel.value = previous;
-    } else {
-        const defId = defaultMangjingMaterialForEquip(equip);
-        const def = defId ? materials.find(m => Number(m.id) === defId) : null;
-        if (def) sel.value = String(def.id);
-    }
 }
 
 /** 渲染芒晶序列：头部最高值 + 逐次结果列表 */
@@ -4641,19 +4611,19 @@ function buildMangjingSummary(result, material, count, equipKey, equipLevel) {
     };
 }
 
-/** 精炼页「芒晶序列」：只读预测 N 次芒晶洗练，不推进 MJSeed */
+/** 独立芒晶页：只读预测 N 次芒晶洗练，不推进 MJSeed。 */
 function doXilianMangjing() {
     if (!saveLoaded) { alert('请先导入存档'); return; }
     const panel = document.getElementById('xilianMangjingPanel');
     const box = document.getElementById('xilianMangjingResult');
     if (!box) return;
-    const equipKey = document.getElementById('xilianEquipSelect')?.value || '';
+    const equipKey = document.getElementById('specialAttachEquipSelect')?.value || '';
     const equip = saveEquips.find(item => runtimeKey(item) === equipKey);
     if (!equip) { alert('请选择要模拟芒晶洗练的装备'); return; }
-    const materialId = document.getElementById('xilianMangjingMaterial')?.value || '';
+    const materialId = document.getElementById('specialAttachMaterialSelect')?.value || '';
     const material = EQUIP_DATA.special[String(materialId)];
     if (!material) { alert('请选择芒晶材料（下拉为空说明该装备无适用材料）'); return; }
-    const count = Number(document.getElementById('xilianMangjingCount')?.value) || 30;
+    const count = Number(document.getElementById('specialAttachCount')?.value) || 30;
     try {
         if (!Number.isSafeInteger(count) || count < 1 || count > PREVIEW_MAX) {
             throw new RangeError(`预测次数必须是 1–${PREVIEW_MAX} 的整数`);
@@ -5192,11 +5162,19 @@ async function initApp() {
     document.getElementById('specialAttachEquipSelect')?.addEventListener('change', () => {
         fillSpecialAttachMaterialSelect(false);
         updateSpecialAttachHint();
-        clearPreview('目标装备已变更，请点击「预测连续附加」');
+        const box = document.getElementById('xilianMangjingResult');
+        if (box) {
+            box.classList.add('empty');
+            box.textContent = '装备已变更，请点击「预测芒晶序列」';
+        }
     });
     document.getElementById('specialAttachMaterialSelect')?.addEventListener('change', () => {
         updateSpecialAttachHint();
-        clearPreview('附加材料已变更，请点击「预测连续附加」');
+        const box = document.getElementById('xilianMangjingResult');
+        if (box) {
+            box.classList.add('empty');
+            box.textContent = '材料已变更，请点击「预测芒晶序列」';
+        }
     });
     document.getElementById('btnJianwangCyclePreview')?.addEventListener('click', doJianwangCyclePreview);
     document.getElementById('jianwangCycleCount')?.addEventListener('change', () => {
@@ -5231,8 +5209,6 @@ async function initApp() {
     document.getElementById('xilianEquipSelect').addEventListener('change', () => {
         resetXilianSession();
         updateXilianHint();
-        fillXilianMangjingMaterials();
-        document.getElementById('xilianMangjingPanel').hidden = true;
         clearPreview('装备已变更，请点击「预测序列」');
     });
     document.getElementById('btnXilianMangjing')?.addEventListener('click', doXilianMangjing);
@@ -5302,7 +5278,6 @@ async function initApp() {
     });
 
     document.getElementById('btnPreview').addEventListener('click', doMakePreview);
-    document.getElementById('btnSpecialAttachPreview')?.addEventListener('click', doSpecialAttachPreview);
     document.getElementById('btnJianwangPreview')?.addEventListener('click', doJianwangPreview);
     document.getElementById('btnJianwangApply')?.addEventListener('click', doJianwangApplyOnce);
     document.getElementById('btnMakeOnce').addEventListener('click', doMakeOnce);
