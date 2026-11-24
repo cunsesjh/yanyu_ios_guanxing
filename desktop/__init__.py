@@ -1,3 +1,3 @@
 """iosGuanxing native desktop shell."""
-VERSION = '3.0.9'
-RELEASE_CHANNEL = '正式版'
+VERSION = '3.1.0-beta.1'
+RELEASE_CHANNEL = '测试版'

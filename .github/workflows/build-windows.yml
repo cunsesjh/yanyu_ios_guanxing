@@ -101,13 +101,13 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v3.0.8-beta.6 测试版更新公告
+            ## v3.1.0-beta.1 测试版更新公告
 
-            修复角色内劲、罡气未计入装备精炼主属性成长的问题，并补齐秘技与合斗提供的个人及全队加成。
+            适配先行服 v1.125.73618：接口迁移至新域名（HTTPS），导入 HAR 时请在 ProxyPin 开启 HTTPS 解密后再抓包。
 
-            主角实测回归：人物 556 + 装备 840 = 内劲 1,396；秘技百分比加成也会独立显示。
+            存档内层密钥改为随下载自动下发（extra 字段），游戏更新密钥后无需等待工具更新即可导入。
 
-            同时修复历史存档下载云存档时错误使用最后导入账号会话的问题。
+            修复先行服更新后 HAR 导入失败的问题。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
