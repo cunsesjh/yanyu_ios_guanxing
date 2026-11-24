@@ -6971,6 +6971,7 @@ function equipAutoAttachmentHtml(attachment) {
         return `<div class="equip-auto-attach-card"><strong>附加 · ${escapeAiHtml(attachment.materialName)} ${stageHtml}</strong><div class="ai-result-error">附加不可用</div></div>`;
     }
     const maxima = (attachment.maxima || []).filter(item => item.recommendedIndex != null);
+    const mangjingPerAttempt = EquipmentAutoOptimizer.mangjingPerAttempt(attachment.equipLevel);
     const maximumSummary = maxima.map(maximum => `最高${escapeAiHtml(equipAutoPropertyLabel(maximum.prop))} ${escapeAiHtml(equipAutoFormatPropValue(maximum.prop, maximum.value))} · 第 ${maximum.indexes.join('、')} 次`).join('；');
     const sequenceItems = attachment.items || [];
     const showProperty = new Set(sequenceItems.map(item => item.prop)).size > 1;
@@ -6991,7 +6992,7 @@ function equipAutoAttachmentHtml(attachment) {
         <div class="equip-auto-refine-title"><strong>芒晶洗练 · ${escapeAiHtml(attachment.materialName)} ${stageHtml}</strong><span class="equip-auto-attachment-value">${maximumSummary || '预测范围内未出现可用属性'}</span></div>
         <div class="equip-auto-attachment-maxima">${maxima.map(maximum => `<div class="equip-auto-attachment-maximum">
             <span>${escapeAiHtml(equipAutoPropertyLabel(maximum.prop))}</span>
-            <span class="equip-auto-cost-line">消耗：芒晶×${maximum.recommendedIndex}</span>
+            <span class="equip-auto-cost-line">消耗：芒晶×${Number(maximum.recommendedIndex) * mangjingPerAttempt}（每次×${mangjingPerAttempt}）</span>
         </div>`).join('')}</div>
         ${sequence ? `<ol class="equip-auto-attach-sequence" aria-label="芒晶洗练逐次结果">${sequence}</ol>` : ''}
     </div>`;

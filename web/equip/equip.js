@@ -142,6 +142,10 @@ function mangjingDisplayValue(prop, v) {
     return mangjingUsesPercentFormat(prop, num) ? mangjingPercentagePoints(num) : num;
 }
 
+function mangjingPerAttempt(equipLevel) {
+    return EquipmentAutoOptimizer.mangjingPerAttempt(equipLevel);
+}
+
 function formatProps(list) {
     if (!list || !list.length) return '—';
     return list.map(p => {
@@ -4213,11 +4217,13 @@ function renderXilianMangjing(result, material, equip) {
     for (const it of items) {
         if (Number(it.value) > Number(best.value)) best = it;
     }
-    const levelText = Number(equip?.need_lv) > 0 ? ` · ${Number(equip.need_lv)}级` : '';
+    const equipLevel = Number(equip?.need_lv) || 0;
+    const levelText = equipLevel > 0 ? ` · ${equipLevel}级` : '';
+    const perAttempt = mangjingPerAttempt(equipLevel);
     const head = `<div class="mangjing-head">
         <strong>芒晶洗练 · ${escapeHtml(material.name || String(material.id))}${escapeHtml(levelText)}</strong>
         <span class="mangjing-peak">最高 ${escapeHtml(propLabel(best.prop))} ${escapeHtml(formatPropValue(best.prop, best.value))} · 第 ${Number(best.index)} 次</span>
-        <span class="mangjing-cost">消耗 芒晶×${Number(best.index)}</span>
+        <span class="mangjing-cost">消耗 芒晶×${Number(best.index) * perAttempt}（每次×${perAttempt}）</span>
         <button type="button" class="mangjing-toggle" aria-expanded="false">展开 ${items.length} 次序列</button>
     </div>`;
     const seq = `<ol class="mangjing-sequence" hidden>${items.map(it => {
@@ -4355,7 +4361,7 @@ function addRefinedToBag() {
             .join(' · ');
     }
     const mjText = mj
-        ? `芒晶 ${mj.materialName} · 最高 ${propLabel(mj.prop)} ${formatPropValue(mj.prop, mj.value)} · 第 ${mj.index} 次`
+        ? `芒晶 ${mj.materialName} · 最高 ${propLabel(mj.prop)} ${formatPropValue(mj.prop, mj.value)} · 第 ${mj.index} 次 · 消耗芒晶×${mj.mangjingCost}`
         : '芒晶 —（未运行芒晶序列）';
 
     refinedBag.push({
@@ -4615,7 +4621,7 @@ function exportRefinedBagTxt() {
 }
 
 /** 从芒晶序列结果里提取「最高那次」摘要（供成品背包记录） */
-function buildMangjingSummary(result, material, count, equipKey) {
+function buildMangjingSummary(result, material, count, equipKey, equipLevel) {
     const items = Array.isArray(result) ? result : (Array.isArray(result?.items) ? result.items : []);
     if (!items.length) return null;
     let best = items[0];
@@ -4629,6 +4635,8 @@ function buildMangjingSummary(result, material, count, equipKey) {
         value: best.value,
         index: Number(best.index),
         count: items.length || count,
+        equipLevel: Number(equipLevel) || 0,
+        mangjingCost: Number(best.index) * mangjingPerAttempt(equipLevel),
         equipKey: equipKey || null,   // 记下是对哪件装备算的，供「加入成品背包」核对
     };
 }
@@ -4651,7 +4659,7 @@ function doXilianMangjing() {
             throw new RangeError(`预测次数必须是 1–${PREVIEW_MAX} 的整数`);
         }
         const result = runSpecialAttachPredict(equip, material, count);
-        lastMangjingResult = buildMangjingSummary(result, material, count, equipKey);
+        lastMangjingResult = buildMangjingSummary(result, material, count, equipKey, equip.need_lv);
         renderXilianMangjing(result, material, equip);
         if (panel) panel.hidden = false;
     } catch (error) {

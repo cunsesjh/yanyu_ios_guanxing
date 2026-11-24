@@ -45,6 +45,28 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn(b'fake-session', raw)
         self.assertNotIn(b'never-save', raw)
 
+    def test_download_removes_only_older_snapshots_for_current_account(self):
+        current_ref = self.store.save_session(SESSION)
+        other_session = dict(SESSION, account='other-account', session='other-session')
+        other_ref = self.store.save_session(other_session)
+        old_current = self.store.save_snapshot(
+            dict(DATA, EncryptID=SESSION['account']), 'ios', '1', '73570', current_ref)
+        legacy_current = self.store.save_snapshot(
+            dict(DATA, EncryptID=SESSION['account']), 'ios', '1', '73571')
+        other = self.store.save_snapshot(
+            dict(DATA, EncryptID=other_session['account']), 'ios', '1', '73572', other_ref)
+
+        downloaded = dict(DATA, EncryptID=SESSION['account'], Rnds={'test': 999})
+        with patch('desktop.service.retrieve.fetch', return_value=(downloaded, '73580', None)):
+            result = DownloadService(self.store).download(SESSION)
+
+        remaining = {row['id'] for row in self.store.list_snapshots()}
+        self.assertEqual(remaining, {result['row']['id'], other['id']})
+        self.assertFalse((self.store.snapshots / old_current['id']).exists())
+        self.assertFalse((self.store.snapshots / legacy_current['id']).exists())
+        self.assertTrue((self.store.snapshots / other['id']).exists())
+        self.assertEqual(self.store.selected()['id'], result['row']['id'])
+
     def test_history_snapshot_selects_its_own_account_session(self):
         other_session = dict(SESSION, account='other-account', session='other-session', area='36')
         first_data = dict(DATA, EncryptID=SESSION['account'])

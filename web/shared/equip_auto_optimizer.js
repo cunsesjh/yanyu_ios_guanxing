@@ -58,6 +58,10 @@
         return Math.max(min, Math.min(max, number));
     }
 
+    function mangjingPerAttempt(equipLevel) {
+        return Math.max(Math.floor(finiteNumber(equipLevel) / 10), 1);
+    }
+
     function normalizeOptions(options) {
         const raw = { ...DEFAULT_OPTIONS, ...(options || {}) };
         return {
@@ -967,6 +971,7 @@
         analyzeRefinement,
         refinementTheoreticalValue,
         estimateRefinementLianjin,
+        mangjingPerAttempt,
         specialMaterialValueRange,
         predictSpecialAttachSequence,
         buildMakeRequest,

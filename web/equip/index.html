@@ -51,7 +51,7 @@
             <div class="tab-bar" id="tabBar">
                 <button type="button" class="tab-btn active" data-tab="make">打造</button>
                 <button type="button" class="tab-btn" data-tab="shenglian">升炼</button>
-                <button type="button" class="tab-btn" data-tab="xilian">精炼</button>
+                <button type="button" class="tab-btn" data-tab="xilian">精炼与芒晶序列</button>
                 <button type="button" class="tab-btn" data-tab="strong">淬炼</button>
                 <button type="button" class="tab-btn" data-tab="jianwang">剑王阁</button>
             </div>
@@ -133,32 +133,6 @@
                 <div class="action-buttons">
                     <button id="btnPreview" class="btn btn-wash-gold" type="button">预测序列</button>
                     <button id="btnMakeOnce" class="btn btn-wash" type="button">推进并加入背包</button>
-                </div>
-            </section>
-            <section class="config-panel">
-                <div class="panel-header">
-                    <h2>装备 · 特殊材料连续附加</h2>
-                    <span class="meta-text">读取或推导装备 MJSeed，只读预测，不消耗材料</span>
-                </div>
-                <div class="config-row">
-                    <div class="config-group grow">
-                        <label>目标装备</label>
-                        <select id="specialAttachEquipSelect"></select>
-                    </div>
-                    <div class="config-group">
-                        <label>预测次数</label>
-                        <input type="number" id="specialAttachCount" min="1" max="5000" value="20">
-                    </div>
-                </div>
-                <div class="config-row">
-                    <div class="config-group grow">
-                        <label>重复附加材料</label>
-                        <select id="specialAttachMaterialSelect"></select>
-                    </div>
-                </div>
-                <div id="specialAttachHint" class="cost-hint">选择已有或模拟打造装备和材料，预测连续覆盖红词条的结果</div>
-                <div class="action-buttons">
-                    <button id="btnSpecialAttachPreview" class="btn btn-wash-custom" type="button">预测连续附加</button>
                 </div>
             </section>
             <section class="manual-panel" id="craftedBagPanel">

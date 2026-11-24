@@ -197,6 +197,22 @@ class Store:
             remaining = [row for row in rows if row['id'] != ident]
             self.select(remaining[0]['id'] if remaining else None)
 
+    def delete_older_account_snapshots(self, keep_ident, account=None, session_ref=None):
+        """Keep the new snapshot and remove older snapshots for only that account."""
+        account = str(account or '').strip().lower()
+        for row in self.list_snapshots():
+            if row['id'] == keep_ident:
+                continue
+            matches = bool(session_ref and row.get('session_ref') == session_ref)
+            if account and not matches:
+                try:
+                    data = self.load_snapshot(row['id'])
+                    matches = str(data.get('EncryptID') or '').strip().lower() == account
+                except (OSError, ValueError, TypeError):
+                    matches = False
+            if matches:
+                self.delete_snapshot(row['id'])
+
     def preferences(self):
         try:
             value = json.loads((self.root / 'preferences.json').read_text(encoding='utf-8'))

@@ -13,11 +13,11 @@ BETA_REPOSITORY = 'cunsesjh/iosGuanxing'
 
 
 def version_tuple(value):
-    match = re.fullmatch(r'v?(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?', str(value).strip())
+    match = re.fullmatch(r'v?(\d+)\.(\d+)(?:\.(\d+))?(?:-beta\.(\d+))?', str(value).strip())
     if not match:
         raise ValueError('无法识别发布版本号。')
     major, minor, patch, beta = match.groups()
-    return int(major), int(minor), int(patch), 0 if beta else 1, int(beta or 0)
+    return int(major), int(minor), int(patch or 0), 0 if beta else 1, int(beta or 0)
 
 
 def parse_release(payload, current, repository=STABLE_REPOSITORY):

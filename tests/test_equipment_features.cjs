@@ -32,6 +32,10 @@ const ring90 = { ...ring100, name: '90级戒指', need_lv: 90 };
 const belt100 = { id: 2, name: '100级腰带', typ: 5, need_lv: 100, MJSeed: 7654321 };
 const belt90 = { ...belt100, name: '90级腰带', need_lv: 90 };
 
+assert.equal(optimizer.mangjingPerAttempt(100), 10);
+assert.equal(optimizer.mangjingPerAttempt(90), 9);
+assert.equal(optimizer.mangjingPerAttempt(1), 1);
+
 assert.equal(optimizer.refinementActualTotal({
     total: 300,
     maxima: {

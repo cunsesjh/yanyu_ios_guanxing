@@ -110,12 +110,11 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v4.0-beta.1 测试版更新公告
+            ## v4.0-beta.2 测试版更新公告
 
-            - 桌面端支持选择应用数据与存档位置，并提供应用内自动更新。
-            - 删除历史存档时直接从本机永久删除。
-            - 优化自动打造结果展示、橙装图纸筛选和材料排序。
-            - 统一使用“芒晶”名称，并优化 Windows 桌面打包内容。
+            - 精炼页整合芒晶序列，移除打造页重复的特殊材料连续附加入口。
+            - 装备模拟与自动模拟均按装备等级正确计算芒晶消耗。
+            - 下载最新云存档后，仅清理当前账号旧存档，其他账号不受影响。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt

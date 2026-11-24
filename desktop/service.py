@@ -18,6 +18,8 @@ class DownloadService:
             warning = '存档已保存；会话未能加密保存，重新启动后需要再次导入 HAR。'
         row = self.store.save_snapshot(data, session['platform'], session['area'], version,
                                        session_ref=session_ref)
+        self.store.delete_older_account_snapshots(
+            row['id'], account=session.get('account'), session_ref=session_ref)
         return dict(row=row, session=session, warning=warning)
 
     def download_from_har(self, har_path, progress=lambda text: None):
