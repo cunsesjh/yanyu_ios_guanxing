@@ -35,11 +35,11 @@
                 <div class="config-row tiger-config-row">
                     <div class="config-group target-count">
                         <label for="targetBones">目标虎骨数</label>
-                        <input id="targetBones" type="number" min="1" max="20" value="5" inputmode="numeric">
+                        <input id="targetBones" type="number" min="1" max="200" value="5" inputmode="numeric">
                     </div>
                     <div class="objective-copy">
                         <strong>最省路线</strong>
-                        <span>优先让总投喂次数最少；次数相同时，选择消耗虎肉更少的路线。</span>
+                        <span>1-20个使用全局最优搜索；21-200个使用分段滚动优化，保证路线掉落准确。</span>
                     </div>
                     <div class="action-buttons"><button id="btnSearch" class="btn btn-primary" type="button">开始推演</button></div>
                 </div>
@@ -47,7 +47,7 @@
             </section>
 
             <section id="resultPanel" class="result-panel" aria-labelledby="resultTitle">
-                <div class="panel-header"><h2 id="resultTitle">最省投喂路线</h2><span id="resultMeta" class="result-meta">等待推演</span></div>
+                <div class="panel-header"><h2 id="resultTitle">省肉投喂路线</h2><span id="resultMeta" class="result-meta">等待推演</span></div>
                 <div id="resultEmpty" class="result-empty">输入目标虎骨数后开始推演。</div>
                 <div id="resultContent" hidden>
                     <div id="summaryGrid" class="summary-grid"></div>
@@ -59,7 +59,7 @@
             <section class="precision-panel" aria-labelledby="precisionTitle">
                 <h2 id="precisionTitle">推演口径</h2>
                 <p><strong>精确状态：</strong>每次投喂都会推进猛虎/白虎、掉落和虎骨保底状态；路线中的肉类与顺序必须照做。</p>
-                <p><strong>最优条件：</strong>虎骨每次最多掉落一个。搜索会比较普通生肉和虎肉的混合分支，找到总投喂次数最少的路线，再以少用虎肉作为同长度路线的优先条件。</p>
+                <p><strong>优化条件：</strong>目标不超过20个时比较完整混合分支，保证总投喂次数最少，并在同长度下少用虎肉。目标超过20个时分段滚动优化，路线及掉落仍然准确，但不标注为全局最优。</p>
                 <p><strong>存档不变：</strong>本页只读取当前存档并推演，不会修改存档或页面中的其他模拟状态。</p>
             </section>
         </main>

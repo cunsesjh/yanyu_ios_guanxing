@@ -18,7 +18,7 @@
 .panel-header { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; margin-bottom: 0.8rem; }
 .panel-header h2, .precision-panel h2 { margin: 0; font-size: 1.05rem; }
 .result-meta, .result-empty { color: var(--text-muted); font-size: 0.85rem; }
-.summary-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.55rem; margin-bottom: 0.75rem; }
+.summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.55rem; margin-bottom: 0.75rem; }
 .summary-item { display: grid; gap: 0.22rem; padding: 0.65rem 0.75rem; border: 1px solid var(--border-color); background: var(--bg-primary); }
 .summary-item span { color: var(--text-muted); font-size: 0.76rem; }
 .summary-item strong { color: var(--text-primary); font-size: 1rem; }

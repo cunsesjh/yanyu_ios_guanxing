@@ -3,6 +3,8 @@
 
     var BONE_ID = 3065;
     var TIGER_MEAT_NAME = '虎肉';
+    var EXACT_TARGET_LIMIT = 20;
+    var ROLLING_CHUNK_SIZE = 10;
     var SEARCH_LIMIT = 120000;
     var saveState = null;
 
@@ -118,12 +120,12 @@
         if (!run) throw new Error('虎骨引擎没有返回本次投喂结果');
         return { value: value, run: run };
     }
-    async function findRoute(target) {
+    async function findRoute(target, initialState, progressLabel) {
         var heap = new MinHeap();
         var seen = Object.create(null);
         var start = {
-            seeds: saveState.seeds,
-            values: saveState.values,
+            seeds: initialState.seeds,
+            values: initialState.values,
             bones: 0,
             steps: 0,
             tigerUses: 0,
@@ -163,11 +165,34 @@
                 heap.push(child);
             }
             if (explored % 120 === 0) {
-                $('searchMessage').textContent = '正在比较混合路线，已检查 ' + explored.toLocaleString() + ' 个状态…';
+                $('searchMessage').textContent = (progressLabel || '正在比较混合路线') + '，已检查 ' + explored.toLocaleString() + ' 个状态…';
                 await new Promise(function (resolve) { window.setTimeout(resolve, 0); });
             }
         }
         throw new Error('没有找到可执行的虎骨路线');
+    }
+    async function buildRoute(target) {
+        if (target <= EXACT_TARGET_LIMIT) {
+            var exact = await findRoute(target, saveState, '正在比较完整混合路线');
+            return { route: reconstruct(exact.goal), explored: exact.explored, exact: true };
+        }
+        var state = { seeds: saveState.seeds, values: saveState.values };
+        var route = [];
+        var explored = 0;
+        var completed = 0;
+        while (completed < target) {
+            var chunkTarget = Math.min(ROLLING_CHUNK_SIZE, target - completed);
+            var label = '正在优化第 ' + (completed + 1) + '-' + (completed + chunkTarget) + ' 个虎骨';
+            var result = await findRoute(chunkTarget, state, label);
+            var chunk = reconstruct(result.goal);
+            route = route.concat(chunk);
+            explored += result.explored;
+            completed += result.goal.bones;
+            state = { seeds: result.goal.seeds, values: result.goal.values };
+            $('searchMessage').textContent = '已完成 ' + completed + ' / ' + target + ' 个虎骨的分段优化…';
+            await new Promise(function (resolve) { window.setTimeout(resolve, 0); });
+        }
+        return { route: route, explored: explored, exact: false };
     }
     function reconstruct(goal) {
         var route = [];
@@ -188,7 +213,7 @@
         });
         return groups.map(function (group) { return group.label + ' ×' + group.count; }).join(' → ');
     }
-    function render(route, target, explored) {
+    function render(route, target, explored, exact) {
         var normalUses = route.filter(function (node) { return node.bait === 'raw_meat'; }).length;
         var tigerUses = route.length - normalUses;
         var tigerMeatDrops = 0;
@@ -196,6 +221,7 @@
             tigerMeatDrops += itemQuantity(node.run.items, function (item) { return item && item.name === TIGER_MEAT_NAME; });
         });
         var summaries = [
+            ['路线模式', exact ? '全局最优' : '分段推荐'],
             ['目标虎骨', target + ' 个'],
             ['总投喂', route.length + ' 次'],
             ['普通生肉', normalUses + ' 个'],
@@ -226,10 +252,13 @@
                 '<div class="bone-total">累计 <strong>' + cumulative + '</strong> 个虎骨</div>' +
                 '</article>';
         }).join('');
-        $('resultMeta').textContent = '已检查 ' + explored.toLocaleString() + ' 个状态';
+        $('resultTitle').textContent = exact ? '最省投喂路线' : '推荐省肉路线';
+        $('resultMeta').textContent = (exact ? '全局最优 · ' : '分段优化 · ') + '已检查 ' + explored.toLocaleString() + ' 个状态';
         $('resultEmpty').hidden = true;
         $('resultContent').hidden = false;
-        $('searchMessage').textContent = '已找到总投喂次数最少、同长度下虎肉用量最少的路线。';
+        $('searchMessage').textContent = exact
+            ? '已找到总投喂次数最少、同长度下虎肉用量最少的路线。'
+            : '已生成掉落准确的分段省肉路线；该路线不代表200个虎骨目标下的全局最优。';
     }
     async function search() {
         if (!saveState) {
@@ -237,7 +266,7 @@
             return;
         }
         var input = $('targetBones');
-        var target = Math.max(1, Math.min(20, integer(input.value, 5)));
+        var target = Math.max(1, Math.min(200, integer(input.value, 5)));
         input.value = target;
         var button = $('btnSearch');
         button.disabled = true;
@@ -249,8 +278,8 @@
         $('searchMessage').textContent = '正在读取普通生肉与虎肉的混合分支…';
         try {
             await HomesteadEngine.ensure();
-            var result = await findRoute(target);
-            render(reconstruct(result.goal), target, result.explored);
+            var result = await buildRoute(target);
+            render(result.route, target, result.explored, result.exact);
         } catch (error) {
             console.error('[虎骨掉落]', error);
             $('resultMeta').textContent = '推演失败';
