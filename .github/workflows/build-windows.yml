@@ -110,11 +110,11 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v4.0-beta.3 测试版更新公告
+            ## v4.0-beta.4 测试版更新公告
 
-            - 芒晶序列拆分为独立子功能，可选择现有装备与模拟背包装备进行推演。
-            - 新增虎骨掉落推演：目标不超过 20 个时搜索全局最优路线，21 至 200 个时生成掉落准确的分段省肉路线。
-            - 虎骨路线支持普通生肉与虎肉混合投喂，并展示逐次掉落、保底计数与途中获得的虎肉。
+            - 恒山自动推演新增 40 / 80 级关键节点说明，要求严格按规划顺序操作。
+            - 自动排除跨过 40 / 80 级的不可执行路线，避免节点天赋与后续序列发生偏差。
+            - 修正节点赠送等级显示，并统一首页各功能页签的尺寸与全屏布局。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
