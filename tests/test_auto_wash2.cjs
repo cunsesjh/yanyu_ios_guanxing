@@ -144,6 +144,33 @@ async function send(type, payload) {
     assert.ok(result.routes.some(r => r.finalTalents.some(t => t.id === 271)));
     rows = await send('search', {input: {...input, initialState: {...converted, talents: []}, targetIds: [271]}});
     assert.equal(rows.find(r => r.type === 'result').result.routes.length, 0, 'no fabricated route outside zero budget');
+    // A newly found verified seed route should immediately yield the remaining
+    // stage to best-minus-one refinement instead of spending it on more seeds.
+    {
+        const originalSeed = sandbox.AutoWash2Seed;
+        const originalUnified = sandbox.AutoWash2Unified;
+        const originalOptimizer = sandbox.AutoWash2Optimizer;
+        let unifiedCalls = 0, refinementCalls = 0;
+        sandbox.AutoWash2Seed = {search:(_input, _targets, collect) => collect({routes:[{
+            totalPills:100, totalWashes:10, finalState:{talents:[271]}, steps:[], verified:true,
+        }]})};
+        sandbox.AutoWash2Unified = {search:() => { unifiedCalls++; }};
+        sandbox.AutoWash2Optimizer = {...originalOptimizer, searchWashRoutes:async () => {
+            refinementCalls++;
+            return {routes:[], searchScope:{}};
+        }};
+        try {
+            rows = await send('search', {searchTimeMs:10000, input:{initialState:{...converted, talents:[]}, targetIds:[271],
+                compatibleGroups:[], options:{maxTotalPills:1000}}});
+            assert.equal(unifiedCalls, 0, 'stop seed stage after finding its first route');
+            assert.ok(refinementCalls > 0, `continue with a search capped below the first route (${JSON.stringify({unifiedCalls, refinementCalls, result:rows.find(r => r.type === 'result')?.result})})`);
+            assert.equal(rows.find(r => r.type === 'result').result.routes[0].totalPills, 100);
+        } finally {
+            sandbox.AutoWash2Seed = originalSeed;
+            sandbox.AutoWash2Unified = originalUnified;
+            sandbox.AutoWash2Optimizer = originalOptimizer;
+        }
+    }
     // Cross-check adapter output against the engine used by the existing wash page,
     // including RC progression, locks, different aptitude levels and pity draws.
     for (const zizhi of [151, 152, 153, 154]) {

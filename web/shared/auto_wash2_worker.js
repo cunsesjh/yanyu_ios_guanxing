@@ -64,7 +64,7 @@ self.onmessage = async ({data: message}) => {
         const totalSearchMs = Number.isFinite(requestedSearchMs)
             ? Math.max(100, Math.min(maxSearchMs, requestedSearchMs)) : maxSearchMs;
         const totalDeadline = searchStarted + totalSearchMs;
-        const userBudget = Math.max(0, Math.trunc(Number(input.options?.maxTotalPills ?? 5000)));
+        const userBudget = Math.max(0, Math.trunc(Number(input.options?.maxTotalPills ?? 8000)));
         const isInternational = WashSourceEngine.isInternationalChannel(
             input.initialState?.save_channel || input.initialState?.channel);
         const progressFor = (branch, stage, value) => send('progress', {progress: {...value,
@@ -88,6 +88,8 @@ self.onmessage = async ({data: message}) => {
                 } catch (_) {
                     progressFor(branch, stage, {message: '欧气种子快搜未形成候选，转入统一构造'});
                 }
+                const bestAfterSeed = combined().routes[0]?.totalPills;
+                if (bestAfterSeed != null && (best == null || bestAfterSeed < best)) return;
                 if (Date.now() >= stageDeadline) return;
                 const unifiedBudget = Math.max(500, Math.min(stageDeadline - Date.now(), branchWindow * 0.70));
                 // Unified construction has a few indivisible sequence scans.
@@ -104,6 +106,8 @@ self.onmessage = async ({data: message}) => {
                 } catch (_) {
                     progressFor(branch, stage, {message: '统一路线构造未形成候选，继续战术搜索'});
                 }
+                const bestAfterUnified = combined().routes[0]?.totalPills;
+                if (bestAfterUnified != null && (best == null || bestAfterUnified < best)) return;
             }
         }
         async function runPass(stageCap, stageDeadline, purpose, stopWhenFound = false,
