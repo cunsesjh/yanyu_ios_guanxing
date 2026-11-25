@@ -248,6 +248,20 @@
                         <input type="number" id="specialAttachCount" min="1" max="5000" value="30">
                     </div>
                 </div>
+                <div class="config-row equip-filter-row">
+                    <div class="config-group">
+                        <label>来源</label>
+                        <select id="mangjingSourceFilter">
+                            <option value="all">全部</option>
+                            <option value="equipped" selected>仅已装备</option>
+                            <option value="crafted">仅模拟打造</option>
+                        </select>
+                    </div>
+                    <div class="config-group grow">
+                        <label>文本筛选</label>
+                        <input type="search" id="mangjingTextFilter" placeholder="名称 / 标记 / 品质" autocomplete="off">
+                    </div>
+                </div>
                 <div class="config-row">
                     <div class="config-group grow">
                         <label>芒晶材料</label>
@@ -489,6 +503,6 @@
     <script src="../shared/save_decrypt.js"></script>
     <script src="../shared/archive_state.js"></script>
     <script src="../shared/equip_auto_optimizer.js?v=20261124mj2"></script>
-    <script src="equip.js?v=20261124orange2"></script>
+    <script src="equip.js?v=20261125mangjing1"></script>
 </body>
 </html>

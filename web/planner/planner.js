@@ -27,7 +27,7 @@
     }
     function propName(prop) { return EQUIP_DATA.propNames && EQUIP_DATA.propNames[prop] || prop; }
     function formatProp(prop, value) {
-        var percentProps = ['dmg_off', 'dmg_ref', 'def_ign', 'atk_extend', 'sword_add', 'unarmed_add', 'blade_add', 'stick_add', 'blood', 'renxing', 'po_parry', 'po_dodge'];
+        var percentProps = ['dmg_off', 'dmg_ref', 'def_ign', 'atk_extend', 'sword_add', 'unarmed_add', 'blade_add', 'stick_add', 'blood', 'po_parry', 'po_dodge', 'xx_prob', 'xx_crit'];
         if (percentProps.indexOf(prop) >= 0) return (number(value, 0) * 100).toFixed(1).replace(/\.0$/, '') + '%';
         return Math.round(number(value, 0) * 10) / 10;
     }
@@ -96,9 +96,8 @@
         };
     }
     function resultKey(item, candidate) {
-        var region = (item.region || []).map(function (entry) { return entry.prop + ':' + entry.value; }).sort().join('|');
         return [item.part, candidate.equipId, candidate.S, candidate.CZSeed, item.refinement.prop,
-            refinementTotal(item.refinement), item.mud, region].join('::');
+            refinementTotal(item.refinement), item.mud].join('::');
     }
     function addResult(candidate, budget) {
         var scored = scoreCandidate(candidate, budget);
@@ -108,8 +107,11 @@
         if (existingIndex == null) {
             resultIndexes[key] = results.length;
             results.push(scored);
-        } else if (scored.silver < results[existingIndex].silver) {
-            results[existingIndex] = scored;
+        } else {
+            var existing = results[existingIndex];
+            if (scored.bonus > existing.bonus || (scored.bonus === existing.bonus && scored.silver < existing.silver)) {
+                results[existingIndex] = scored;
+            }
         }
     }
     function compareResults(a, b) {
@@ -171,7 +173,7 @@
         var makeRnd = extractMakeRnd(saveData);
         if (!makeRnd) { $('planMessage').textContent = '当前存档缺少 MakeRnd 打造状态。'; return; }
         var mudBudget = integer($('mudBudget').value, 10, 1000, 200);
-        var craftCount = integer($('craftCount').value, 1, 500, 100);
+        var craftCount = integer($('craftCount').value, 1, 500, 20);
         $('mudBudget').value = mudBudget;
         $('craftCount').value = craftCount;
         results = [];
@@ -229,7 +231,10 @@
         }
     }
     function score(value) { return number(value, 0).toFixed(1).replace(/\.0$/, ''); }
-    function silver(value) { return Math.round(number(value, 0)).toLocaleString(); }
+    function silver(value) {
+        var total = Math.max(0, Math.round(number(value, 0)));
+        return Math.floor(total / 1000).toLocaleString() + '两' + (total % 1000) + '文';
+    }
     function cardHtml(item) {
         var region = item.region.length ? item.region.map(function (prop) {
             return '<span>' + escapeHtml(propName(prop.prop)) + ' +' + escapeHtml(formatProp(prop.prop, prop.value)) + '</span>';

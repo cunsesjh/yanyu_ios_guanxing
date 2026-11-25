@@ -9,6 +9,10 @@ assert.ok(equipmentHtml.indexOf('../shared/equip_auto_optimizer.js') < equipment
     'equipment optimizer must load before equip.js');
 assert.match(equipmentHtml, /data-tab="mangjing">芒晶序列</);
 assert.match(equipmentHtml, /id="specialAttachEquipSelect"/);
+assert.match(equipmentHtml, /id="mangjingSourceFilter"/,
+    'mangjing equipment list must expose the same source selection as refinement');
+assert.match(equipmentHtml, /id="mangjingTextFilter"/,
+    'mangjing equipment list must support text filtering');
 const sandbox = {
     console,
     document: { addEventListener() {} },
@@ -71,6 +75,9 @@ assert.equal(vm.runInContext('specialMaterialSupportsEquip(EQUIP_DATA.special["8
 assert.equal(vm.runInContext('specialMaterialSupportsEquip(EQUIP_DATA.special["8825"], ({typ:8, need_lv:90}))', context), false);
 assert.equal(vm.runInContext('specialMaterialSupportsEquip(EQUIP_DATA.special["8826"], ({typ:5, need_lv:100}))', context), true);
 assert.equal(vm.runInContext('specialMaterialSupportsEquip(EQUIP_DATA.special["8826"], ({typ:7, need_lv:100}))', context), false);
+assert.equal(vm.runInContext('canPredictSpecialAttach(({color:4, typ:8, need_lv:100, MJSeed:1234567}))', context), true);
+assert.equal(vm.runInContext('canPredictSpecialAttach(({color:5, typ:8, need_lv:100, MJSeed:1234567}))', context), false,
+    'orange equipment cannot be washed with mangjing and must stay out of the target list');
 
 const redSequence = optimizer.predictSpecialAttachSequence(ring100, redMarrow, 5);
 assert.equal(redSequence.items.length, 5);
@@ -179,6 +186,8 @@ assert.equal(vm.runInContext('usesOrangePadSequence(freeOrangeRequest)', context
 
 const html = fs.readFileSync(path.join(root, 'web/equip/index.html'), 'utf8');
 const autoSimulatorSource = fs.readFileSync(path.join(root, 'web/shared/simulator.js'), 'utf8');
+const plannerHtml = fs.readFileSync(path.join(root, 'web/planner/index.html'), 'utf8');
+const plannerSource = fs.readFileSync(path.join(root, 'web/planner/planner.js'), 'utf8');
 assert.ok((html.match(/value="orange"/g) || []).length >= 2,
     'both linked equipment category selectors must expose orange blueprints');
 assert.equal(vm.runInContext('DEFAULT_MAKE_COLOR_FILTER', context), '',
@@ -197,6 +206,14 @@ assert.match(autoSimulatorSource, /value="lianjin-asc"/,
     'automatic equipment results must support sorting by lianjin consumption');
 assert.match(autoSimulatorSource, /实际\$\{escapeAiHtml\(equipAutoPropertyLabel\(refinement\.prop\)\)\}/,
     'collapsed cards must label refinement values as actual results');
+assert.match(plannerHtml, /id="craftCount"[^>]*value="20"/,
+    'equipment planner must default each route to 20 crafts');
+assert.doesNotMatch(plannerSource.match(/var percentProps = \[[^\]]+\]/)?.[0] || '', /renxing/,
+    'toughness is a point value and must not be rendered as a percentage');
+assert.match(plannerSource, /Math\.floor\(total \/ 1000\).*'两'.*total % 1000.*'文'/s,
+    'planner silver costs must be rendered in liang and wen');
+assert.doesNotMatch(plannerSource.match(/function resultKey[\s\S]*?\n    }/)?.[0] || '', /item\.region/,
+    'regional variants of the same craft result must share one deduplication key');
 
 assert.equal(
     vm.runInContext('summarizeExtTotals([{prop:"atk",value:100},{prop:"atk",value:80},{prop:"blood",value:0.02}])', context),

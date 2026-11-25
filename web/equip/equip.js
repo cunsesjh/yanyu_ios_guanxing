@@ -372,14 +372,18 @@ function nextCraftedOnlyId() {
 function getSourceFilter(which) {
     const id = which === 'strong'
         ? 'strongSourceFilter'
-        : (which === 'shenglian' ? 'shenglianSourceFilter' : 'xilianSourceFilter');
+        : (which === 'shenglian'
+            ? 'shenglianSourceFilter'
+            : (which === 'mangjing' ? 'mangjingSourceFilter' : 'xilianSourceFilter'));
     return document.getElementById(id)?.value || 'all';
 }
 
 function getTextFilter(which) {
     const id = which === 'strong'
         ? 'strongTextFilter'
-        : (which === 'shenglian' ? 'shenglianTextFilter' : 'xilianTextFilter');
+        : (which === 'shenglian'
+            ? 'shenglianTextFilter'
+            : (which === 'mangjing' ? 'mangjingTextFilter' : 'xilianTextFilter'));
     return (document.getElementById(id)?.value || '').trim().toLowerCase();
 }
 
@@ -2808,7 +2812,9 @@ function equipOptionLabel(e, mode) {
 }
 
 function canPredictSpecialAttach(equip) {
-    return Number.isSafeInteger(equip.MJSeed)
+    return Number(equip.color) > 1
+        && Number(equip.color) < 5
+        && Number.isSafeInteger(equip.MJSeed)
         && equip.MJSeed > 0
         && Object.values(EQUIP_DATA.special).some(material => specialMaterialSupportsEquip(material, equip));
 }
@@ -2857,10 +2863,10 @@ function fillSpecialAttachEquipSelect(preserveSelection) {
     const select = document.getElementById('specialAttachEquipSelect');
     if (!select) return;
     const previous = preserveSelection ? select.value : '';
-    const equips = saveEquips.filter(canPredictSpecialAttach);
+    const equips = saveEquips.filter(equip => canPredictSpecialAttach(equip) && passEquipListFilter(equip, 'mangjing'));
     select.innerHTML = '';
     if (!equips.length) {
-        select.innerHTML = '<option value="">（没有带有效 MJSeed 的适用装备）</option>';
+        select.innerHTML = '<option value="">（当前来源没有可用芒晶洗炼的绿/蓝/紫装）</option>';
     } else {
         for (const equip of equips) {
             const option = document.createElement('option');
@@ -5263,9 +5269,11 @@ async function initApp() {
     });
     const onEquipFilterChange = () => fillEquipSelects(true);
     document.getElementById('xilianSourceFilter')?.addEventListener('change', onEquipFilterChange);
+    document.getElementById('mangjingSourceFilter')?.addEventListener('change', onEquipFilterChange);
     document.getElementById('strongSourceFilter')?.addEventListener('change', onEquipFilterChange);
     document.getElementById('shenglianSourceFilter')?.addEventListener('change', onEquipFilterChange);
     document.getElementById('xilianTextFilter')?.addEventListener('input', onEquipFilterChange);
+    document.getElementById('mangjingTextFilter')?.addEventListener('input', onEquipFilterChange);
     document.getElementById('strongTextFilter')?.addEventListener('input', onEquipFilterChange);
     document.getElementById('shenglianTextFilter')?.addEventListener('input', onEquipFilterChange);
     document.getElementById('strongMinGrade')?.addEventListener('change', () => {
