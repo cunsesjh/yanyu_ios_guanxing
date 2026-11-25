@@ -247,6 +247,12 @@ assert.equal((plannerHtml.match(/class="planner-intro /g) || []).length, 3,
 assert.match(plannerHtml, /data-planner-tool="fixed">固定打造规划/);
 assert.match(plannerHtml, /data-planner-tool="allocation">资源分配规划/);
 assert.match(plannerHtml, /data-planner-tool="target">目标装备追踪/);
+assert.match(plannerHtml, /\.\.\/shared\/wasm_data\.js/,
+    'planner must use the same equipment WASM runtime as automatic simulation');
+assert.match(plannerHtml, /\.\.\/shared\/core_glue\.js/,
+    'planner must use the proven legacy equipment bindings');
+assert.doesNotMatch(plannerHtml, /wasm_algorithm_api\.js/,
+    'the Rust bridge must not replace the planner optimizer with a divergent equipment sequence');
 assert.match(plannerHtml, /id="allocationMudBudget"/,
     'resource allocation must accept a shared lianjin budget');
 assert.doesNotMatch(plannerHtml, /id="allocationSilverBudget"/,
@@ -259,10 +265,16 @@ assert.match(plannerSource, /function targetRegionMatches\(/,
     'target tracking must apply regional attachment conditions');
 assert.match(plannerSource, /refineMudBudget: Math\.max\(1, options\.mudBudget - 10\)/,
     'planner must constrain refinement analysis to the remaining budget after upgrading');
+assert.match(plannerSource, /await ensureEquipmentEngine\(\)/,
+    'planner must initialize the shared equipment runtime before scanning routes');
 assert.match(equipmentOptimizerSource, /maxMud > 0 && cumMud > maxMud/,
     'refinement analysis must discard over-budget occurrences before choosing slot maxima');
 assert.doesNotMatch(plannerSource.match(/var percentProps = \[[^\]]+\]/)?.[0] || '', /renxing/,
     'toughness is a point value and must not be rendered as a percentage');
+assert.match(plannerSource, /function refinementDisplayTotal\([\s\S]*?Math\.floor\(value \* 1000 \+ 0\.001\) \/ 10/,
+    'planner must sum the per-slot displayed percentages using the same truncation as automatic simulation');
+assert.match(plannerSource, /escapeHtml\(refinementDisplayTotal\(item\.refinement\)\)/,
+    'planner cards must use the shared per-slot refinement display rule');
 assert.match(plannerSource, /Math\.floor\(total \/ 1000\).*'两'.*total % 1000.*'文'/s,
     'planner silver costs must be rendered in liang and wen');
 assert.doesNotMatch(plannerSource.match(/function resultKey[\s\S]*?\n    }/)?.[0] || '', /item\.region/,

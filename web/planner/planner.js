@@ -10,6 +10,7 @@
     var cancelRequested = false;
     var allocationCancelRequested = false;
     var targetCancelRequested = false;
+    var equipmentEngineReady = null;
 
     function $(id) { return document.getElementById(id); }
     function number(value, fallback) { var n = Number(value); return Number.isFinite(n) ? n : fallback; }
@@ -35,6 +36,17 @@
     function refinementTotal(refinement) {
         var maxima = refinement && refinement.maxima || {};
         return [1, 2, 3].reduce(function (sum, slot) { return sum + number(maxima[slot] && maxima[slot].value, 0); }, 0);
+    }
+    function refinementDisplayTotal(refinement) {
+        var prop = refinement && refinement.prop;
+        var percentProps = ['dmg_off', 'dmg_ref', 'def_ign', 'atk_extend', 'sword_add', 'unarmed_add', 'blade_add', 'stick_add', 'blood', 'po_parry', 'po_dodge', 'xx_prob', 'xx_crit'];
+        if (percentProps.indexOf(prop) < 0) return formatProp(prop, refinementTotal(refinement));
+        var maxima = refinement && refinement.maxima || {};
+        var points = [1, 2, 3].reduce(function (sum, slot) {
+            var value = number(maxima[slot] && maxima[slot].value, 0);
+            return sum + Math.floor(value * 1000 + 0.001) / 10;
+        }, 0);
+        return points.toFixed(1).replace(/\.0$/, '') + '%';
     }
     function refinementCost(refinement) { return number(refinement && refinement.plan && refinement.plan.cost && refinement.plan.cost.lianjin, 0); }
     function regionBonusItem(item) {
@@ -140,10 +152,23 @@
     function bridge() {
         return {getMakeState: function () { return window.wasmMakeGetState(); }, setMakeState: function (next) { if (!window.wasmMakeSetState(next)) throw new Error('打造状态恢复失败'); return true; }, makePreview: function (request, count) { return window.wasmMakePreview(request, count); }, xilianPlan: function (equip, accepts) { return window.wasmXilianPlan(equip, accepts); }};
     }
+    function ensureEquipmentEngine() {
+        if (!equipmentEngineReady) {
+            equipmentEngineReady = window.initWasm().then(function (ready) {
+                if (!ready) throw new Error('装备计算内核加载失败。');
+                if (!window.wasmMakeInitTables(EQUIP_DATA)) throw new Error('装备数据初始化失败。');
+                return true;
+            }).catch(function (error) {
+                equipmentEngineReady = null;
+                throw error;
+            });
+        }
+        return equipmentEngineReady;
+    }
     async function scanRoutes(options) {
         var makeRnd = extractMakeRnd(saveData);
         if (!makeRnd) throw new Error('当前存档缺少 MakeRnd 打造状态。');
-        await window.WasmAlgorithmAPI.ready;
+        await ensureEquipmentEngine();
         window.wasmMakeSetState(makeRnd);
         var tasks = [];
         options.parts.forEach(function (part) { branchesForPart(part).forEach(function (branch) { tasks.push({part: part, branch: branch}); }); });
@@ -166,7 +191,7 @@
     function silver(value) { var total = Math.max(0, Math.round(number(value, 0))); return Math.floor(total / 1000).toLocaleString() + '两' + (total % 1000) + '文'; }
     function cardHtml(item) {
         var region = item.region.length ? item.region.map(function (prop) { return '<span>' + escapeHtml(propName(prop.prop)) + ' +' + escapeHtml(formatProp(prop.prop, prop.value)) + '</span>'; }).join('') : '<span>无地区附加</span>';
-        var refineText = escapeHtml(propName(item.refinement.prop)) + ' ' + escapeHtml(formatProp(item.refinement.prop, refinementTotal(item.refinement)));
+        var refineText = escapeHtml(propName(item.refinement.prop)) + ' ' + escapeHtml(refinementDisplayTotal(item.refinement));
         return '<article class="planner-card ' + (item.grade === '神器' ? 'is-artifact' : 'is-premium') + '"><header class="planner-card-head"><div><h4>' + escapeHtml(item.equipName) + '</h4><p>' + escapeHtml(item.paperName) + ' · ' + escapeHtml(item.location) + ' · 第' + item.craftIndex + '件</p></div><span class="planner-grade"><b>' + item.grade + '</b><strong>' + score(item.finalScore) + '</strong></span></header><div class="planner-score-grid"><span>精炼基础<strong>' + score(item.baseScore) + '</strong></span><span>地区附加<strong>+' + score(item.bonus) + '</strong></span><span>最终评分<strong>' + score(item.finalScore) + '</strong></span></div><div class="planner-props"><span>最佳精炼 ' + refineText + '</span>' + region + '</div><footer class="planner-card-foot"><span>实际泥耗 <strong>' + item.mud.toLocaleString() + '</strong></span><span>累计银两 <strong>' + silver(item.silver) + '</strong></span></footer></article>';
     }
     function renderResults() {

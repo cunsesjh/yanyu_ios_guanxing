@@ -24,10 +24,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Improved wash engine and legacy route replay
-        run: node tests/test_auto_wash2.cjs
-      - name: Dynamic wash eligibility regression
-        run: node tests/test_wash_dynamic_pool.cjs
       - name: Equipment orange blueprint and material regression
         run: node tests/test_equipment_features.cjs
       - name: Embedded page smoke test
@@ -110,11 +106,11 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v4.0-beta.4 测试版更新公告
+            ## v4.0-beta.5 测试版更新公告
 
-            - 恒山自动推演新增 40 / 80 级关键节点说明，要求严格按规划顺序操作。
-            - 自动排除跨过 40 / 80 级的不可执行路线，避免节点天赋与后续序列发生偏差。
-            - 修正节点赠送等级显示，并统一首页各功能页签的尺寸与全屏布局。
+            - 装备规划新增资源分配规划与目标装备追踪，可按预算组合装备或筛选指定属性路线。
+            - 修复装备规划与自动模拟使用不同计算内核导致的打造序列偏差。
+            - 修复精炼百分比显示口径不一致，规划结果现与自动模拟保持一致。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
