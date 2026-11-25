@@ -7,6 +7,7 @@
         attachCount: 50,
         maxCraftCount: 5000,
         maxRefineCount: 1000,
+        refineMudBudget: 0,
         maxCraftWork: 100000,
         maxRefineWork: 2000000,
         resultLimit: 30,
@@ -70,6 +71,7 @@
             attachCount: integerInRange(raw.attachCount, 1, 5000, DEFAULT_OPTIONS.attachCount),
             maxCraftCount: integerInRange(raw.maxCraftCount, 1, 5000, DEFAULT_OPTIONS.maxCraftCount),
             maxRefineCount: integerInRange(raw.maxRefineCount, 1, 1000, DEFAULT_OPTIONS.maxRefineCount),
+            refineMudBudget: Math.max(0, Math.trunc(finiteNumber(raw.refineMudBudget, DEFAULT_OPTIONS.refineMudBudget))),
             maxCraftWork: integerInRange(raw.maxCraftWork, 1, 500000, DEFAULT_OPTIONS.maxCraftWork),
             maxRefineWork: integerInRange(raw.maxRefineWork, 1, 10000000, DEFAULT_OPTIONS.maxRefineWork),
             resultLimit: integerInRange(raw.resultLimit, 1, 100, DEFAULT_OPTIONS.resultLimit),
@@ -281,7 +283,7 @@
         return v / coef;
     }
 
-    function collectSlotMaxima(items, targetProp) {
+    function collectSlotMaxima(items, targetProp, maxMud) {
         const maxima = { 1: null, 2: null, 3: null };
         items.forEach((item, zeroIndex) => {
             const slot = finiteNumber(item && item.slot);
@@ -291,6 +293,7 @@
             if (!Number.isFinite(value)) return;
             // 比较用「理论最大值」而不是原始值：81 之前的低系数机会，除以系数后可能一样到顶
             const cumMud = finiteNumber(item && item.xl_level, 0);
+            if (maxMud > 0 && cumMud > maxMud) return;
             const theoretical = refinementTheoreticalValue(value, cumMud);
             const occurrence = {
                 index: finiteNumber(item.index, zeroIndex + 1), slot, value, cumMud, theoretical,
@@ -436,8 +439,8 @@
         };
     }
 
-    function nextStatefulMaximum(items, targetProp, settledSlots, currentMaxima) {
-        const maxima = collectSlotMaxima(items, targetProp);
+    function nextStatefulMaximum(items, targetProp, settledSlots, currentMaxima, maxMud) {
+        const maxima = collectSlotMaxima(items, targetProp, maxMud);
         const choices = [1, 2, 3]
             .filter(slot => !settledSlots.has(slot) && maxima[slot]
                 && (!currentMaxima[slot] || maxima[slot].theoretical > currentMaxima[slot].theoretical))
@@ -446,7 +449,7 @@
         return choices[0] || null;
     }
 
-    function analyzeRefinement(bridge, equip, targetProp, count, data) {
+    function analyzeRefinement(bridge, equip, targetProp, count, data, maxMud) {
         const maxima = initialSlotMaxima(equip, targetProp);
         const settledSlots = new Set((equip.xilian_marks || []).map(Number));
         const accepted = [];
@@ -457,7 +460,7 @@
 
         while (remaining > 0 && settledSlots.size < 3) {
             const previewItems = refinementPreviewItems(bridge, currentEquip, remaining);
-            const next = nextStatefulMaximum(previewItems, targetProp, settledSlots, maxima);
+            const next = nextStatefulMaximum(previewItems, targetProp, settledSlots, maxima, maxMud);
             if (!next) break;
 
             const localCutoff = next.index;
@@ -870,7 +873,7 @@
                     message: `分析紫装 ${candidateIndex + 1}/${candidates.length}：${source.branchResult.equipName} · 第 ${source.item.index} 次`,
                 });
                 const refinements = source.branchResult.targetProps.map(prop => analyzeRefinement(
-                    bridge, equip, prop, options.refineCount, data,
+                    bridge, equip, prop, options.refineCount, data, options.refineMudBudget,
                 ));
                 const refinementRatingReference = theoreticalRefinementReference(
                     data.equipment[String(equip.id)],

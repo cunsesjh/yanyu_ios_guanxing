@@ -1,5 +1,15 @@
 .planner-app { max-width: 1180px; }
 .planner-main { display: grid; gap: 1rem; }
+.planner-tool-view[hidden] { display: none !important; }
+.planner-tool-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; margin-bottom: 1rem; padding: 0.35rem; border: 1px solid var(--border-color); border-radius: 7px; background: var(--bg-card); }
+.planner-tool-tab { min-width: 0; min-height: 42px; padding: 0.55rem 0.7rem; border: 1px solid transparent; border-radius: 5px; color: var(--text-secondary); background: transparent; font: inherit; font-size: 0.86rem; font-weight: 700; cursor: pointer; }
+.planner-tool-tab:hover { color: var(--text-primary); border-color: var(--border-color); }
+.planner-tool-tab.is-active { color: #fff; border-color: var(--accent); background: var(--accent); }
+.planner-intro { display: grid; grid-template-columns: minmax(130px, 180px) 1fr; align-items: center; gap: 1rem; padding: 0.9rem 1rem; border: 1px solid rgba(155, 107, 201, 0.35); border-left: 5px solid var(--purple-bright); border-radius: 7px; background: rgba(155, 107, 201, 0.1); }
+.planner-intro strong { color: var(--text-primary); font-size: 0.96rem; }
+.planner-intro p { margin: 0; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.65; }
+.planner-intro-allocation { border-color: rgba(54, 148, 111, 0.36); border-left-color: #36946f; background: rgba(54, 148, 111, 0.1); }
+.planner-intro-target { border-color: rgba(201, 126, 48, 0.38); border-left-color: #c97e30; background: rgba(201, 126, 48, 0.1); }
 .planner-main > section { border-radius: 8px; box-shadow: 0 10px 26px rgba(38, 82, 152, 0.09); }
 .feature-section-head, .panel-title, .planner-title-wrap { display: flex; align-items: center; }
 .feature-section-head { justify-content: space-between; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px dashed var(--border-color); }
@@ -16,6 +26,11 @@
 }
 .planner-config-grid > label { display: grid; gap: 0.45rem; color: var(--text-secondary); font-size: 0.86rem; font-weight: 700; }
 .planner-config-grid [hidden] { display: none !important; }
+.target-config-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 0.75rem; }
+.target-config-grid > label { display: grid; gap: 0.4rem; min-width: 0; color: var(--text-secondary); font-size: 0.8rem; font-weight: 700; }
+.target-config-grid select, .target-config-grid input { min-width: 0; width: 100%; height: 42px; padding: 0 0.7rem; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; }
+.target-config-grid .btn { min-height: 42px; }
+.target-config-grid [hidden] { display: none !important; }
 .input-with-unit { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.45rem; }
 .input-with-unit input, .planner-filters select {
     min-width: 0;
@@ -63,6 +78,9 @@
 .planner-props span { padding: 0.25rem 0.42rem; border: 1px solid var(--border-accent); border-radius: 4px; color: var(--text-secondary); font-size: 0.72rem; }
 .planner-card-foot { display: flex; flex-wrap: wrap; gap: 0.45rem 0.8rem; color: var(--text-secondary); font-size: 0.74rem; }
 .planner-card-foot strong { color: var(--text-primary); }
+.allocation-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.55rem; margin-bottom: 0.8rem; }
+.allocation-summary span { display: grid; gap: 0.15rem; min-height: 62px; align-content: center; padding: 0.55rem 0.7rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-muted); font-size: 0.72rem; }
+.allocation-summary strong { color: var(--text-primary); font-size: 0.94rem; }
 .scoring-panel { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.65; }
 .scoring-panel .panel-title { margin-bottom: 0.5rem; }
 .scoring-panel p { padding-left: 2.45rem; }
@@ -71,13 +89,18 @@ html[data-theme="dark"] .local-badge { color: var(--green-bright); }
 
 @media (max-width: 780px) {
     .planner-config-grid { grid-template-columns: 1fr 1fr; }
+    .target-config-grid { grid-template-columns: 1fr 1fr; }
     .planner-result-head { align-items: stretch; flex-direction: column; }
     .planner-filters { flex-wrap: wrap; }
     .planner-cards { grid-template-columns: 1fr; }
+    .allocation-summary { grid-template-columns: 1fr 1fr; }
     .scoring-panel p { padding-left: 0; }
 }
 @media (max-width: 520px) {
+    .planner-tool-tabs { grid-template-columns: 1fr; }
+    .planner-intro { grid-template-columns: 1fr; gap: 0.3rem; }
     .planner-config-grid { grid-template-columns: 1fr; }
+    .target-config-grid { grid-template-columns: 1fr; }
     .planner-score-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .planner-filters select { flex: 1; width: auto; }
 }

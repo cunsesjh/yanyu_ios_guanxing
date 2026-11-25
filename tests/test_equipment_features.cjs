@@ -45,6 +45,39 @@ assert.equal(optimizer.mangjingPerAttempt(100), 10);
 assert.equal(optimizer.mangjingPerAttempt(90), 9);
 assert.equal(optimizer.mangjingPerAttempt(1), 1);
 
+const refinementBudgetEquip = {
+    id: 5220, need_lv: 100, typ: 7, color: 4,
+    xilian_marks: [1, 2], exts: [], S: 1, CZSeed: 2, XLLevel: 0, XLNumber: 0,
+};
+const refinementBudgetPreview = [
+    { index: 1, slot: 3, prop: { prop: 'hp_add', value: 1 }, xl_level: 700, accepted: false },
+    { index: 2, slot: 3, prop: { prop: 'dmg_off', value: 0.015 }, xl_level: 800, accepted: false },
+    { index: 3, slot: 3, prop: { prop: 'dmg_off', value: 0.018 }, xl_level: 950, accepted: false },
+];
+const refinementBudgetBridge = {
+    xilianPlan(equip, flags) {
+        const applying = flags.some(Boolean);
+        return {
+            items: refinementBudgetPreview.slice(0, flags.length).map((item, index) => ({
+                ...item,
+                accepted: applying && !!flags[index],
+            })),
+            equip: { ...equip, xilian_marks: [1, 2, 3] },
+        };
+    },
+};
+const unlimitedRefinement = optimizer.analyzeRefinement(
+    refinementBudgetBridge, refinementBudgetEquip, 'dmg_off', 3, data, 0,
+);
+const budgetedRefinement = optimizer.analyzeRefinement(
+    refinementBudgetBridge, refinementBudgetEquip, 'dmg_off', 3, data, 890,
+);
+assert.equal(unlimitedRefinement.maxima[3].value, 0.018,
+    'without a mud budget refinement should choose the global maximum');
+assert.equal(budgetedRefinement.maxima[3].value, 0.015,
+    'an over-budget maximum must not hide the best affordable refinement result');
+assert.equal(budgetedRefinement.maxima[3].occurrences[0].cumMud, 800);
+
 assert.equal(optimizer.refinementActualTotal({
     total: 300,
     maxima: {
@@ -186,6 +219,7 @@ assert.equal(vm.runInContext('usesOrangePadSequence(freeOrangeRequest)', context
 
 const html = fs.readFileSync(path.join(root, 'web/equip/index.html'), 'utf8');
 const autoSimulatorSource = fs.readFileSync(path.join(root, 'web/shared/simulator.js'), 'utf8');
+const equipmentOptimizerSource = fs.readFileSync(path.join(root, 'web/shared/equip_auto_optimizer.js'), 'utf8');
 const plannerHtml = fs.readFileSync(path.join(root, 'web/planner/index.html'), 'utf8');
 const plannerSource = fs.readFileSync(path.join(root, 'web/planner/planner.js'), 'utf8');
 assert.ok((html.match(/value="orange"/g) || []).length >= 2,
@@ -208,6 +242,25 @@ assert.match(autoSimulatorSource, /实际\$\{escapeAiHtml\(equipAutoPropertyLabe
     'collapsed cards must label refinement values as actual results');
 assert.match(plannerHtml, /id="craftCount"[^>]*value="20"/,
     'equipment planner must default each route to 20 crafts');
+assert.equal((plannerHtml.match(/class="planner-intro /g) || []).length, 3,
+    'all three equipment planner tools must start with a feature description panel');
+assert.match(plannerHtml, /data-planner-tool="fixed">固定打造规划/);
+assert.match(plannerHtml, /data-planner-tool="allocation">资源分配规划/);
+assert.match(plannerHtml, /data-planner-tool="target">目标装备追踪/);
+assert.match(plannerHtml, /id="allocationMudBudget"/,
+    'resource allocation must accept a shared lianjin budget');
+assert.doesNotMatch(plannerHtml, /id="allocationSilverBudget"/,
+    'resource allocation must not require a silver budget');
+assert.match(plannerHtml, /id="targetRefineProp"/);
+assert.match(plannerHtml, /id="targetRegionProp"/);
+assert.match(plannerSource, /function allocateResources\(/,
+    'resource allocation must optimize a combined equipment set');
+assert.match(plannerSource, /function targetRegionMatches\(/,
+    'target tracking must apply regional attachment conditions');
+assert.match(plannerSource, /refineMudBudget: Math\.max\(1, options\.mudBudget - 10\)/,
+    'planner must constrain refinement analysis to the remaining budget after upgrading');
+assert.match(equipmentOptimizerSource, /maxMud > 0 && cumMud > maxMud/,
+    'refinement analysis must discard over-budget occurrences before choosing slot maxima');
 assert.doesNotMatch(plannerSource.match(/var percentProps = \[[^\]]+\]/)?.[0] || '', /renxing/,
     'toughness is a point value and must not be rendered as a percentage');
 assert.match(plannerSource, /Math\.floor\(total \/ 1000\).*'两'.*total % 1000.*'文'/s,
