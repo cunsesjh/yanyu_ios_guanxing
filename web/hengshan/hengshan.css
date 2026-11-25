@@ -52,6 +52,9 @@
 
 /* ===== 弟子自动模拟 ===== */
 .auto-sim-panel .hengshan-ledger-note { line-height: 1.6; }
+.as-milestone-warning { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.65rem; align-items: start; margin: 0.85rem 0 1rem; padding: 0.75rem 0.85rem; border: 1px solid rgba(183, 135, 55, 0.48); border-left: 4px solid #b78737; border-radius: 7px; background: rgba(183, 135, 55, 0.09); color: var(--text-secondary); font-size: 0.8rem; line-height: 1.65; }
+.as-milestone-warning strong { color: #8a5b08; white-space: nowrap; }
+html[data-theme="dark"] .as-milestone-warning strong { color: #e6bd65; }
 .as-rule-grid { display: grid; grid-template-columns: minmax(120px, 160px) minmax(0, 1fr) minmax(0, 1fr); gap: 0.8rem; align-items: start; }
 .as-rule-grid label { display: block; margin-bottom: 0.3rem; color: var(--text-muted); font-size: 0.74rem; }
 .as-rule-grid input[type="number"] { width: 100%; max-width: 90px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 0.45rem 0.6rem; }
@@ -101,6 +104,8 @@ details.as-cat summary { cursor: pointer; color: var(--text-primary); font-famil
 .as-validate.is-error { color: #ff9d9d; }
 @media (max-width: 900px) {
     .as-rule-grid { grid-template-columns: 1fr; }
+    .as-milestone-warning { grid-template-columns: 1fr; gap: 0.25rem; }
+    .as-milestone-warning strong { white-space: normal; }
 }
 
 /* ===== 页签导航 ===== */

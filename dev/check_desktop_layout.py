@@ -42,6 +42,10 @@ SCRIPT = r'''JSON.stringify((function () {
         theme: document.documentElement.dataset.theme,
         importPanel: !!document.querySelector('.archive-import-panel'),
         modules: document.querySelectorAll('.module-card').length,
+        moduleRects: Array.from(document.querySelectorAll('.module-card')).map(function (card) {
+            var r = card.getBoundingClientRect();
+            return {width: r.width, height: r.height};
+        }),
         shop: document.querySelector('.page.active')?.id,
         shopHome: !!document.getElementById('page-home'),
         disclaimer: document.body.textContent.includes('免责声明：'),
@@ -83,6 +87,10 @@ def next_page():
                     failures.append((row['size'], row['page'], 'homepage overflow'))
                 if row['importPanel'] or row['modules'] != 10:
                     failures.append((row['size'], row['page'], 'homepage features'))
+                widths = [rect['width'] for rect in row['moduleRects']]
+                heights = [rect['height'] for rect in row['moduleRects']]
+                if not widths or max(widths) - min(widths) > 1 or max(heights) - min(heights) > 1:
+                    failures.append((row['size'], row['page'], 'homepage card sizes differ'))
             elif len(row['links']) != 11 or row['nav']['top'] < 0 or any(link['left'] < 0 or link['right'] > row['width'] + 1
                                               or link['bottom'] > row['nav']['bottom'] + 1
                                               or link['scrollWidth'] > link['clientWidth'] + 1

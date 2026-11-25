@@ -368,8 +368,8 @@ footer {
 .home-shell { height: 100vh; display: flex; flex-direction: column; padding: 22px 0 !important; box-sizing: border-box; }
 .home-header { margin-bottom: 20px !important; }
 .home-shell .module-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 22px !important; margin-bottom: 0 !important; }
-.home-shell .module-grid { flex: 1; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(5, minmax(0, 1fr)); gap: 12px !important; margin-top: 14px !important; }
-.home-shell .module-card { min-height: 0 !important; padding: 14px 20px !important; border-radius: 12px !important; gap: 8px !important; }
+.home-shell .module-grid { flex: 1; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(5, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); align-items: stretch; gap: 12px !important; margin-top: 14px !important; }
+.home-shell .module-card { width: 100% !important; min-width: 0 !important; height: 100% !important; min-height: 0 !important; padding: 14px 20px !important; border-radius: 12px !important; gap: 8px !important; }
 .home-shell .module-card strong { font-size: 17px !important; }
 .home-shell .module-card span { font-size: 12px !important; line-height: 1.6 !important; }
 @media (max-height: 600px) {

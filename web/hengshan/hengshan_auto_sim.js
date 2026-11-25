@@ -253,6 +253,7 @@
         var queue = [initial];
         var visited = new Map();   // key -> 达到该状态所需最少落地洗
         var expansions = 0;
+        var blockedByMilestoneJump = false;
 
         function keyOf(state) {
             return [state.seed, state.level, state.exp, (state.talents || []).join('.')].join('|');
@@ -333,6 +334,18 @@
 
                 var eventList = node.events;
                 var milestones = (result.action && result.action.milestones) || [];
+                /*
+                 * 实机从节点下方直接跳到节点上方时，节点天赋及后续序列可能与准确落级不同。
+                 * 当前内核只能给出阈值事件，不能把它当作已经校准过的跨级路线，因此严格淘汰。
+                 */
+                var jumpedMilestone = milestones.some(function (m) {
+                    var milestoneLevel = Number(m && m.level);
+                    return milestoneLevel > Number(node.state.level) && milestoneLevel < Number(dayState.level);
+                });
+                if (jumpedMilestone) {
+                    blockedByMilestoneJump = true;
+                    continue;
+                }
                 milestones.forEach(function (m) {
                     var id = Number(m && (m.id !== undefined ? m.id : m.talentId));
                     if (!id) return;
@@ -340,7 +353,7 @@
                     var gained = gainedTargetIds((node.state.talents || []), (node.state.talents || []).concat(id), mustSet, pickSet, pickN);
                     eventList = eventList.concat([{
                         day: node.day + 1,
-                        level: dayState.level,
+                        level: Number(m && m.level) || dayState.level,
                         type: 'grant',
                         drawnId: id,
                         hit: gained.indexOf(id) >= 0
@@ -432,7 +445,14 @@
             }
         }
 
-        return { ok: false, reason: '该弟子在 1~100 级、最多 ' + maxWashes + ' 次洗的范围内凑不齐目标规则。', washes: -1, day: -1 };
+        return {
+            ok: false,
+            reason: blockedByMilestoneJump
+                ? '严格节点规则下没有可执行路线：推演过程会跨过 40 / 80 级，已排除该路线。请调整升级经验，确保准确落在节点等级后再推演。'
+                : '该弟子在 1~100 级、最多 ' + maxWashes + ' 次洗的范围内凑不齐目标规则。',
+            washes: -1,
+            day: -1
+        };
     }
 
     /* —— 以下为页面 UI —— */

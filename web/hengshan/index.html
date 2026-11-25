@@ -6,7 +6,7 @@
     <title>烟雨江湖 · 恒山模拟</title>
     <meta name="description" content="烟雨江湖恒山弟子升级与天赋刷新本地推演（官方内核离线版）">
     <link rel="stylesheet" href="../shared/simulator.css">
-    <link rel="stylesheet" href="./hengshan.css">
+    <link rel="stylesheet" href="./hengshan.css?v=20261125milestone1">
     <style>
         .wasm-loading-overlay { position: fixed; inset: 0; z-index: 99; display: grid; place-items: center; background: rgba(10, 11, 16, 0.88); }
         .wasm-loading-dialog { max-width: 420px; padding: 1.4rem 1.6rem; border: 1px solid var(--border-accent, #3a2f57); border-radius: 10px; background: var(--bg-primary, #eaf2fd); text-align: center; }
@@ -142,6 +142,10 @@
                     <button id="btnAutoSimReset" class="btn btn-reset" type="button">清空规则</button>
                 </div>
                 <p class="hengshan-ledger-note">设定"最多洗几次 + 目标天赋规则"，一键扫描商店候选（默认）或全部弟子；只给出"几级洗哪个槽、洗出什么天赋"的指令卡，凑不齐的直接淘汰、不占结果位。所有洗点由官方内核推算——没命中目标的试洗相当于回档 SL，不消耗次数预算。卡片里可能出现"抽到什么都行"的步骤，它要真花 1 次额度：<b>清障</b>＝目标被身上的同类天赋挡住、得先挪走（默认就会做）；<b>换运</b>＝目标没被挡、但这颗种子等不到，先洗一次换一组新结果（需勾选下方「允许清障 / 换运」，搜得更全但明显更慢）。</p>
+                <div class="as-milestone-warning" role="note">
+                    <strong>40 / 80 级是关键节点</strong>
+                    <span>节点赠送会推进弟子种子，并影响后续全部天赋序列。实机必须严格按结果卡操作：路线写“升到 40 级获得 A”，就要准确落在 40 级并确认获得 A 后再继续，不能从 39 级直接跳到 41 级；80 级同理。跨级可能获得不同天赋并改变后续序列，自动推演不会把这类路线当作可执行结果。</span>
+                </div>
 
                 <div class="as-rule-grid">
                     <div class="config-group as-wash-group">
@@ -210,7 +214,7 @@
     <script src="../shared/archive_state.js"></script>
     <script src="./hengshan.js?v=20260921a"></script>
     <script src="./hengshan_day_advance.js"></script>
-    <script src="./hengshan_auto_sim.js"></script>
+    <script src="./hengshan_auto_sim.js?v=20261125milestone1"></script>
     <script src="./hengshan_shop_view.js"></script>
 </body>
 </html>
