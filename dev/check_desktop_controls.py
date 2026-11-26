@@ -49,7 +49,7 @@ SCRIPT = r'''JSON.stringify((()=>{
     if (select.value !== '21' || changes !== 2) fail('Keyboard confirmation failed');
     select.remove();
     const budget = document.getElementById('w2Budget');
-    if (budget && budget.value !== '5000') fail('Wash2 default budget mismatch: expected 5000, got ' + budget.value);
+    if (budget && budget.value !== '1000000') fail('Wash2 default budget mismatch: expected 1000000, got ' + budget.value);
     if (budget && document.querySelector('#autoWash2ModePanel [id^="anchor"]')) fail('Anchor control leaked into Wash2 UI');
     const guide = document.querySelector('.ghost-guide');
     if (guide && !guide.open) fail('Ghost guide not expanded');
@@ -77,7 +77,7 @@ def loaded(ok):
 
 def next_page():
     if not pages:
-        print('PASS: dropdown hover/scroll never commits; click/keyboard confirm once; Escape cancels; default budget 5000; guide expanded; no Wash2 anchor controls (%d pages)' % len(results), flush=True)
+        print('PASS: dropdown hover/scroll never commits; click/keyboard confirm once; Escape cancels; default budget 1000000; guide expanded; no Wash2 anchor controls (%d pages)' % len(results), flush=True)
         window.close()
         app.exit(0)
         return
