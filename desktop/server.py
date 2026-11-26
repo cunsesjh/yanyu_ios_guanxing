@@ -25,12 +25,18 @@ class LocalSite:
             def _relative_path(self):
                 expected = '127.0.0.1:' + str(self.server.server_port)
                 raw = urlsplit(self.path).path
-                if self.headers.get('Host') != expected or not raw.startswith(site.prefix):
-                    return None
-                return unquote(raw[len(site.prefix):]).lstrip('/')
+                if self.headers.get('Host') != expected:
+                    return 403, None
+                if not raw.startswith(site.prefix):
+                    return 404, None
+                return None, unquote(raw[len(site.prefix):]).lstrip('/')
 
             def do_POST(self):
-                if self._relative_path() != 'api/awash/search':
+                error_status, relative = self._relative_path()
+                if error_status:
+                    self.send_error(error_status)
+                    return
+                if relative != 'api/awash/search':
                     self.send_error(404)
                     return
                 try:
@@ -54,9 +60,9 @@ class LocalSite:
                     self.wfile.write(body)
 
             def do_GET(self):
-                relative = self._relative_path()
-                if relative is None:
-                    self.send_error(403)
+                error_status, relative = self._relative_path()
+                if error_status:
+                    self.send_error(error_status)
                     return
                 if relative.startswith('api/'):
                     self.send_error(404)
