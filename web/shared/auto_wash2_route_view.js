@@ -6,15 +6,17 @@
         if (!route || !Array.isArray(route.steps)) return null;
         const nameOf = id => name(Number(id) || 0);
         const steps = [];
-        let totalStepPills = 0, totalStepWashes = 0;
+        let totalStepPills = 0, totalStepWashes = 0, currentLocks = null;
 
         for (const source of route.steps) {
             const op = String(source.op || source.type || 'wash');
             if (op === 'wash') {
                 const count = Math.max(0, Number(source.count) || 0);
                 const pills = Math.max(0, Number(source.cost) || 0);
-                const keepIds = (source.keepIds || []).map(Number);
-                const key = JSON.stringify([String(source.type || ''), keepIds]);
+                const hasKeepIds = Array.isArray(source.keepIds);
+                const keepIds = hasKeepIds ? source.keepIds.map(Number) : (currentLocks || []);
+                const normalizedKeepIds = [...new Set(keepIds)].sort((a, b) => a - b);
+                const key = JSON.stringify(normalizedKeepIds);
                 const previous = steps[steps.length - 1];
                 if (previous && previous._washKey === key) {
                     previous.washes += count;
@@ -29,11 +31,14 @@
                 }
                 totalStepPills += pills;
                 totalStepWashes += count;
+                currentLocks = normalizedKeepIds;
                 continue;
             }
 
             if (op === 'locks') {
-                const ids = (source.lockIds || []).map(Number);
+                const ids = [...new Set((source.lockIds || []).map(Number))].sort((a, b) => a - b);
+                if (currentLocks && JSON.stringify(currentLocks) === JSON.stringify(ids)) continue;
+                currentLocks = ids;
                 const special = String(source.type || '');
                 const label = ids.length ? '调整锁脉' : '解除锁脉';
                 const detail = special === 'lockConflict' && source.id

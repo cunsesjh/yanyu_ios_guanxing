@@ -137,7 +137,8 @@ class LocalSite:
             raise RuntimeError('当前程序缺少内置 Node 运行时')
         completed = subprocess.run([node, str(runner)], input=payload,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   cwd=str(root), timeout=900, check=False)
+                                   cwd=str(root), timeout=900, check=False,
+                                   creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         if not completed.stdout:
             detail = completed.stderr.decode('utf-8', 'replace')[-1000:]
             raise RuntimeError(detail or 'AWASH 求解器没有返回结果')

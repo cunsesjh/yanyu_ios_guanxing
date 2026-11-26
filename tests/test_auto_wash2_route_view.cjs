@@ -16,17 +16,15 @@ const route = view.normalizeRoute({
 
 assert.equal(route.totalPills, 8);
 assert.equal(route.totalWashes, 2);
-assert.equal(route.steps.length, 3, 'lock changes stay visible and prevent merging across them');
-assert.equal(route.steps[0].pills, 4);
-assert.equal(route.steps[1].pills, 0, 'cumulative lock metadata must not be charged again');
-assert.equal(route.steps[1].cumulativePills, 4);
-assert.equal(route.steps[2].pills, 4);
-assert.equal(route.steps[2].cumulativePills, 8);
+assert.equal(route.steps.length, 1, 'a lock instruction that repeats the already-active set is redundant');
+assert.equal(route.steps[0].washes, 2, 'same washes merge even when internal search labels differ');
+assert.equal(route.steps[0].pills, 8);
+assert.equal(route.steps[0].cumulativePills, 8);
 
 const repeated = view.normalizeRoute({
     pills: 12, washes: 3, finalTalents: [271],
     steps: [
-        {op: 'wash', type: 'chaseAnchor', count: 1, cost: 4, keepIds: [182]},
+        {op: 'wash', type: 'pityBoundary', count: 1, cost: 4, keepIds: [182]},
         {op: 'wash', type: 'chaseAnchor', count: 1, cost: 4, keepIds: [182]},
         {op: 'wash', type: 'chaseAnchor', count: 1, cost: 4, keepIds: [182]},
     ],
@@ -35,5 +33,27 @@ assert.equal(repeated.steps.length, 1, 'consecutive identical washes should be g
 assert.equal(repeated.steps[0].washes, 3);
 assert.equal(repeated.steps[0].pills, 12);
 assert.equal(repeated.steps[0].cumulativePills, 12);
+
+const changedLocks = view.normalizeRoute({
+    pills: 8, washes: 2, finalTalents: [271],
+    steps: [
+        {op: 'wash', count: 1, cost: 4, keepIds: [182]},
+        {op: 'locks', lockIds: []},
+        {op: 'wash', count: 1, cost: 4, keepIds: []},
+    ],
+}, 0, id => id === 182 ? '刀法好手' : `#${id}`);
+assert.equal(changedLocks.steps.length, 3, 'a real lock change stays visible between wash groups');
+assert.equal(changedLocks.steps[1].label, '解除锁脉');
+
+const inheritedLocks = view.normalizeRoute({
+    pills: 8, washes: 2, finalTalents: [271],
+    steps: [
+        {op: 'locks', lockIds: [182]},
+        {op: 'wash', count: 1, cost: 4, keepIds: [182]},
+        {op: 'wash', count: 1, cost: 4},
+    ],
+}, 0, id => id === 182 ? '刀法好手' : `#${id}`);
+assert.equal(inheritedLocks.steps.length, 2, 'wash actions without explicit keepIds inherit active locks');
+assert.equal(inheritedLocks.steps[1].washes, 2);
 
 console.log('auto wash route display accounting tests passed');

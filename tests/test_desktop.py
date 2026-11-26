@@ -232,6 +232,22 @@ class DesktopTests(unittest.TestCase):
         self.assertIn(b'window.__latestPlainSave=', response.read())
         self.assertEqual(response.getheader('Cache-Control'), 'no-store')
 
+    def test_awash_solver_suppresses_console_window(self):
+        root = Path(self.tmp.name)
+        web = root / 'web'
+        web.mkdir()
+        (root / 'awash_runner.js').write_text('// runner')
+        site = LocalSite(web)
+        self.addCleanup(site.close)
+        completed = SimpleNamespace(returncode=0, stdout=b'{"ok":true}', stderr=b'')
+        with (
+            patch('desktop.server.shutil.which', return_value='node.exe'),
+            patch('desktop.server.subprocess.run', return_value=completed) as run,
+        ):
+            self.assertEqual(site.run_awash(b'{"raw":{}}'), {'ok': True})
+        self.assertEqual(run.call_args.kwargs['creationflags'],
+                         getattr(__import__('subprocess'), 'CREATE_NO_WINDOW', 0))
+
 
 if __name__ == '__main__':
     unittest.main()
