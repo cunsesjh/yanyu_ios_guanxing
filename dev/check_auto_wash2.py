@@ -31,7 +31,7 @@ ticks = 0
 last_observation = {}
 
 def fail(message):
-    print(message, flush=True)
+    print(str(message).encode('ascii', 'backslashreplace').decode('ascii'), flush=True)
     window.grab().save(str(out / 'failure.png'))
     window.close()
     app.exit(1)
@@ -94,7 +94,7 @@ scripts = [r'''JSON.stringify((()=>{
         waiting:status.textContent, role:document.getElementById('w2Role').value,
         targets:document.querySelectorAll('#w2Targets [data-id]').length};
     if (JSON.stringify(state) !== w2Baseline) return {error:'New role selection mutated legacy simulator state'};
-    const b = document.getElementById('w2Budget'); b.value = 0; b.dispatchEvent(new Event('input'));
+    const b = document.getElementById('w2Budget'); b.value = 1000000; b.dispatchEvent(new Event('input'));
     document.querySelector('#autoWash2ModePanel .w2-section').scrollIntoView({block:'start'});
     return {ready:true};
 })())''', r'''JSON.stringify((()=>{
