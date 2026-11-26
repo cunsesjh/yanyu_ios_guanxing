@@ -6944,7 +6944,11 @@ function equipAutoRefinementHtml(refinement, upgradeCost = null) {
     const slots = [1, 2, 3].map(slot => {
         const maximum = refinement.maxima[slot];
         if (!maximum) return `<span>槽位 ${slot}：无</span>`;
-        const occurrences = maximum.occurrences.map(item => item.source === 'original' ? '原有' : `#${item.index}`).join('、');
+        const occurrences = maximum.occurrences.map(item => item.source === 'original'
+            ? '原有'
+            : (item.keptValue != null && Number(item.keptValue) !== Number(maximum.value)
+                ? `#${item.index}（预锁${equipAutoFormatPropValue(refinement.prop, item.keptValue)}）`
+                : `#${item.index}`)).join('、');
         // 洗出来的原始值照实显示，理论上限（值÷系数）放括号里；两者一样就不重复
         const rawTxt = equipAutoFormatPropValue(refinement.prop, maximum.value);
         const theoreticalTxt = equipAutoFormatPropValue(refinement.prop, equipAutoRefinementShownValue(maximum));
@@ -6952,7 +6956,7 @@ function equipAutoRefinementHtml(refinement, upgradeCost = null) {
         return `<span>槽位 ${slot}：${escapeAiHtml(slotTxt)}<small>（${occurrences}）</small></span>`;
     }).join('');
     const plan = refinement.plan;
-    const accepts = plan ? plan.accepts.map(item => `#${item.index}（槽${item.slot}）`).join(' → ') : '无';
+    const accepts = plan ? plan.accepts.map(item => `#${item.index}（槽${item.slot}${item.prelock ? '预锁' : '保留'}${item.prelock ? '+' + equipAutoFormatPropValue(refinement.prop, item.value) : ''}）`).join(' → ') : '无';
     const totalCost = mergeEquipAutoCosts(upgradeCost, plan && plan.cost);
     return `<div class="equip-auto-refine-card">
         <div class="equip-auto-refine-title"><strong>精炼 · ${escapeAiHtml(label)}</strong><span class="equip-auto-max-value">实际${escapeAiHtml(label)} ${escapeAiHtml(equipAutoFormatRefinementTotal(refinement))}</span></div>
@@ -7149,13 +7153,21 @@ function equipAutoRatingForPercent(percent) {
 }
 
 function equipAutoRefinementRating(candidate, refinement, reference = equipAutoRatingReference(candidate)) {
+    if (refinement && refinement.prop === 'mp_back') {
+        return { min: 0, key: 'white', label: '特殊词条', percent: 0, roundedPercent: 0 };
+    }
     const maximum = Number(reference && reference[refinement && refinement.prop]) || 0;
     const percent = maximum > 0 ? equipAutoRefinementTotal(refinement) / maximum * 100 : 0;
     return equipAutoRatingForPercent(percent);
 }
 
 function equipAutoCandidateRating(candidate, reference = equipAutoRatingReference(candidate)) {
-    const ratings = (candidate.refinements || []).map(refinement => equipAutoRefinementRating(candidate, refinement, reference));
+    const refinements = candidate.refinements || [];
+    const ratings = refinements.filter(refinement => refinement.prop !== 'mp_back')
+        .map(refinement => equipAutoRefinementRating(candidate, refinement, reference));
+    if (!ratings.length && refinements.some(refinement => refinement.prop === 'mp_back')) {
+        return { min: 0, key: 'white', label: '特殊词条', percent: 0, roundedPercent: 0 };
+    }
     return equipAutoRatingForPercent(ratings.length ? Math.max(...ratings.map(item => item.percent)) : 0);
 }
 

@@ -131,7 +131,11 @@
                 slotCount: Math.max(1, Number(zz.num_talent) || 0),
                 pity: Number.isFinite(Number(zz.bd_zz)) ? Number(zz.bd_zz) : 900,
                 eligibleZi: zizhi || 154,
-                advancePerDraw: true,
+                // 仅 73420+ 存档（或国际服）按每条抽取推进 BornTalent.RC。
+                // 不能无条件开启：旧版国服存档必须与 wash WASM 的固定 RC
+                // 规则一致，否则从第一洗开始种子序列就会分叉。
+                advancePerDraw: !!(root.SequenceRules && typeof root.SequenceRules.washRC === 'function'
+                    && root.SequenceRules.washRC(fullState)),
                 dlcMode: !!(options && options.dlcMode),
                 international: false,
                 saveChannel: source.save_channel,

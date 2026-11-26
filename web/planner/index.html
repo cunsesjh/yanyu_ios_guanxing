@@ -23,12 +23,12 @@
         </header>
 
         <div class="planner-tool-tabs" role="tablist" aria-label="装备规划子功能">
-            <button class="planner-tool-tab is-active" type="button" role="tab" aria-selected="true" data-planner-tool="fixed">固定打造规划</button>
-            <button class="planner-tool-tab" type="button" role="tab" aria-selected="false" data-planner-tool="allocation">资源分配规划</button>
-            <button class="planner-tool-tab" type="button" role="tab" aria-selected="false" data-planner-tool="target">目标装备追踪</button>
+            <button class="planner-tool-tab is-active" type="button" role="tab" aria-selected="true" data-planner-tool="target">目标装备追踪</button>
+            <button class="planner-tool-tab" type="button" role="tab" aria-selected="false" data-planner-tool="fixed">固定打造规划</button>
+            <button class="planner-tool-tab" type="button" role="tab" aria-selected="false" data-planner-tool="standards">属性上限与PVP精炼标准</button>
         </div>
 
-        <main class="planner-main planner-tool-view" data-planner-view="fixed">
+        <main class="planner-main planner-tool-view" data-planner-view="fixed" hidden>
             <aside class="planner-intro planner-intro-fixed">
                 <strong>固定打造规划</strong>
                 <p>把每个地点与图纸都从当前存档的同一份打造状态独立起跑，找出指定件数内达到神器或极品的装备。适合比较“现在去哪里、打造哪一件”最划算，不会连续推进不同路线之间的种子。</p>
@@ -75,51 +75,14 @@
                 <div class="panel-title"><span class="section-step">03</span><h2 id="scoringTitle">评分口径</h2></div>
                 <p><strong>最终分 = 精炼基础分 + 地区附加分。</strong>精炼基础分按实际三槽属性相对该装备三槽理论满值计算；96分起为神器，91分起为极品。</p>
                 <p>地区附加按战斗价值折算并封顶30分，例如2%免伤加25分、69攻击约加13.8分、12臂力加15分、10真元加20分。结果卡会分别列出基础分、附加分和最终分。</p>
-                <p>只列出实际总泥耗不超过预算的精炼方案。不同地点、图纸和部位均独立推演，不会修改存档或装备模拟背包。</p>
+                <p>聚气属于离散特殊词条，不单独参与神器/极品评级。只列出实际总泥耗不超过预算的精炼方案。不同地点、图纸和部位均独立推演，不会修改存档或装备模拟背包。</p>
             </section>
         </main>
 
-        <main class="planner-main planner-tool-view" data-planner-view="allocation" hidden>
-            <aside class="planner-intro planner-intro-allocation">
-                <strong>资源分配规划</strong>
-                <p>输入连金泥总预算，程序从所有部位的真实打造结果中组合装备，每个部位最多选择一件，以整套装备总评分最高为目标。银两不限制方案，只在结果中统计，并用于同分方案择优。</p>
-            </aside>
-            <section class="config-panel" aria-labelledby="allocationConfigTitle">
-                <div class="feature-section-head">
-                    <div><span class="section-step">01</span><div><small>RESOURCE ALLOCATION</small><h2 id="allocationConfigTitle">分配条件</h2></div></div>
-                    <span class="local-badge">本地计算</span>
-                </div>
-                <div class="planner-config-grid">
-                    <label>连金泥总预算
-                        <span class="input-with-unit"><input id="allocationMudBudget" type="number" min="10" max="3000" value="400" inputmode="numeric"><span>个</span></span>
-                    </label>
-                    <label>每条路线打造
-                        <span class="input-with-unit"><input id="allocationCraftCount" type="number" min="1" max="500" value="20" inputmode="numeric"><span>件</span></span>
-                    </label>
-                    <button id="btnAllocationPlan" class="btn btn-primary" type="button">开始分配</button>
-                    <button id="btnAllocationCancel" class="btn btn-reset" type="button" hidden>计算完当前部位后停止</button>
-                </div>
-                <p class="field-hint">预算包含90级紫装升炼和精炼的实际连金泥消耗；不要求输入银两预算。</p>
-                <div id="allocationProgress" class="planner-progress" hidden aria-live="polite">
-                    <div><span id="allocationProgressText">准备计算</span><strong id="allocationProgressPercent">0%</strong></div>
-                    <div class="planner-progress-track"><span id="allocationProgressFill"></span></div>
-                </div>
-                <p id="allocationMessage" class="field-hint" role="status" aria-live="polite">载入存档后即可计算资源分配。</p>
-            </section>
-            <section class="result-panel planner-results-panel" aria-labelledby="allocationResultTitle">
-                <div class="planner-result-head">
-                    <div class="planner-title-wrap"><span class="section-step">02</span><div><h2 id="allocationResultTitle">推荐分配</h2><span id="allocationMeta">等待规划</span></div></div>
-                </div>
-                <div id="allocationSummary" class="allocation-summary" hidden></div>
-                <div id="allocationEmpty" class="result-empty">计算后显示总预算内评分最高的装备组合。</div>
-                <div id="allocationResults" class="planner-cards" aria-live="polite"></div>
-            </section>
-        </main>
-
-        <main class="planner-main planner-tool-view" data-planner-view="target" hidden>
+        <main class="planner-main planner-tool-view" data-planner-view="target">
             <aside class="planner-intro planner-intro-target">
                 <strong>目标装备追踪</strong>
-                <p>先限定部位与期望属性，再从当前存档中寻找满足条件的打造路线。可以按第几件最早出现、连金泥最少、银两最少或最终评分最高排序，减少无关结果。</p>
+                <p>先限定部位与期望属性，再从当前存档中寻找满足条件的打造路线。默认不限档次，避免评分门槛漏掉想要的装备；也可限定神器/极品。可以按最早出现、连金泥、银两或最终评分排序。聚气仅作为特殊词条展示，不评级为神器。</p>
             </aside>
             <section class="config-panel" aria-labelledby="targetConfigTitle">
                 <div class="feature-section-head">
@@ -128,7 +91,7 @@
                 </div>
                 <div class="target-config-grid">
                     <label>装备部位<select id="targetPart"></select></label>
-                    <label>最低档次<select id="targetGrade"><option value="premium">极品及以上</option><option value="artifact">仅神器</option></select></label>
+                    <label>最低档次<select id="targetGrade"><option value="all">不限档次</option><option value="premium">极品及以上</option><option value="artifact">仅神器</option></select></label>
                     <label>精炼属性<select id="targetRefineProp"><option value="all">不限属性</option></select></label>
                     <label>地区附加<select id="targetRegionProp"><option value="all">不限附加</option><option value="attached">任意地区附加</option></select></label>
                     <label>结果排序<select id="targetSort"><option value="earliest">最早命中</option><option value="mud">连金泥最少</option><option value="silver">银两最少</option><option value="score">最终评分最高</option></select></label>
@@ -151,6 +114,30 @@
                 <div id="targetResults" class="planner-cards" aria-live="polite"></div>
             </section>
         </main>
+
+        <main class="planner-main planner-tool-view" data-planner-view="standards" hidden>
+            <aside class="planner-intro planner-intro-standards">
+                <strong>属性上限与PVP精炼标准</strong>
+                <p>属性上限根据当前内置的90级常规图纸及其100级升炼配置计算；PVP标准图用于实战选装参考，不参与固定打造规划的自动评分。</p>
+            </aside>
+            <section class="result-panel planner-results-panel" aria-labelledby="limitsTitle">
+                <div class="planner-title-wrap"><span class="section-step">01</span><div><h2 id="limitsTitle">各部位属性上限</h2><span>按属性分别列出词条1、词条2、词条3的上限</span></div></div>
+                <p class="limits-note">打造列为90级紫装的主属性上限（基础配置×110%，不含强化、地区和材料附加）；精炼列按100级升炼配置分别计算三个词条的理论满值（125%×槽位系数1、0.75、0.5，点数属性逐槽取整，百分比逐槽截取显示精度）。各图纸取同部位最高值，不代表单件装备能同时拥有所有属性，也不保证序列中可达。</p>
+                <div class="limits-table-wrap">
+                    <table class="limits-table">
+                        <thead><tr><th>部位</th><th>90级紫装打造主属性上限</th><th>精炼属性</th><th>词条1上限</th><th>词条2上限</th><th>词条3上限</th></tr></thead>
+                        <tbody id="limitsTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+            <section class="result-panel planner-results-panel pvp-standard-panel" aria-labelledby="pvpStandardTitle">
+                <div class="planner-title-wrap"><span class="section-step">02</span><div><h2 id="pvpStandardTitle">PVP精炼标准表</h2><span>实战选装参考</span></div></div>
+                <figure class="pvp-standard-figure">
+                    <img src="./pvp-refine-standards.png" alt="PVP精炼标准表，按部位和属性列出及格、良好、优秀、极品与神装标准">
+                    <figcaption>来源：B站《丶索巴宰》</figcaption>
+                </figure>
+            </section>
+        </main>
     </div>
 
     <script src="../shared/equip_data.js"></script>
@@ -162,6 +149,6 @@
     <script src="../shared/save_decrypt.js"></script>
     <script src="../shared/archive_state.js"></script>
     <script src="../shared/equip_auto_optimizer.js?v=20261125planner3"></script>
-    <script src="./planner.js?v=20261125tools6"></script>
+    <script src="./planner.js?v=20261126tools1"></script>
 </body>
 </html>

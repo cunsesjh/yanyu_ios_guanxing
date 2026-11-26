@@ -424,18 +424,16 @@
             : { id: 3026, name: '昆吾石' };
         const price = finiteNumber(data.equipment[String(equip.id)] && data.equipment[String(equip.id)].price) || 10000;
         const segment = planItems.slice(0, cutoff);
-        const exact = segment.reduce((sum, item) => sum + Math.max(1, finiteNumber(item.cost_mult, 1)), 0);
-        // 目标全在满值区（每一刀动手前累积泥已 ≥ 80）→ 逐刀累加就是真实花费，不必估算
-        const allPastLine = segment.length > 0 && segment.every(refinementItemPastLine);
-        const estimated = allPastLine ? null : estimateRefinementLianjin(acceptIndices);
-        const lianjin = estimated != null ? estimated : exact;
+        // The preview has already replayed the exact lock sequence. Sum its actual
+        // per-attempt multipliers; estimating from keep indices misses repeated locks.
+        const lianjin = segment.reduce((sum, item) => sum + Math.max(1, finiteNumber(item.cost_mult, 1)), 0);
         return {
             mainMaterial,
             mainAmount: 5 * lianjin,
             lianjin,
             silver: Math.floor(price * 1.5) * cutoff,
             multiplierWork: lianjin,
-            estimated: estimated != null,
+            estimated: false,
         };
     }
 
@@ -449,9 +447,11 @@
         return choices[0] || null;
     }
 
-    function analyzeRefinement(bridge, equip, targetProp, count, data, maxMud) {
+    function analyzeRefinementDirect(bridge, equip, targetProp, count, data, maxMud) {
         const maxima = initialSlotMaxima(equip, targetProp);
-        const settledSlots = new Set((equip.xilian_marks || []).map(Number));
+        // Marks protect slots from a reroll but do not prevent keeping the same
+        // slot again later to upgrade its value.
+        const settledSlots = new Set();
         const accepted = [];
         const plannedItems = [];
         let currentEquip = clone(equip);
@@ -526,6 +526,105 @@
             },
             previewCount: count,
         };
+    }
+
+    function analyzeRefinement(bridge, equip, targetProp, count, data, maxMud) {
+        const best = analyzeRefinementDirect(bridge, equip, targetProp, count, data, maxMud);
+        if (!(count > 1)) return best;
+
+        // Search useful early keeps that raise the refinement multiplier. Without
+        // this branch, the first later maximum is selected before the optimizer can
+        // discover a lower early keep that makes that maximum attainable.
+        const earlyItems = refinementPreviewItems(bridge, equip, Math.min(count, 80));
+        const earlyInitial = initialSlotMaxima(equip, targetProp);
+        const earlyBest = { 1: earlyInitial[1]?.theoretical || 0,
+            2: earlyInitial[2]?.theoretical || 0,
+            3: earlyInitial[3]?.theoretical || 0 };
+        const prefixes = [];
+        earlyItems.forEach((item, index) => {
+            const slot = finiteNumber(item && item.slot);
+            const prop = item && item.prop;
+            if (slot < 1 || slot > 3 || !prop || prop.prop !== targetProp) return;
+            const level = finiteNumber(item.xl_level, 0);
+            if (level > 80) return;
+            const theoretical = refinementTheoreticalValue(prop.value, level);
+            if (theoretical > earlyBest[slot]) {
+                earlyBest[slot] = theoretical;
+                prefixes.push({ index: index + 1, slot });
+            }
+        });
+
+        let selected = best;
+        const actualTotal = refinement => [1, 2, 3].reduce((sum, slot) => (
+            sum + finiteNumber(refinement && refinement.maxima && refinement.maxima[slot]
+                && refinement.maxima[slot].value, 0)
+        ), 0);
+        let selectedValue = actualTotal(best);
+        let selectedCost = finiteNumber(best && best.plan && best.plan.cost && best.plan.cost.lianjin, Infinity);
+        prefixes.forEach(prefix => {
+            const flags = Array(prefix.index).fill(false);
+            flags[prefix.index - 1] = true;
+            const firstPlan = bridge.xilianPlan(toWasmEquip(equip), flags);
+            const firstItem = (firstPlan && firstPlan.items || [])[prefix.index - 1];
+            if (!firstItem || !firstItem.accepted || finiteNumber(firstItem.slot) !== prefix.slot || !firstPlan.equip) return;
+            const prefixCost = refinementCost(equip, firstPlan.items || [], prefix.index, data, [prefix.index]);
+            if (maxMud > 0 && prefixCost.lianjin > maxMud) return;
+
+            const restCount = count - prefix.index;
+            const rest = restCount > 0
+                ? analyzeRefinementDirect(bridge, firstPlan.equip, targetProp, restCount, data, maxMud)
+                : null;
+            if (!rest || !rest.plan) return;
+            const value = finiteNumber(firstItem.prop && firstItem.prop.value);
+            const firstAccept = {
+                index: prefix.index,
+                slot: prefix.slot,
+                value,
+                prelock: true,
+                keptValue: finiteNumber((firstPlan.equip.exts || [])[prefix.slot - 1]
+                    && (firstPlan.equip.exts || [])[prefix.slot - 1].value, value),
+                cumMud: finiteNumber(firstItem.xl_level, 0),
+                theoretical: refinementTheoreticalValue(value, finiteNumber(firstItem.xl_level, 0)),
+                prop: targetProp,
+            };
+            const accepts = [firstAccept].concat((rest.plan.accepts || []).map(item => ({
+                ...item,
+                index: prefix.index + finiteNumber(item.index, 0),
+            })));
+            const routeMaxima = { ...rest.maxima };
+            accepts.forEach(item => {
+                routeMaxima[item.slot] = {
+                    slot: item.slot,
+                    value: item.value,
+                    keptValue: item.keptValue,
+                    theoretical: item.theoretical,
+                    occurrences: [{ index: item.index, slot: item.slot, value: item.value,
+                        cumMud: item.cumMud, theoretical: item.theoretical }],
+                };
+            });
+            const cost = {
+                ...rest.plan.cost,
+                lianjin: prefixCost.lianjin + finiteNumber(rest.plan.cost && rest.plan.cost.lianjin, 0),
+                mainAmount: prefixCost.mainAmount + finiteNumber(rest.plan.cost && rest.plan.cost.mainAmount, 0),
+                silver: prefixCost.silver + finiteNumber(rest.plan.cost && rest.plan.cost.silver, 0),
+                multiplierWork: prefixCost.multiplierWork + finiteNumber(rest.plan.cost && rest.plan.cost.multiplierWork, 0),
+                estimated: false,
+            };
+            const routeValue = actualTotal(rest);
+            if (value <= 0 || (maxMud > 0 && cost.lianjin > maxMud)
+                || routeValue < selectedValue || (routeValue === selectedValue && cost.lianjin >= selectedCost)) return;
+            selectedValue = routeValue;
+            selectedCost = cost.lianjin;
+            selected = {
+                ...rest,
+                maxima: routeMaxima,
+                total: rest.total,
+                plan: { ...rest.plan, accepts, accepted: accepts,
+                    cutoff: prefix.index + finiteNumber(rest.plan.cutoff, 0), cost },
+                previewCount: count,
+            };
+        });
+        return selected || best;
     }
 
     function requirePositiveInteger(value, field) {

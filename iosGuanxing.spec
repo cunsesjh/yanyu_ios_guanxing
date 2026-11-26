@@ -1,5 +1,6 @@
 # Windows x64, one executable, no console window.
 from pathlib import Path
+import shutil
 
 root = Path(SPECPATH)
 
@@ -27,8 +28,15 @@ web_datas = collect_runtime_tree(
     excluded_suffixes=('.bak', '.lnk'),
 )
 
+awash_datas = collect_runtime_tree(root / 'awash', 'awash')
+awash_runner = [(str(root / 'awash_runner.js'), '.')]
+node_executable = shutil.which('node')
+if not node_executable:
+    raise RuntimeError('Building iosGuanxing requires Node.js to bundle the AWASH runtime')
+awash_runner.append((node_executable, 'node'))
+
 a = Analysis([str(root / 'desktop_main.py')], pathex=[str(root)],
-             binaries=[], datas=web_datas + [(str(root / 'assets' / 'iosGuanxing.png'), 'assets'),
+             binaries=[], datas=web_datas + awash_datas + awash_runner + [(str(root / 'assets' / 'iosGuanxing.png'), 'assets'),
                                              (str(root / 'keys.json'), '.')],
              hiddenimports=[], hookspath=[], hooksconfig={}, runtime_hooks=[],
              excludes=['tkinter', 'PyQt5', 'PyQt6'], noarchive=False)

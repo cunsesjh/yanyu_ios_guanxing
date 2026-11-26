@@ -8,7 +8,6 @@
     var resultIndexes = Object.create(null);
     var saveData = null;
     var cancelRequested = false;
-    var allocationCancelRequested = false;
     var targetCancelRequested = false;
     var equipmentEngineReady = null;
 
@@ -55,37 +54,42 @@
         return value * number(weights[item && item.prop], 0);
     }
     function regionBonus(region) { return Math.min(30, (region || []).reduce(function (sum, item) { return sum + regionBonusItem(item); }, 0)); }
-    function bestWithinBudget(candidate, budget, refineProp) {
+    function scoreableRefinement(prop) { return prop !== 'mp_back'; }
+    function bestWithinBudget(candidate, budget, refineProp, allowUnrated) {
         var upgradeMud = candidate.upgraded ? 10 : 0;
         var reference = candidate.refinementRatingReference || {};
         return (candidate.refinements || []).reduce(function (best, refinement) {
             if (refineProp && refineProp !== 'all' && refinement.prop !== refineProp) return best;
+            if (!(refinementTotal(refinement) > 0)) return best;
+            var scoreable = scoreableRefinement(refinement.prop);
+            if (!scoreable && !(allowUnrated && refineProp === refinement.prop)) return best;
             var mud = upgradeMud + refinementCost(refinement);
             var maximum = number(reference[refinement.prop], 0);
-            var baseScore = maximum > 0 ? Math.min(100, refinementTotal(refinement) / maximum * 100) : 0;
+            var baseScore = scoreable && maximum > 0 ? Math.min(100, refinementTotal(refinement) / maximum * 100) : 0;
             var option = {refinement: refinement, mud: mud, baseScore: baseScore};
             if (mud > budget) return best;
             if (!best || option.baseScore > best.baseScore || (option.baseScore === best.baseScore && option.mud < best.mud)) return option;
             return best;
         }, null);
     }
-    function scoreCandidate(candidate, budget, refineProp) {
-        var best = bestWithinBudget(candidate, budget, refineProp);
+    function scoreCandidate(candidate, budget, refineProp, minimumScore) {
+        var allowUnrated = refineProp && refineProp !== 'all';
+        var best = bestWithinBudget(candidate, budget, refineProp, allowUnrated);
         if (!best) return null;
         var bonus = regionBonus(candidate.region);
         var finalScore = Math.min(100, best.baseScore + bonus);
-        if (finalScore < 91) return null;
+        if (finalScore < number(minimumScore, 91)) return null;
         var config = EQUIP_DATA.equipment[String(candidate.equipId)] || {};
         return {id: candidate.id, part: number(config.type, 0), equipName: candidate.equipName, paperName: candidate.paperName,
             location: candidate.location, craftIndex: number(candidate.craftIndex, 0), region: candidate.region || [], refinement: best.refinement,
             mud: best.mud, silver: number(candidate.craftCost && candidate.craftCost.silver, 0) + number(candidate.upgradeCost && candidate.upgradeCost.silver, 0) + number(best.refinement.plan && best.refinement.plan.cost && best.refinement.plan.cost.silver, 0),
-            baseScore: best.baseScore, bonus: bonus, finalScore: finalScore, grade: finalScore >= 96 ? '神器' : '极品'};
+            baseScore: best.baseScore, bonus: bonus, finalScore: finalScore, grade: finalScore >= 96 ? '神器' : (finalScore >= 91 ? '极品' : '候选')};
     }
     function resultKey(item, candidate) {
         return [item.part, candidate.equipId, candidate.S, candidate.CZSeed, item.refinement.prop, refinementTotal(item.refinement), item.mud].join('::');
     }
-    function addToCollection(collection, indexes, candidate, budget, refineProp) {
-        var scored = scoreCandidate(candidate, budget, refineProp);
+    function addToCollection(collection, indexes, candidate, budget, refineProp, minimumScore) {
+        var scored = scoreCandidate(candidate, budget, refineProp, minimumScore);
         if (!scored) return;
         var key = resultKey(scored, candidate);
         var index = indexes[key];
@@ -192,7 +196,8 @@
     function cardHtml(item) {
         var region = item.region.length ? item.region.map(function (prop) { return '<span>' + escapeHtml(propName(prop.prop)) + ' +' + escapeHtml(formatProp(prop.prop, prop.value)) + '</span>'; }).join('') : '<span>无地区附加</span>';
         var refineText = escapeHtml(propName(item.refinement.prop)) + ' ' + escapeHtml(refinementDisplayTotal(item.refinement));
-        return '<article class="planner-card ' + (item.grade === '神器' ? 'is-artifact' : 'is-premium') + '"><header class="planner-card-head"><div><h4>' + escapeHtml(item.equipName) + '</h4><p>' + escapeHtml(item.paperName) + ' · ' + escapeHtml(item.location) + ' · 第' + item.craftIndex + '件</p></div><span class="planner-grade"><b>' + item.grade + '</b><strong>' + score(item.finalScore) + '</strong></span></header><div class="planner-score-grid"><span>精炼基础<strong>' + score(item.baseScore) + '</strong></span><span>地区附加<strong>+' + score(item.bonus) + '</strong></span><span>最终评分<strong>' + score(item.finalScore) + '</strong></span></div><div class="planner-props"><span>最佳精炼 ' + refineText + '</span>' + region + '</div><footer class="planner-card-foot"><span>实际泥耗 <strong>' + item.mud.toLocaleString() + '</strong></span><span>累计银两 <strong>' + silver(item.silver) + '</strong></span></footer></article>';
+        var gradeClass = item.grade === '神器' ? 'is-artifact' : (item.grade === '极品' ? 'is-premium' : 'is-candidate');
+        return '<article class="planner-card ' + gradeClass + '"><header class="planner-card-head"><div><h4>' + escapeHtml(item.equipName) + '</h4><p>' + escapeHtml(item.paperName) + ' · ' + escapeHtml(item.location) + ' · 第' + item.craftIndex + '件</p></div><span class="planner-grade"><b>' + item.grade + '</b><strong>' + score(item.finalScore) + '</strong></span></header><div class="planner-score-grid"><span>精炼基础<strong>' + score(item.baseScore) + '</strong></span><span>地区附加<strong>+' + score(item.bonus) + '</strong></span><span>最终评分<strong>' + score(item.finalScore) + '</strong></span></div><div class="planner-props"><span>最佳精炼 ' + refineText + '</span>' + region + '</div><footer class="planner-card-foot"><span>实际泥耗 <strong>' + item.mud.toLocaleString() + '</strong></span><span>累计银两 <strong>' + silver(item.silver) + '</strong></span></footer></article>';
     }
     function renderResults() {
         var filter = $('partFilter').value;
@@ -219,42 +224,6 @@
         } catch (error) { $('planMessage').textContent = '装备规划失败：' + (error && error.message || error); }
         finally { $('btnPlan').disabled = false; $('btnCancel').hidden = true; }
     }
-    function betterState(a, b) {
-        if (!b) return a; if (!a) return b;
-        if (a.value !== b.value) return a.value > b.value ? a : b;
-        if (a.items.length !== b.items.length) return a.items.length > b.items.length ? a : b;
-        return a.silver <= b.silver ? a : b;
-    }
-    function allocateResources(items, budget) {
-        var byPart = Object.create(null);
-        items.forEach(function (item) { (byPart[item.part] || (byPart[item.part] = [])).push(item); });
-        var states = new Array(budget + 1); states[0] = {value: 0, silver: 0, items: []};
-        PART_ORDER.forEach(function (part) {
-            var next = states.slice();
-            for (var spent = 0; spent <= budget; spent += 1) if (states[spent]) (byPart[part] || []).forEach(function (item) {
-                var total = spent + Math.max(0, Math.round(item.mud)); if (total > budget) return;
-                next[total] = betterState(next[total], {value: states[spent].value + item.finalScore, silver: states[spent].silver + item.silver, items: states[spent].items.concat([item])});
-            });
-            states = next;
-        });
-        return states.reduce(function (best, state) { return betterState(best, state); }, null) || {value: 0, silver: 0, items: []};
-    }
-    function renderAllocation(plan, budget) {
-        var items = (plan.items || []).slice().sort(function (a, b) { return a.part - b.part; });
-        var mud = items.reduce(function (sum, item) { return sum + item.mud; }, 0), silverTotal = items.reduce(function (sum, item) { return sum + item.silver; }, 0);
-        $('allocationResults').innerHTML = items.map(cardHtml).join(''); $('allocationEmpty').hidden = items.length > 0; $('allocationMeta').textContent = items.length ? '推荐 ' + items.length + ' 件装备' : '没有可分配结果'; $('allocationSummary').hidden = !items.length;
-        $('allocationSummary').innerHTML = items.length ? '<span>采用装备<strong>' + items.length + ' 件</strong></span><span>连金泥<strong>' + mud + ' / ' + budget + '</strong></span><span>累计银两<strong>' + silver(silverTotal) + '</strong></span><span>总评分<strong>' + score(plan.value) + '</strong></span>' : '';
-        if (!items.length) $('allocationEmpty').textContent = '当前预算内没有达到神器或极品的可分配装备。';
-    }
-    async function runAllocation() {
-        var budget = integer($('allocationMudBudget').value, 10, 3000, 400), count = integer($('allocationCraftCount').value, 1, 500, 20), collection = [], indexes = Object.create(null);
-        $('allocationMudBudget').value = budget; $('allocationCraftCount').value = count; allocationCancelRequested = false; $('btnAllocationPlan').disabled = true; $('btnAllocationCancel').hidden = false; $('btnAllocationCancel').disabled = false; $('allocationResults').replaceChildren(); $('allocationSummary').hidden = true; $('allocationEmpty').hidden = false; $('allocationEmpty').textContent = '正在扫描全部部位并计算资源组合...';
-        try {
-            await scanRoutes({parts: PART_ORDER, mudBudget: budget, craftCount: count, cancelled: function () { return allocationCancelRequested; }, progress: function (done, total, text) { setProgress('allocation', done, total, text); }, candidate: function (candidate) { addToCollection(collection, indexes, candidate, budget, 'all'); }});
-            renderAllocation(allocateResources(collection, budget), budget); $('allocationMessage').textContent = allocationCancelRequested ? '已停止后续扫描，分配结果基于已完成路线。' : '分配完成。银两仅统计，不参与预算限制。';
-        } catch (error) { $('allocationMessage').textContent = '资源分配失败：' + (error && error.message || error); }
-        finally { $('btnAllocationPlan').disabled = false; $('btnAllocationCancel').hidden = true; }
-    }
     function targetRegionMatches(candidate, target) {
         var region = candidate.region || [];
         if (target === 'all') return true;
@@ -272,9 +241,13 @@
         var part = Number($('targetPart').value) || 1, budget = integer($('targetMudBudget').value, 10, 1000, 200), count = integer($('targetCraftCount').value, 1, 500, 100), refineProp = $('targetRefineProp').value || 'all', regionProp = $('targetRegionProp').value || 'all', collection = [], indexes = Object.create(null);
         $('targetMudBudget').value = budget; $('targetCraftCount').value = count; targetCancelRequested = false; $('btnTargetPlan').disabled = true; $('btnTargetCancel').hidden = false; $('btnTargetCancel').disabled = false; $('targetResults').replaceChildren(); $('targetEmpty').hidden = false; $('targetEmpty').textContent = '正在追踪目标装备...';
         try {
-            await scanRoutes({parts: [part], mudBudget: budget, craftCount: count, targetProp: refineProp, cancelled: function () { return targetCancelRequested; }, progress: function (done, total, text) { setProgress('target', done, total, text); }, candidate: function (candidate) { if (targetRegionMatches(candidate, regionProp)) addToCollection(collection, indexes, candidate, budget, refineProp); }});
+            await scanRoutes({parts: [part], mudBudget: budget, craftCount: count, targetProp: refineProp, cancelled: function () { return targetCancelRequested; }, progress: function (done, total, text) { setProgress('target', done, total, text); }, candidate: function (candidate) { if (targetRegionMatches(candidate, regionProp)) addToCollection(collection, indexes, candidate, budget, refineProp, 0); }});
             var grade = $('targetGrade').value;
-            var shown = collection.filter(function (item) { return grade !== 'artifact' || item.grade === '神器'; }).sort(targetComparator($('targetSort').value));
+            var shown = collection.filter(function (item) {
+                if (grade === 'artifact') return item.grade === '神器';
+                if (grade === 'premium') return item.grade === '神器' || item.grade === '极品';
+                return true;
+            }).sort(targetComparator($('targetSort').value));
             $('targetResults').innerHTML = shown.map(cardHtml).join(''); $('targetEmpty').hidden = shown.length > 0; $('targetMeta').textContent = shown.length ? '找到 ' + shown.length + ' 条符合路线' : '没有符合路线';
             if (!shown.length) $('targetEmpty').textContent = '当前打造范围和泥预算内没有满足全部条件的装备。';
             $('targetMessage').textContent = targetCancelRequested ? '已停止后续路线，结果来自已完成范围。' : '追踪完成。所有结果均同时满足当前筛选条件。';
@@ -290,8 +263,40 @@
         region.innerHTML = '<option value="all">不限附加</option><option value="attached">任意地区附加</option>' + Object.keys(regionGroups).sort(function (a, b) { return a.localeCompare(b, 'zh'); }).map(function (label) { return '<option value="' + escapeHtml(regionGroups[label].join(',')) + '">' + escapeHtml(label) + '</option>'; }).join('');
         if ([].some.call(region.options, function (option) { return option.value === oldRegion; })) region.value = oldRegion;
     }
+    function renderLimitsTable() {
+        $('limitsTableBody').innerHTML = PART_ORDER.map(function (part) {
+            var craftBase = {}, refineSlots = {};
+            PAPER_IDS.forEach(function (id) {
+                var paper = EQUIP_DATA.papers[String(id)];
+                var equip = paper && EQUIP_DATA.equipment[String(paper.dz_equip)];
+                if (!equip || Number(equip.type) !== part) return;
+                Object.keys(equip.base || {}).forEach(function (prop) {
+                    craftBase[prop] = Math.max(craftBase[prop] || 0, Math.floor(number(equip.base[prop], 0) * 1.1 + 1e-8));
+                });
+                var upgraded = EQUIP_DATA.equipment[String(equip.equ_next)] || equip;
+                Object.keys(upgraded.exts || {}).forEach(function (prop) {
+                    var slots = refineSlots[prop] || (refineSlots[prop] = [0, 0, 0]);
+                    [1, 2, 3].forEach(function (slot) {
+                        slots[slot - 1] = Math.max(slots[slot - 1], EquipmentAutoOptimizer.theoreticalRefinementSlotMaximum(upgraded, prop, slot));
+                    });
+                });
+            });
+            function propertiesHtml(values) {
+                return Object.keys(values).map(function (prop) {
+                    return '<span>' + escapeHtml(propName(prop)) + ' <b>' + escapeHtml(formatProp(prop, values[prop])) + '</b></span>';
+                }).join('');
+            }
+            var props = Object.keys(refineSlots);
+            return props.map(function (prop, index) {
+                var group = index === 0 ? '<th scope="rowgroup" rowspan="' + props.length + '">' + PART_NAMES[part] + '</th><td rowspan="' + props.length + '"><div class="limit-values">' + propertiesHtml(craftBase) + '</div></td>' : '';
+                return '<tr' + (index === 0 ? ' class="limit-part-start"' : '') + '>' + group + '<th scope="row">' + escapeHtml(propName(prop)) + '</th>' + refineSlots[prop].map(function (value) {
+                    return '<td>' + escapeHtml(refinementDisplayTotal({prop: prop, maxima: {1: {value: value}}})) + '</td>';
+                }).join('') + '</tr>';
+            }).join('');
+        }).join('');
+    }
     function switchPlannerTool(tool, updateUrl) {
-        var selected = ['fixed', 'allocation', 'target'].indexOf(tool) >= 0 ? tool : 'fixed';
+        var selected = ['target', 'fixed', 'standards'].indexOf(tool) >= 0 ? tool : 'target';
         document.querySelectorAll('[data-planner-tool]').forEach(function (button) { var active = button.dataset.plannerTool === selected; button.classList.toggle('is-active', active); button.setAttribute('aria-selected', active ? 'true' : 'false'); });
         document.querySelectorAll('[data-planner-view]').forEach(function (view) { view.hidden = view.dataset.plannerView !== selected; });
         if (updateUrl && window.history && typeof window.history.replaceState === 'function') {
@@ -300,9 +305,8 @@
     }
     function loadSharedSave() {
         var shared = typeof loadShareStore === 'function' ? loadShareStore() : null; saveData = shared && shared.data || null;
-        var ready = !!extractMakeRnd(saveData); ['btnPlan', 'btnAllocationPlan', 'btnTargetPlan'].forEach(function (id) { $(id).disabled = !ready; });
+        var ready = !!extractMakeRnd(saveData); ['btnPlan', 'btnTargetPlan'].forEach(function (id) { $(id).disabled = !ready; });
         $('planMessage').textContent = ready ? '已读取打造状态，可开始规划。' : '当前没有可用的打造状态，请先在首页或其他功能页导入存档。';
-        $('allocationMessage').textContent = ready ? '已读取打造状态，可开始计算资源分配。' : '当前没有可用的打造状态，请先导入存档。';
         $('targetMessage').textContent = ready ? '已读取打造状态，选择目标后开始追踪。' : '当前没有可用的打造状态，请先导入存档。';
     }
     function init() {
@@ -310,10 +314,10 @@
         fillTargetOptions();
         document.querySelector('.planner-tool-tabs').addEventListener('click', function (event) { var button = event.target.closest('[data-planner-tool]'); if (button) switchPlannerTool(button.dataset.plannerTool, true); });
         $('btnPlan').addEventListener('click', runPlanner); $('btnCancel').addEventListener('click', function () { cancelRequested = true; $('btnCancel').disabled = true; }); $('partFilter').addEventListener('change', renderResults); $('attachOnly').addEventListener('change', renderResults);
-        $('btnAllocationPlan').addEventListener('click', runAllocation); $('btnAllocationCancel').addEventListener('click', function () { allocationCancelRequested = true; $('btnAllocationCancel').disabled = true; });
         $('btnTargetPlan').addEventListener('click', runTarget); $('btnTargetCancel').addEventListener('click', function () { targetCancelRequested = true; $('btnTargetCancel').disabled = true; }); $('targetPart').addEventListener('change', fillTargetOptions);
         loadSharedSave();
-        switchPlannerTool(new URLSearchParams(window.location.search).get('tool') || 'fixed', false);
+        renderLimitsTable();
+        switchPlannerTool(new URLSearchParams(window.location.search).get('tool') || 'target', false);
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once: true}); else init();
 })();

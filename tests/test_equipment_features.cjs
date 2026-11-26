@@ -245,7 +245,7 @@ assert.match(plannerHtml, /id="craftCount"[^>]*value="20"/,
 assert.equal((plannerHtml.match(/class="planner-intro /g) || []).length, 3,
     'all three equipment planner tools must start with a feature description panel');
 assert.match(plannerHtml, /data-planner-tool="fixed">固定打造规划/);
-assert.match(plannerHtml, /data-planner-tool="allocation">资源分配规划/);
+assert.match(plannerHtml, /data-planner-tool="standards">属性上限与PVP精炼标准/);
 assert.match(plannerHtml, /data-planner-tool="target">目标装备追踪/);
 assert.match(plannerHtml, /\.\.\/shared\/wasm_data\.js/,
     'planner must use the same equipment WASM runtime as automatic simulation');
@@ -253,14 +253,12 @@ assert.match(plannerHtml, /\.\.\/shared\/core_glue\.js/,
     'planner must use the proven legacy equipment bindings');
 assert.doesNotMatch(plannerHtml, /wasm_algorithm_api\.js/,
     'the Rust bridge must not replace the planner optimizer with a divergent equipment sequence');
-assert.match(plannerHtml, /id="allocationMudBudget"/,
-    'resource allocation must accept a shared lianjin budget');
-assert.doesNotMatch(plannerHtml, /id="allocationSilverBudget"/,
-    'resource allocation must not require a silver budget');
+assert.doesNotMatch(plannerHtml, /data-planner-tool="allocation"|id="allocationMudBudget"/,
+    'resource allocation has been replaced by the equipment reference page');
 assert.match(plannerHtml, /id="targetRefineProp"/);
 assert.match(plannerHtml, /id="targetRegionProp"/);
-assert.match(plannerSource, /function allocateResources\(/,
-    'resource allocation must optimize a combined equipment set');
+assert.match(plannerSource, /function renderLimitsTable\(/,
+    'the reference page must generate limits from equipment configuration');
 assert.match(plannerSource, /function targetRegionMatches\(/,
     'target tracking must apply regional attachment conditions');
 assert.match(plannerSource, /refineMudBudget: Math\.max\(1, options\.mudBudget - 10\)/,

@@ -4,7 +4,7 @@
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const name = id => TALENT_DATA[id]?.name || '#' + id;
     const clone = value => JSON.parse(JSON.stringify(value));
-    let raw = null, worker = null, request = 0, running = false, inspecting = false, available = [], assignments = new Map();
+    let raw = null, worker = null, request = 0, running = false, inspecting = false, available = [], assignments = new Map(), progressTimer = null;
     let source = null, context = '', lastResult = null, bag = 0, activeRole = '';
     const panel = document.getElementById('autoWash2ModePanel');
     if (!panel) return;
@@ -33,7 +33,7 @@
                 <button id="w2Preset" type="button" class="btn btn-reset" disabled>金顶混</button>
                 <button id="w2Clear" type="button" class="btn btn-reset">清空选择</button>
             </div>
-            <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。欧气种子/统一构造、锚点路线与分级战术搜索按四阶段共同比较，未用时间会自动转给后续引擎；整轮通常最多约 10 分钟，三个或四个目标紫脉时最多约 15 分钟，找到后继续按当前最低丹耗减一压价。国服、先行服及国际服均使用各自脉序状态机回放，只有验证通过的候选才会显示。</p>
+        <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。规划会持续比较可执行路线并优先降低丹耗，找到后继续压价；只有经过完整回放核对的候选才会显示。</p>
             <p class="w2-credit">特别鸣谢 B站大佬「庸丶人」提供欧气种子路线、吞脉/跳脉及统一路线构造的研究方案</p>
             <div id="w2Targets" class="w2-targets"></div>
             <p id="w2Requirements" class="w2-requirements"></p>
@@ -59,6 +59,7 @@
     }
     function stop(text) {
         request++;
+        if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
         worker?.terminate(); worker = null; running = false;
         $('Stop').hidden = true;
         $('Run').disabled = !raw || !available.length;
@@ -94,7 +95,7 @@
     }
     function makeWorker() {
         if (worker) return worker;
-        worker = new Worker(new URL('auto_wash2_worker.js', document.currentScript?.src || new URL('../shared/auto_wash2.js', location.href)));
+        worker = new Worker(new URL('auto_wash2_worker.js?v=20261126engine-api3', document.currentScript?.src || new URL('../shared/auto_wash2.js', location.href)));
         worker.onerror = event => { stop(); status('后台计算失败：' + (event.message || '请重新进入此页面重试'), true); };
         return worker;
     }
@@ -123,7 +124,7 @@
         if (!entry) { $('Run').disabled = true; renderLocks(); renderTargets(); status('请选择人物。'); return; }
         try {
             if (s.dlcMode || /international|oversea|国际|國際/i.test([s.saveChannel, s.savePlatform].join(' '))) throw new Error('此模块暂支持国服及先行服，国际服请使用原有功能。');
-            raw = AutoWash2Model.snapshot(s.saveData, entry.role, {vip: $('Vip').value, channel: s.saveChannel});
+            raw = AutoWash2Model.snapshot(s.saveData, entry.role, {vip: $('Vip').value, channel: s.saveChannel, saveVersion: s.saveVersion});
             if (![150, 151, 152, 153, 154].includes(raw.zizhi)) throw new Error('该人物资质不受支持。');
             bag = (Array.isArray(s.saveData.Items) ? s.saveData.Items : Object.values(s.saveData.Items || {})).reduce((n, t) => n + (Number(t.ID) === 2601 ? Number(t.Num) || 0 : 0), 0);
             $('Bag').textContent = bag.toLocaleString() + ' 丹';
@@ -147,7 +148,8 @@
         $('Export').disabled = !routes.length;
         $('Results').innerHTML = routes.length ? `<p class="w2-muted">已找到 ${routes.length} 条候选，按总丹耗排序。候选经过内核回放校验，不保证全局最优。</p>` + routes.slice(0, 20).map((r, i) => {
             const remaining = bag - Number(r.totalPills || 0);
-            const method = r.kind === 'unified-seed-route' ? `欧气种子统一路线 · ${r.seedMethod || '统一构造'}`
+            const method = r.kind === 'awash-full-route' ? 'AWASH 完整路线'
+                : r.kind === 'unified-seed-route' ? `欧气种子统一路线 · ${r.seedMethod || '统一构造'}`
                 : r.kind === 'luck-seed-replay' ? `欧气种子路线 · ${r.seedMethod || '种子优化'}`
                 : r.kind === 'anchor-replay' ? '锚点路线' : '分级战术搜索';
             return `<details class="w2-route" ${i === 0 ? 'open' : ''}><summary><strong>路线 ${i + 1} · ${Number(r.totalPills).toLocaleString()} 丹</strong><span>${esc(method)} · ${Number(r.totalWashes)} 次洗脉 · ${remaining < 0 ? '缺' + -remaining : '余' + remaining} 丹</span></summary><p>最终天赋：${esc((r.finalTalents || []).map(t => t.name || name(t.id)).join('、'))}</p><div class="w2-table"><table><thead><tr><th>步骤</th><th>操作与核对</th><th>本步丹耗</th><th>累计丹耗</th><th>剩余丹数</th></tr></thead><tbody>${(r.steps || []).map((step, n) => `<tr><td>${n + 1}</td><td><strong>${esc(step.label)}</strong><p>${esc(step.detail)}</p><small>${esc((step.after?.talents || []).map(t => (t.name || name(t.id)) + (t.locked ? '（锁）' : '')).join('、'))}</small></td><td>${Number(step.pills || 0)}</td><td>${Number(step.cumulativePills || 0)}</td><td>${bag - Number(step.cumulativePills || 0)}</td></tr>`).join('')}</tbody></table></div></details>`;
@@ -166,11 +168,16 @@
             const id = ++request, started = Date.now(), input = {initialState: clone(raw), ...selection,
                 bagPills: bag, hasBagPills: true, dlcMode: false,
                 options: {maxTotalPills: budget, maxStoredStates: 500000, searchPolicy: 'full'}};
-            status('正在启动本地路线搜索…');
+            let progressMessage = '正在启动源码 wash 搜索…';
+            const updateProgress = () => {
+                if (running) status(`${progressMessage} · ${((Date.now() - started) / 1000).toFixed(1)} 秒`);
+            };
+            updateProgress();
+            progressTimer = setInterval(updateProgress, 250);
             const w = makeWorker();
             w.onmessage = ({data}) => {
                 if (data.requestId !== id) return;
-                if (data.type === 'progress') status(`${data.progress?.message || '搜索中…'} · ${((Date.now() - started) / 1000).toFixed(1)} 秒`);
+                if (data.type === 'progress') { progressMessage = data.progress?.message || '源码 wash 搜索中…'; updateProgress(); }
                 if (data.type === 'candidate') renderResult(data.result);
                 if (data.type === 'error') { stop(); status(data.error, true); }
                 if (data.type === 'result') {

@@ -8,7 +8,7 @@
 .planner-intro { display: grid; grid-template-columns: minmax(130px, 180px) 1fr; align-items: center; gap: 1rem; padding: 0.9rem 1rem; border: 1px solid rgba(155, 107, 201, 0.35); border-left: 5px solid var(--purple-bright); border-radius: 7px; background: rgba(155, 107, 201, 0.1); }
 .planner-intro strong { color: var(--text-primary); font-size: 0.96rem; }
 .planner-intro p { margin: 0; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.65; }
-.planner-intro-allocation { border-color: rgba(54, 148, 111, 0.36); border-left-color: #36946f; background: rgba(54, 148, 111, 0.1); }
+.planner-intro-standards { border-color: rgba(54, 148, 111, 0.36); border-left-color: #36946f; background: rgba(54, 148, 111, 0.1); }
 .planner-intro-target { border-color: rgba(201, 126, 48, 0.38); border-left-color: #c97e30; background: rgba(201, 126, 48, 0.1); }
 .planner-main > section { border-radius: 8px; box-shadow: 0 10px 26px rgba(38, 82, 152, 0.09); }
 .feature-section-head, .panel-title, .planner-title-wrap { display: flex; align-items: center; }
@@ -71,6 +71,7 @@
 .planner-grade { flex: 0 0 auto; display: grid; place-items: center; min-width: 58px; padding: 0.3rem 0.45rem; border-radius: 5px; color: #fff; background: #b7791f; font-size: 0.76rem; }
 .planner-grade strong { font-size: 1rem; }
 .is-artifact .planner-grade { background: #c94f48; }
+.is-candidate .planner-grade { background: #526b82; }
 .planner-score-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
 .planner-score-grid span { display: grid; gap: 0.1rem; min-height: 3.25rem; align-content: center; padding: 0.42rem; text-align: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-muted); font-size: 0.7rem; }
 .planner-score-grid strong { color: var(--text-primary); font-size: 0.9rem; }
@@ -78,9 +79,21 @@
 .planner-props span { padding: 0.25rem 0.42rem; border: 1px solid var(--border-accent); border-radius: 4px; color: var(--text-secondary); font-size: 0.72rem; }
 .planner-card-foot { display: flex; flex-wrap: wrap; gap: 0.45rem 0.8rem; color: var(--text-secondary); font-size: 0.74rem; }
 .planner-card-foot strong { color: var(--text-primary); }
-.allocation-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.55rem; margin-bottom: 0.8rem; }
-.allocation-summary span { display: grid; gap: 0.15rem; min-height: 62px; align-content: center; padding: 0.55rem 0.7rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-muted); font-size: 0.72rem; }
-.allocation-summary strong { color: var(--text-primary); font-size: 0.94rem; }
+.limits-note { color: var(--text-secondary); font-size: 0.8rem; line-height: 1.7; margin: 0.8rem 0; }
+.limits-table-wrap { overflow-x: auto; }
+.limits-table { width: 100%; border-collapse: collapse; color: var(--text-primary); font-size: 0.82rem; }
+.limits-table th, .limits-table td { padding: 0.85rem; border: 1px solid var(--border-color); text-align: left; vertical-align: top; }
+.limits-table thead, .limits-table tbody th { background: var(--bg-secondary); }
+.limits-table tbody th { white-space: nowrap; }
+.limits-table { min-width: 620px; }
+.limits-table .limit-part-start > * { border-top-width: 2px; }
+.limits-table td[rowspan], .limits-table th[rowspan] { vertical-align: top; }
+.limit-values { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; }
+.limit-values span { white-space: nowrap; color: var(--text-secondary); }
+.limit-values b { color: var(--text-primary); }
+.pvp-standard-figure { margin: 1rem 0 0; }
+.pvp-standard-figure img { display: block; width: 100%; height: auto; background: #fff; border: 1px solid var(--border-color); border-radius: 5px; }
+.pvp-standard-figure figcaption { margin-top: 0.6rem; color: var(--text-secondary); font-size: 0.85rem; }
 .scoring-panel { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.65; }
 .scoring-panel .panel-title { margin-bottom: 0.5rem; }
 .scoring-panel p { padding-left: 2.45rem; }
@@ -93,7 +106,6 @@ html[data-theme="dark"] .local-badge { color: var(--green-bright); }
     .planner-result-head { align-items: stretch; flex-direction: column; }
     .planner-filters { flex-wrap: wrap; }
     .planner-cards { grid-template-columns: 1fr; }
-    .allocation-summary { grid-template-columns: 1fr 1fr; }
     .scoring-panel p { padding-left: 0; }
 }
 @media (max-width: 520px) {

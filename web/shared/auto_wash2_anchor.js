@@ -76,7 +76,7 @@
                     (packet.candidate ? [packet.candidate] : packet.routes).forEach(route => accept(route, anchors));
                 }
             });
-            bounded ||= Date.now() - choiceStarted > 20000 + (intensity - 1) * 10000;
+            bounded = bounded || Date.now() - choiceStarted > 20000 + (intensity - 1) * 10000;
         }
         // Fast sequence comparison must not skip the legacy late-lock and slot
         // optimizations. Refine the best verified sequence with a separate budget.
