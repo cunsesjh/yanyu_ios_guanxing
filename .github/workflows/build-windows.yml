@@ -106,11 +106,12 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v4.0-beta.14 测试版更新公告
+            ## v4.0-beta.15 测试版更新公告
 
-            - 修复下拉框回归检查在非自动模拟页面误读 Wash2 控件的问题。
-            - 提升装备评级、规划徽标及恒山状态徽标在浅色模式下的可读性。
-            - 包含 v4.0-beta.13 的自动洗脉、恒山经验推演、角色状态与装备模拟更新。
+            - 重新接入最新 AWASH 搜索，并为候选检查点失败增加直接路线搜索回退。
+            - 自动洗脉支持单槽角色，包括尚未初始化欧气种子的存档。
+            - 恢复每步路线说明、当前脉序、锁定状态和天赋详细说明。
+            - 将搜索失败原因改为用户可读的中文提示。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt

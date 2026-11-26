@@ -57,6 +57,32 @@
         };
         return [...new Set(reasons || [])].map(reason => labels[reason] || reason).join('、');
     }
+    function routeReasonText(reason) {
+        const labels = {
+            'positive-budget-required': '搜索缺少有效的洗髓丹预算，无法开始。',
+            'checkpoint-quality-no-route': '已检查的候选检查点中没有找到可行路线。',
+            'initial-search-no-route': '从当前存档直接搜索也没有找到路线（在本轮搜索范围内）。',
+            'no-remaining-budget': '前置步骤已用完丹耗预算，无法继续搜索。',
+            'prefix-at-or-over-upper-bound': '前置步骤丹耗已达到或超过预算上限。',
+            'checkpoint-quality-exhausted': '候选检查点已搜索完，未找到更优路线。',
+            'max-runtime': '搜索时间已到上限；可以减少目标或重新开始搜索。',
+            'route-search-no-route': '本轮没有找到可行路线。',
+        };
+        const key = String(reason || '本分支未找到路线');
+        if (labels[key]) return labels[key];
+        if (key.startsWith('unknown-or-non-purple-target:')) {
+            return '所选目标中有当前不支持的紫脉。';
+        }
+        return `搜索未找到路线（${key}）。`;
+    }
+    function talentStateHtml(after) {
+        const talents = after?.talents || [];
+        if (!talents.length) return '';
+        return `<div class="w2-step-state"><strong>本步完成后的当前脉序</strong><ul>${talents.map(t => {
+            const item = TALENT_DATA[Number(t.id)] || {};
+            return `<li><b>${esc(item.name || name(t.id))}${t.locked ? '（已锁定）' : ''}</b><span>${esc(item.desc || '暂无天赋说明')}</span></li>`;
+        }).join('')}</ul></div>`;
+    }
     function stop(text) {
         request++;
         if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
@@ -129,7 +155,7 @@
             if (![150, 151, 152, 153, 154].includes(raw.zizhi)) throw new Error('该人物资质不受支持。');
             bag = (Array.isArray(s.saveData.Items) ? s.saveData.Items : Object.values(s.saveData.Items || {})).reduce((n, t) => n + (Number(t.ID) === 2601 ? Number(t.Num) || 0 : 0), 0);
             $('Bag').textContent = bag.toLocaleString() + ' 丹';
-            $('Summary').textContent = `${entry.tag} · ${entry.role.Name || '无名'} · ${ZZ_DATA[raw.zizhi]?.zz_name || ZZ_DATA[raw.zizhi]?.name || ['资质平平', '资质过人', '武林俊杰', '绝世奇才', '空前绝后'][raw.zizhi - 150]} · ${raw.zizhi - 150} 槽 · 从导入存档的原始状态起算`;
+            $('Summary').textContent = `${entry.tag} · ${entry.role.Name || '无名'} · ${ZZ_DATA[raw.zizhi]?.zz_name || ZZ_DATA[raw.zizhi]?.name || ['资质平平', '资质过人', '武林俊杰', '绝世奇才', '空前绝后'][raw.zizhi - 150]} · ${raw.zizhi - 150} 槽 · 从导入存档的原始状态起算${raw.zizhi === 151 ? ' · 单槽也支持自动规划（请选择可用目标）' : ''}`;
             renderLocks(); renderTargets(); inspect();
         } catch (error) { raw = null; $('Run').disabled = true; renderLocks(); renderTargets(); status(error.message, true); }
     }
@@ -153,7 +179,7 @@
                 : r.kind === 'unified-seed-route' ? `欧气种子统一路线 · ${r.seedMethod || '统一构造'}`
                 : r.kind === 'luck-seed-replay' ? `欧气种子路线 · ${r.seedMethod || '种子优化'}`
                 : r.kind === 'anchor-replay' ? '锚点路线' : '分级战术搜索';
-            return `<details class="w2-route" ${i === 0 ? 'open' : ''}><summary><strong>路线 ${i + 1} · ${Number(r.totalPills).toLocaleString()} 丹</strong><span>${esc(method)} · ${Number(r.totalWashes)} 次洗脉 · ${remaining < 0 ? '缺' + -remaining : '余' + remaining} 丹</span></summary><p>最终天赋：${esc((r.finalTalents || []).map(t => t.name || name(t.id)).join('、'))}</p><div class="w2-table"><table><thead><tr><th>步骤</th><th>操作与核对</th><th>本步丹耗</th><th>累计丹耗</th><th>剩余丹数</th></tr></thead><tbody>${(r.steps || []).map((step, n) => `<tr><td>${n + 1}</td><td><strong>${esc(step.label)}</strong><p>${esc(step.detail)}</p>${step.after?.talents?.length ? `<small>当前天赋：${esc(step.after.talents.map(t => (t.name || name(t.id)) + (t.locked ? '（锁）' : '')).join('、'))}</small>` : ''}</td><td>${Number(step.pills || 0)}</td><td>${Number(step.cumulativePills || 0)}</td><td>${bag - Number(step.cumulativePills || 0)}</td></tr>`).join('')}</tbody></table></div></details>`;
+            return `<details class="w2-route" ${i === 0 ? 'open' : ''}><summary><strong>路线 ${i + 1} · ${Number(r.totalPills).toLocaleString()} 丹</strong><span>${esc(method)} · ${Number(r.totalWashes)} 次洗脉 · ${remaining < 0 ? '缺' + -remaining : '余' + remaining} 丹</span></summary><p>最终天赋：${esc((r.finalTalents || []).map(t => t.name || name(t.id)).join('、'))}</p><div class="w2-table"><table><thead><tr><th>步骤</th><th>操作与核对</th><th>本步丹耗</th><th>累计丹耗</th><th>剩余丹数</th></tr></thead><tbody>${(r.steps || []).map((step, n) => `<tr><td>${n + 1}</td><td><strong>${esc(step.label)}</strong><p class="w2-step-detail">${esc(step.detail)}</p>${talentStateHtml(step.after)}</td><td>${Number(step.pills || 0)}</td><td>${Number(step.cumulativePills || 0)}</td><td>${bag - Number(step.cumulativePills || 0)}</td></tr>`).join('')}</tbody></table></div></details>`;
         }).join('') : `<div class="ai-result-empty">${esc(result.noResultReason || '本轮搜索暂未找到路线，可以增加耗丹上限或调整目标。')}</div>`;
     }
     async function runAwash(input, branches, id, started, onProgress) {
@@ -168,9 +194,9 @@
                 body: JSON.stringify({raw: input.initialState, targets: branches[index],
                     budget: input.options.maxTotalPills,
                     options: {budget: input.options.maxTotalPills,
-                        concurrency: 16, horizon: 1000, horizonStep: 200, maxHorizon: 6000,
+                        concurrency: 16, horizon: 2000,
                         pityQuality: true, seedQuality: true, stopOnFirstRoute: false,
-                        infiniteOptions: {nMax: 300, count: 60},
+                        infiniteOptions: {nMax: 100, count: 30},
                         frontierOptions: {boundaryLanding: true, maxStates: 200, maxRounds: 1},
                         limits: {maxRuntimeMs: 900000, maxExpandedNodes: 500000,
                             maxWashSteps: 2000000, maxUniqueStates: 300000},
@@ -184,7 +210,7 @@
             if (route) {
                 routes.push(route);
                 renderResult({routes: routes.slice().sort((a, b) => a.totalPills - b.totalPills), noResultReason: ''});
-            } else reasons.push(payload.stopReason || payload.status || '本分支未找到路线');
+            } else reasons.push(routeReasonText(payload.stopReason || payload.status));
         }
         if (!running || id !== request) return;
         const sorted = routes.sort((a, b) => a.totalPills - b.totalPills);
@@ -245,6 +271,10 @@
                 }
                 return `${name(id)}${Number(raw?.zizhi) < 151 ? '（需要至少 1 槽资质）' : '（不在当前人物可用脉池）'}`;
             });
+            if (Number(raw?.zizhi) === 151 && missing.includes(250)) {
+                status(`当前是单槽角色，金顶混预设中的${name(250)}需要至少 2 槽。单槽仍可自动洗脉，请手动选择一条当前可用紫脉。`);
+                return;
+            }
             status(`无法选择完整的金顶混组合，缺少：${reasons.join('、')}。`, true);
             return;
         }

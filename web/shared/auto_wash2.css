@@ -33,6 +33,13 @@
 #autoWash2ModePanel th, #autoWash2ModePanel td { padding: 12px; border-bottom: 1px solid #2b3c53; vertical-align: top; }
 #autoWash2ModePanel td p { margin: 8px 0; line-height: 1.7; }
 #autoWash2ModePanel td small { display: block; margin-top: 8px; color: #b7a0eb; line-height: 1.7; }
+#autoWash2ModePanel .w2-step-detail { color: var(--text-primary, #dce6f3); }
+#autoWash2ModePanel .w2-step-state { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color, #42536a); }
+#autoWash2ModePanel .w2-step-state > strong { color: #b7a0eb; font-size: 12px; }
+#autoWash2ModePanel .w2-step-state ul { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+#autoWash2ModePanel .w2-step-state li { display: grid; gap: 3px; }
+#autoWash2ModePanel .w2-step-state b { color: var(--text-primary, #e6edf6); font-size: 12px; }
+#autoWash2ModePanel .w2-step-state span { color: var(--text-secondary, #9babc2); font-size: 12px; line-height: 1.6; }
 @media (max-width: 650px) {
     #autoWash2ModePanel .w2-section { padding: 14px; }
     #autoWash2ModePanel .w2-targets { grid-template-columns: repeat(2, minmax(0, 1fr)); }

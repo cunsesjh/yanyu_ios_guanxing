@@ -11,8 +11,7 @@ input.on('close', async () => {
     try {
         const request = JSON.parse(body || '{}');
         const options = Object.assign({
-            horizon: 1000, horizonStep: 200, maxHorizon: 4000,
-            nMax: 100, fallbackNMax: 300, count: 30,
+            horizon: 2000, nMax: 100, fallbackNMax: 100, count: 30,
             pityQuality: true, seedQuality: true, concurrency: 16,
         }, request.options || {});
         const result = await solveJoint(request.raw || {}, request.targets || [], options);

@@ -8,14 +8,20 @@ const U = require('./dev/unified_runner');
 
 const ROOT = __dirname;
 const ENGINE = path.join(ROOT, 'initial_route_engine');
+const decodeBase64 = typeof atob === 'function'
+    ? atob
+    : value => Buffer.from(String(value), 'base64').toString('binary');
+const encodeBase64 = typeof btoa === 'function'
+    ? btoa
+    : value => Buffer.from(String(value), 'binary').toString('base64');
 let sharedSearchContext = null;
 let sharedInitPromise = null;
 
 function loadInitialRouteContext() {
     const sandbox = {
         console,
-        atob,
-        btoa,
+        atob: decodeBase64,
+        btoa: encodeBase64,
         TextEncoder,
         TextDecoder,
         WebAssembly,
@@ -117,7 +123,7 @@ async function searchInitialRoute(raw, targetText, options) {
     const result = context.wasmSearchWashRoutes({
         desired_ids: targets,
         max_pad: Number(opts.maxPad) || 0,
-        horizon: Number(opts.horizon) || 12000,
+        horizon: Number(opts.horizon) || 2000,
         top_n: Number(opts.topN) || 1,
         allow_open_slot: true,
         allow_pity: true,

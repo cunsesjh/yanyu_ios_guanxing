@@ -317,7 +317,7 @@ async function findInitialRoutes(raw, targetIds, options) {
         names.join(','),
         Object.assign({
             topN: requiredHeldIds.length ? 8 : 1,
-            horizon: 12000,
+            horizon: 2000,
         }, options || {})
     );
     const routes = (searched.result.routes || []);

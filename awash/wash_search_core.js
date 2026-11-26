@@ -591,15 +591,12 @@
 
         function snapshot(displayLocks) {
             if (!trace) return;
-            const locked = new Set(uniqueNumbers(
-                displayLocks == null ? locks : displayLocks
-            ));
+            const locked = new Set(uniqueNumbers(displayLocks == null ? locks : displayLocks));
             trace.push({
                 zizhi: Number(state.zizhi) || 0,
                 lockIds: Array.from(locked),
                 talents: (state.talents || []).map(id => ({
-                    id: Number(id),
-                    locked: locked.has(Number(id)),
+                    id: Number(id), locked: locked.has(Number(id)),
                 })),
             });
         }
@@ -921,7 +918,6 @@
             number(runtime.reverseTailOrders, DEFAULT_RUNTIME.reverseTailOrders)
         ));
         const chainSearch = !!runtime.chainSearch;
-        const stopOnFirstRoute = !!optionsValue.stopOnFirstRoute;
         const metrics = {
             expandedNodes: 0,
             uniqueStates: 0,
@@ -1375,10 +1371,6 @@
                             provenOptimal: false,
                         });
                     } catch (error) { }
-                }
-                if (stopOnFirstRoute) {
-                    stopped = true;
-                    stopReason = 'first-route';
                 }
             }
         }
@@ -5197,7 +5189,6 @@
                     if (targetStats(node.engineState, targets)
                         === targets.length) {
                         rememberBest(node);
-                        if (stopOnFirstRoute) break;
                         continue;
                     }
                     metrics.expandedNodes++;
@@ -5274,7 +5265,6 @@
                         if (targetStats(child.engineState, targets)
                             === targets.length) {
                             rememberBest(child);
-                            if (stopOnFirstRoute) break;
                         }
                         const existing = next.get(child.searchKey);
                         if (!existing || compareNodes(
@@ -5325,24 +5315,6 @@
         const perSeedWashBudget = Math.max(
             5000, Math.floor(maxPolicyWashes / 20)
         );
-        if (stopOnFirstRoute && !stopped) {
-            policyLabel = 'fast-preferred:' + targets[0];
-            policyRollout(
-                rootNode,
-                true,
-                targets[0],
-                false,
-                false,
-                false,
-                Math.min(
-                    maxPolicyWashes,
-                    Math.max(
-                        20000,
-                        Math.floor(limits.maxWashSteps * 0.1)
-                    )
-                )
-            );
-        }
         if (chainSearch && rootNode.engineState.luckSeed != null && !stopped) {
             const reverseOrders = configuredTargetOrder.length === targets.length
                 && configuredTargetOrder.every(id => targets.includes(id))
@@ -5664,16 +5636,6 @@
         if (stopReason && stopReason.startsWith('max-')) {
             return {
                 ok: !!bestRoute,
-                status: 'resource-limited',
-                provenOptimal: false,
-                route: bestRoute,
-                metrics,
-                stopReason,
-            };
-        }
-        if (bestRoute && stopReason === 'first-route') {
-            return {
-                ok: true,
                 status: 'resource-limited',
                 provenOptimal: false,
                 route: bestRoute,

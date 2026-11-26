@@ -357,15 +357,7 @@ async function solveSeedCheckpointQuality(
         Number(limits.maxRuntimeMs) || 300000
     );
     const deadline = startedAt + maxRuntimeMs;
-    const firstHorizon = Number(o.horizon) || 1000;
-    const horizonStep = Math.max(
-        1, Number(o.horizonStep) || 200
-    );
-    const maxHorizon = Math.max(
-        firstHorizon + horizonStep,
-        Number(o.maxHorizon) || 6000
-    );
-    const stopOnFirstRoute = !!o.stopOnFirstRoute;
+    const firstHorizon = Number(o.horizon) || 2000;
     const cache = o.sessionCache
         && typeof o.sessionCache.get === 'function'
         && typeof o.sessionCache.set === 'function'
@@ -429,7 +421,6 @@ async function solveSeedCheckpointQuality(
             horizon,
             screenOnly: o.screenOnly !== false,
             targetOrder: o.targetOrder || targets,
-            stopOnFirstRoute,
             limits: Object.assign({}, limits, {
                 maxRuntimeMs: Math.min(
                     maxRuntimeMs, remaining
@@ -458,63 +449,37 @@ async function solveSeedCheckpointQuality(
     async function runStage(horizon) {
         let stopped = false;
         const routes = [];
-        if (stopOnFirstRoute) {
-            for (let start = 0;
-                start < ordered.length;
-                start += concurrency) {
+        let cursor = 0;
+        const activeChains = new Set();
+        async function workerLoop() {
+            while (!stopped) {
                 if (Date.now() >= deadline) {
                     stopped = true;
                     break;
                 }
-                const batch = ordered.slice(start, start + concurrency);
+                const index = cursor++;
+                if (index >= ordered.length) break;
+                const checkpoint = ordered[index];
+                activeChains.add(checkpoint.chainKey);
                 metrics.maxActiveChains = Math.max(
                     metrics.maxActiveChains,
-                    new Set(batch.map(item => item.chainKey)).size
+                    activeChains.size
                 );
-                const batchResults = await Promise.all(
-                    batch.map(checkpoint =>
-                        runCheckpoint(checkpoint, horizon)
-                    )
+                const result = await runCheckpoint(
+                    checkpoint, horizon
                 );
-                routes.push.apply(routes, batchResults);
-                if (batchResults.some(result => result && result.ok)) {
-                    stopped = true;
-                    break;
-                }
+                routes.push(result);
+                activeChains.delete(checkpoint.chainKey);
             }
-        } else {
-            let cursor = 0;
-            const activeChains = new Set();
-            async function workerLoop() {
-                while (!stopped) {
-                    if (Date.now() >= deadline) {
-                        stopped = true;
-                        break;
-                    }
-                    const index = cursor++;
-                    if (index >= ordered.length) break;
-                    const checkpoint = ordered[index];
-                    activeChains.add(checkpoint.chainKey);
-                    metrics.maxActiveChains = Math.max(
-                        metrics.maxActiveChains,
-                        activeChains.size
-                    );
-                    const result = await runCheckpoint(
-                        checkpoint, horizon
-                    );
-                    routes.push(result);
-                    activeChains.delete(checkpoint.chainKey);
-                }
-            }
-            await Promise.all(Array.from(
-                {
-                    length: Math.min(
-                        concurrency, ordered.length
-                    ),
-                },
-                workerLoop
-            ));
         }
+        await Promise.all(Array.from(
+            {
+                length: Math.min(
+                    concurrency, ordered.length
+                ),
+            },
+            workerLoop
+        ));
         return {
             horizon,
             routes,
@@ -524,29 +489,14 @@ async function solveSeedCheckpointQuality(
     }
 
     try {
-        let horizon = firstHorizon;
-        let previousSignature = null;
-        while (true) {
-            const stage = await runStage(horizon);
-            const signature = routeSignature(best);
-            metrics.horizons.push({
-                horizon,
-                upperBound,
-                firstRouteMs: metrics.firstRouteMs,
-                signature,
-                timedOut: stage.timedOut,
-            });
-            if (stopOnFirstRoute && best) break;
-            if (Date.now() >= deadline) break;
-            if (previousSignature != null
-                && signature === previousSignature) {
-                metrics.stableHorizon = horizon;
-                break;
-            }
-            previousSignature = signature;
-            if (horizon + horizonStep > maxHorizon) break;
-            horizon += horizonStep;
-        }
+        const stage = await runStage(firstHorizon);
+        metrics.horizons.push({
+            horizon: firstHorizon,
+            upperBound,
+            firstRouteMs: metrics.firstRouteMs,
+            signature: routeSignature(best),
+            timedOut: stage.timedOut,
+        });
     } finally {
         if (pool) await pool.close();
     }
@@ -566,11 +516,9 @@ async function solveSeedCheckpointQuality(
         route: best,
         metrics,
         stopReason: best
-            ? (stopOnFirstRoute && metrics.firstRouteMs != null
-                ? 'first-route'
-                : (metrics.elapsedMs >= maxRuntimeMs
-                    ? 'max-runtime'
-                    : 'checkpoint-quality-exhausted'))
+            ? (metrics.elapsedMs >= maxRuntimeMs
+                ? 'max-runtime'
+                : 'checkpoint-quality-exhausted')
             : 'checkpoint-quality-no-route',
         strategy: 'awash-seed-checkpoint-quality',
     };

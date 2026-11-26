@@ -37,10 +37,10 @@
         return Array.from(new Set((values || []).map(Number).filter(id => id > 0)));
     }
 
+    // Retained for compatibility with existing regression probes.
     function normalizeNMax(value) {
-        const parsed = Number(value);
-        const requested = Number.isFinite(parsed) ? Math.trunc(parsed) : 300;
-        return Math.max(0, Math.min(300, requested));
+        const requested = Number(value) || 100;
+        return Math.max(0, Math.min(100, Math.trunc(requested)));
     }
 
     function engineFor(raw, slots) {
@@ -639,7 +639,7 @@
         const raw = Object.assign({}, rawInput);
         const slots = Number(raw.zizhi) >= 154 ? 4 : 3;
         const nMax = normalizeNMax(o.nMax);
-        const count = Math.max(12, Math.trunc(Number(o.count) || 60));
+        const count = Math.max(12, Math.trunc(Number(o.count) || 30));
         const maxWash = Math.max(500, Math.trunc(Number(o.maxWash) || 4000));
         const chainLimit = Math.max(2, Math.min(15, Math.trunc(
             Number(o.chainLimit) || 15)));

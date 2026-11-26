@@ -4,58 +4,14 @@
 const { loadAWash } = require('./context');
 const RolePlanner = require('./role_planner');
 const Sequence = require('./sequence');
-const JumpSeedSearch = require('./jump_seed_search');
 const PityFrontier = require('./pity_seed_frontier');
+const { findInitialRoutes } = require('./fixed_chain_initial_route');
 const {
     solveSeedCheckpointQuality,
 } = require('./seed_checkpoint_quality');
 const {
     indexPitySeedChains,
 } = require('./seed_chain_order');
-
-const DEFAULT_PILL_BUDGET = 1000000;
-
-function actualSlotCount(context, raw) {
-    const zizhi = Number(raw && raw.zizhi) || 153;
-    return Number(context.ZZ_DATA
-        && context.ZZ_DATA[String(zizhi)]
-        && context.ZZ_DATA[String(zizhi)].num_talent) || 0;
-}
-
-function attachRouteStepStates(context, raw, targets, result) {
-    const route = result && result.route;
-    if (!route || !Array.isArray(route.steps)) return result;
-    try {
-        const replayed = context.WashSearchV2.replay(
-            raw, targets, route.steps, true
-        );
-        if (!replayed.ok || replayed.trace.length !== route.steps.length
-            || replayed.pills !== Number(route.pills)
-            || replayed.washes !== Number(route.washes)) return result;
-        route.steps = route.steps.map((step, index) => Object.assign({}, step, {
-            after: replayed.trace[index],
-        }));
-    } catch (_) {
-        // A route already returned by an independently verified checkpoint
-        // stays usable if optional presentation-state replay is unavailable.
-    }
-    return result;
-}
-
-function solveLowSlotRole(context, raw, targets, options) {
-    const slots = actualSlotCount(context, raw);
-    if (!(slots > 0 && slots < 3)) return null;
-    const o = options || {};
-    const configuredBudget = Number(o.budget);
-    const result = context.WashFixedChain.search(raw, targets, {
-        budget: Number.isFinite(configuredBudget) && configuredBudget > 0
-            ? configuredBudget : DEFAULT_PILL_BUDGET,
-        limits: o.limits || {},
-        runtime: o.runtime || {},
-    });
-    result.searchMode = 'direct-low-slot';
-    return attachRouteStepStates(context, raw, targets, result);
-}
 
 function compareRoute(a, b) {
     for (const field of ['pills', 'washes', 'exchanges']) {
@@ -347,255 +303,48 @@ function checkpointFromRoot(root) {
     };
 }
 
-async function solve(raw, targetIds, options) {
-    const o = options || {};
-    const context = o.context || loadAWash();
-    const sessionCache = o.sessionCache
-        && typeof o.sessionCache.get === 'function'
-        && typeof o.sessionCache.set === 'function'
-        ? o.sessionCache : new Map();
-    const targets = Array.from(new Set((targetIds || []).map(Number)));
-    const lowSlotResult = solveLowSlotRole(context, raw, targets, o);
-    if (lowSlotResult) return lowSlotResult;
-    const sequence = o.plan ? null : Sequence.readSequence(raw, {
-        context,
-        zi: Number(raw.zizhi) || 153,
-        count: Number(o.count) || 40,
-    });
-    const plan = o.plan || RolePlanner.selectPlan(
-        raw,
-        sequence,
-        { context }
-    );
-    const metrics = {
-        backendCalls: 0,
-        prunedSeeds: 0,
-        duplicateSeeds: 0,
-        infiniteSeeds: 0,
-        pitySeeds: 0,
-    };
-    const phaseResults = {};
-    const seen = new Map();
-    let best = null;
-    let upperBound = Infinity;
-    function consume(packet) {
-        const item = normalizeCheckpoint(packet);
-        const key = `${item.source || ''}|${item.seed || ''}|`
-            + `${item.checkpointRaw && item.checkpointRaw.luck_seed || ''}|`
-            + (item.pinTargetIds || []).map(Number).sort((a, b) => a - b)
-                .join(',');
-        const priorPrefix = seen.get(key);
-        if (priorPrefix != null && priorPrefix <= item.prefixPills) {
-            metrics.duplicateSeeds++;
-            return { upperBound };
-        }
-        seen.set(key, item.prefixPills);
-        metrics.infiniteSeeds++;
-        if (item.prefixPills >= upperBound) {
-            metrics.prunedSeeds++;
-            return { upperBound };
-        }
-        const configuredBudget = Number(o.budget);
-        const budget = Number.isFinite(upperBound)
-            ? upperBound - item.prefixPills
-            : (Number.isFinite(configuredBudget) && configuredBudget > 0
-                ? configuredBudget : DEFAULT_PILL_BUDGET);
-        if (Number.isFinite(upperBound) && !(budget > 0)) {
-            metrics.prunedSeeds++;
-            return { upperBound };
-        }
-        const backend = o.backend || ((checkpointRaw, wanted, backendOptions) =>
-            context.WashFixedChain.search(
-                checkpointRaw,
-                wanted,
-                backendOptions
-            ));
-        const result = backend(
-            item.checkpointRaw,
-            targets,
-            Object.assign({}, o.backendOptions || {}, {
-                budget,
-                limits: o.limits || {},
-                runtime: o.runtime || {},
-                checkpoint: item,
-            })
+function actualSlotCount(context, raw) {
+    const zizhi = Number(raw && raw.zizhi) || 153;
+    return Number(context.ZZ_DATA && context.ZZ_DATA[String(zizhi)]
+        && context.ZZ_DATA[String(zizhi)].num_talent) || 0;
+}
+
+function attachRouteStepStates(context, raw, targets, result) {
+    const route = result && result.route;
+    if (!route || !Array.isArray(route.steps)) return result;
+    try {
+        const replayed = context.WashSearchV2.replay(
+            raw, targets, route.steps, true
         );
-        if (result && typeof result.then === 'function') {
-            throw new Error('AWash 同步种子流不能调用异步后端');
-        }
-        metrics.backendCalls++;
-        if (result && result.ok && result.route) {
-            const route = Object.assign({}, result.route, {
-                pills: item.prefixPills + Number(result.route.pills || 0),
-                washes: item.prefixWashes
-                    + Number(result.route.washes || 0),
-                exchanges: Number(item.exchanges || 0)
-                    + Number(result.route.exchanges || 0),
-                prefixSteps: item.prefixSteps,
-                steps: item.prefixSteps.concat(
-                    Array.isArray(result.route.steps)
-                        ? result.route.steps : []
-                ),
-                checkpoint: item,
-            });
-            if (!best || compareRoute(route, best) < 0) {
-                best = route;
-                upperBound = route.pills;
-            }
-        }
-        return { upperBound };
-    }
+        if (!replayed.ok || replayed.trace.length !== route.steps.length
+            || replayed.pills !== Number(route.pills)
+            || replayed.washes !== Number(route.washes)) return result;
+        route.steps = route.steps.map((step, index) => Object.assign({}, step, {
+            after: replayed.trace[index],
+        }));
+        route.finalTalents = replayed.trace.length
+            ? replayed.trace[replayed.trace.length - 1].talents : [];
+    } catch (_) { /* Keep the independently verified route if display replay fails. */ }
+    return result;
+}
 
-    function acceptPityResult(result) {
-        phaseResults.pity = result;
-        const candidate = result && result.best;
-        if (candidate && candidate.totalPills != null
-            && (!best
-                || Number(candidate.totalPills) < best.pills)) {
-            best = {
-                pills: Number(candidate.totalPills),
-                washes: Number(candidate.totalWashes) || 0,
-                exchanges: Number(candidate.exchanges) || 0,
-                steps: candidate.route
-                    ? candidate.route.steps || [] : [],
-                route: candidate.route || null,
-                seed: Number(candidate.seed),
-                zizhi: Number(candidate.zizhi),
-                preludePills: Number(candidate.preludePills) || 0,
-                preludeWashes: Number(candidate.preludeWashes) || 0,
-                checkpointRaw: candidate.checkpointRaw || null,
-                keptTargetIds: (candidate.keptTargetIds || []).slice(),
-                branchKey: candidate.branchKey || '',
-            };
-            upperBound = best.pills;
-        }
-        metrics.pitySeeds += Number(
-            result && result.metrics
-            && result.metrics.totalSeedsSearched
-        ) || 0;
-    }
-
-    for (const method of plan.methodOrder || []) {
-        if (method === 'fixed-current-chain') {
-            consume({
-                source: method,
-                checkpointRaw: raw,
-                prefixPills: 0,
-                prefixWashes: 0,
-                prefixSteps: [],
-                seed: raw.luck_seed,
-                seedChain: [],
-            });
-            phaseResults[method] = {
-                ok: !!best,
-                best,
-            };
-            continue;
-        }
-        if (method === 'infinite-exchange') {
-            let produced;
-            if (typeof o.infiniteProducer === 'function') {
-                produced = await o.infiniteProducer({
-                    raw,
-                    targets,
-                    context,
-                    emit: consume,
-                    upperBound,
-                });
-            } else {
-                produced = context.InfiniteSeedFrontier.enumerate(
-                    raw,
-                    targets,
-                    Object.assign({}, o.infiniteOptions || {}, {
-                        onSeed: consume,
-                    })
-                );
-            }
-            phaseResults['infinite-exchange'] = produced;
-            continue;
-        }
-        if (method === 'pity') {
-            let frontier;
-            const frontierOptions = productionPityFrontierOptions(
-                raw, targets, context, o.frontierOptions
-            );
-            if (typeof o.pityFrontierProducer === 'function') {
-                frontier = await o.pityFrontierProducer({
-                    raw,
-                    targets,
-                    context,
-                    upperBoundPills: upperBound,
-                    options: frontierOptions,
-                });
-            } else if (o.pitySeedCandidates) {
-                frontier = {
-                    seeds: o.pitySeedCandidates.slice(),
-                    metrics: {},
-                };
-            } else if (typeof o.pityProducer === 'function') {
-                frontier = { seeds: [], metrics: {} };
-            } else {
-                frontier = o.parallelPity
-                    && typeof PityFrontier.discoverPitySeedFrontierAsync
-                        === 'function'
-                    ? await PityFrontier.discoverPitySeedFrontierAsync(
-                        raw, frontierOptions
-                    )
-                    : PityFrontier.discoverPitySeedFrontier(
-                        raw, frontierOptions
-                    );
-            }
-            phaseResults.pityFrontier = frontier;
-            const seedCandidates = (frontier && frontier.seeds || [])
-                .slice();
-            let result;
-            if (typeof o.pityProducer === 'function') {
-                result = await o.pityProducer(raw, targets, {
-                    context,
-                    upperBoundPills: upperBound,
-                    initialUpperBoundPills: Number.isFinite(upperBound)
-                        ? upperBound : 0,
-                    seedCandidates,
-                    skipEnumeratedSeeds: true,
-                    limits: o.limits || {},
-                    runtime: o.runtime || {},
-                });
-            } else {
-                result = await JumpSeedSearch.searchJumpRoutes(
-                    raw,
-                    targets,
-                    Object.assign({}, o.pityOptions || {}, {
-                        context,
-                        seedCandidates,
-                        skipEnumeratedSeeds: true,
-                        initialUpperBoundPills: Number.isFinite(upperBound)
-                            ? upperBound
-                            : Number(
-                                o.pityOptions
-                                && o.pityOptions.initialUpperBoundPills
-                            ) || 0,
-                        limits: o.limits
-                            || (o.pityOptions && o.pityOptions.limits)
-                            || {},
-                    })
-                );
-            }
-            acceptPityResult(result);
-        }
-    }
-
-    const output = {
-        ok: !!best,
-        best,
-        plan,
-        metrics,
-        phaseResults,
-        upperBound: Number.isFinite(upperBound) ? upperBound : null,
+function solveLowSlotRole(context, raw, targets, options) {
+    const slots = actualSlotCount(context, raw);
+    if (!(slots > 0 && slots < 3)) return null;
+    const o = options || {};
+    const configuredBudget = Number(o.budget);
+    const searchOptions = {
+        budget: Number.isFinite(configuredBudget) && configuredBudget > 0
+            ? configuredBudget : 1000000,
+        limits: o.limits || {},
+        runtime: o.runtime || {},
     };
-    if (best && best.route) {
-        attachRouteStepStates(context, raw, targets, {route: best.route});
-    }
-    return output;
+    const fixedLuckSeed = !!(raw && raw.luck_seed_inited);
+    const result = fixedLuckSeed
+        ? context.WashFixedChain.search(raw, targets, searchOptions)
+        : context.WashSearchV2.search(raw, targets, searchOptions);
+    result.searchMode = 'direct-low-slot';
+    return attachRouteStepStates(context, raw, targets, result);
 }
 
 async function solveJoint(raw, targetIds, options) {
@@ -628,11 +377,9 @@ async function solveJoint(raw, targetIds, options) {
     let lockOneInfiniteResult = null;
     let infinitePhaseComplete = false;
     const infiniteMaterializationErrors = [];
+    const backendHorizon = Number(o.horizon) || 2000;
     // 0 表示还没有路线上界；资源节点/时长限制仍然生效。
-    const requestedPillBudget = Number(o.budget);
-    let sharedUpperBoundPills = Number.isFinite(requestedPillBudget)
-        && requestedPillBudget > 0
-        ? requestedPillBudget : DEFAULT_PILL_BUDGET;
+    let sharedUpperBoundPills = 0;
     const qualityRequested = !!o.pityQuality
         || !!o.seedQuality;
     let nativePityQuality = qualityRequested;
@@ -646,7 +393,6 @@ async function solveJoint(raw, targetIds, options) {
             .map(checkpointFromRoot)
             .filter(Boolean);
         if (!checkpoints.length) return null;
-        const backendHorizon = Number(o.horizon) || 1000;
         const backend = typeof o.checkpointBackend === 'function'
             ? o.checkpointBackend
             : (items, wanted, backendOptions) =>
@@ -666,14 +412,10 @@ async function solveJoint(raw, targetIds, options) {
                 budget: requestedBudget > 0 ? requestedBudget : 0,
                 concurrency: Number(o.concurrency) || 16,
                 horizon: backendHorizon,
-                maxHorizon: Number(o.maxHorizon) || backendHorizon,
                 limits: o.limits || {},
                 runtime: o.runtime || {},
                 sessionCache,
                 targetOrder: targets,
-                stopOnFirstRoute: options.stopOnFirstRoute != null
-                    ? !!options.stopOnFirstRoute
-                    : false,
             }
         );
     }
@@ -720,8 +462,8 @@ async function solveJoint(raw, targetIds, options) {
                 raw,
                 targets,
                 Object.assign({
-                    nMax: 300,
-                    count: 60,
+                    nMax: 100,
+                    count: 30,
                 }, o.infiniteOptions || {}, {
                     onSeed(packet) {
                         if (!packet) return;
@@ -768,7 +510,6 @@ async function solveJoint(raw, targetIds, options) {
                         infiniteBaseRoots,
                         {
                             budget: 0,
-                            stopOnFirstRoute: false,
                         }
                     );
                 if (preliminaryInfiniteResult
@@ -793,7 +534,6 @@ async function solveJoint(raw, targetIds, options) {
                                 sharedUpperBoundPills > 0
                                     ? sharedUpperBoundPills
                                     : 0,
-                            stopOnFirstRoute: false,
                         }
                     );
                 if (lockOneInfiniteResult
@@ -882,56 +622,15 @@ async function solveJoint(raw, targetIds, options) {
                 ? pityRoots.slice()
                 : infiniteRoots.concat(pityRoots))
             : pityRoots.concat(infiniteRoots);
-    if (fixedRoot) {
-        result = context.WashFixedChain.search(
-            raw,
-            targets,
-            {
-                budget: sharedUpperBoundPills > 0
-                    ? sharedUpperBoundPills : 0,
-                limits: o.limits || {},
-                runtime: o.runtime || {},
-            }
-        );
-        if (result && result.route) {
+    if (checkpointRoots.length) {
+        result = await runCheckpointQuality(checkpointRoots);
+        if (fixedRoot && result && result.route) {
             result.route.seedCheckpointSource =
                 'fixed-current-chain';
             result.route.seedCheckpointPills = 0;
             result.route.seedCheckpointWashes = 0;
             result.route.seedCheckpointSteps = [];
         }
-    } else if (checkpointRoots.length) {
-        const checkpoints = checkpointRoots
-            .map(checkpointFromRoot)
-            .filter(Boolean);
-        const backendHorizon = Number(o.horizon) || 1000;
-        const backend = typeof o.checkpointBackend === 'function'
-            ? o.checkpointBackend
-            : (items, targets, backendOptions) =>
-                solveSeedCheckpointQuality(
-                    raw,
-                    items,
-                    targets,
-                    backendOptions
-                );
-        result = await backend(
-            checkpoints,
-            targets,
-            {
-                budget: sharedUpperBoundPills > 0
-                    ? sharedUpperBoundPills : 0,
-                concurrency: Number(o.concurrency) || 16,
-                horizon: backendHorizon,
-                maxHorizon: Number(o.maxHorizon) || backendHorizon,
-                limits: o.limits || {},
-                runtime: o.runtime || {},
-                sessionCache,
-                targetOrder: targets,
-                stopOnFirstRoute: o.stopOnFirstRoute != null
-                    ? !!o.stopOnFirstRoute
-                    : false,
-            }
-        );
     }
     if (preliminaryInfiniteResult
         && preliminaryInfiniteResult.ok
@@ -942,6 +641,53 @@ async function solveJoint(raw, targetIds, options) {
                 result.route
             ) < 0)) {
         result = preliminaryInfiniteResult;
+    }
+    if (!result || !result.ok || !result.route) {
+        const directStartedAt = Date.now();
+        try {
+            const directRoutes = await findInitialRoutes(
+                raw,
+                targets,
+                {
+                    horizon: backendHorizon,
+                    topN: 1,
+                    limits: o.limits || {},
+                    runtime: o.runtime || {},
+                }
+            );
+            const direct = directRoutes && directRoutes[0];
+            const budget = Number(o.budget);
+            if (direct && (!Number.isFinite(budget)
+                || budget <= 0 || Number(direct.pills) <= budget)) {
+                result = {
+                    ok: true,
+                    status: 'found',
+                    provenOptimal: false,
+                    route: Object.assign({}, direct, {
+                        finalTalents: direct.replay
+                            && direct.replay.state
+                            && direct.replay.state.talents
+                            ? direct.replay.state.talents : [],
+                    }),
+                    metrics: {
+                        initializer: 'direct-initial-route',
+                        directSearchElapsedMs: Date.now() - directStartedAt,
+                    },
+                    stopReason: 'direct-initial-route-fallback',
+                };
+            } else if (result && result.metrics) {
+                result.metrics.directSearchElapsedMs =
+                    Date.now() - directStartedAt;
+            }
+        } catch (error) {
+            if (result && result.metrics) {
+                result.metrics.directSearchElapsedMs =
+                    Date.now() - directStartedAt;
+                result.metrics.directSearchError = String(
+                    error && error.message || error
+                );
+            }
+        }
     }
     if (!result) {
         result = {
@@ -969,7 +715,7 @@ async function solveJoint(raw, targetIds, options) {
     if (result.metrics.sharedUpperBoundPills === Infinity) {
         result.metrics.sharedUpperBoundPills = null;
     }
-    result.metrics.horizon = Number(o.horizon) || 1000;
+    result.metrics.horizon = backendHorizon;
     result.metrics.preliminaryInfinitePills =
         preliminaryInfiniteResult
         && preliminaryInfiniteResult.route
@@ -991,12 +737,11 @@ async function solveJoint(raw, targetIds, options) {
         : infiniteRoots.length
         ? 'seed-quality'
         : (pityRoots.length ? 'pity-quality' : 'route-search');
-    attachRouteStepStates(context, raw, targets, result);
-    return Object.assign(
+    return attachRouteStepStates(context, raw, targets, Object.assign(
         {},
         result,
         { strategy: result.strategy || 'awash-route-search' }
-    );
+    ));
 }
 
 module.exports = {
@@ -1004,8 +749,6 @@ module.exports = {
     currentZizhiList,
     filterPitySeedsForRole,
     pityZizhiList,
-    solve,
     solveJoint,
-    normalizeCheckpoint,
     selectInfiniteSeedPackets,
 };

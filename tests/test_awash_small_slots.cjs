@@ -40,6 +40,34 @@ const rawFor = zizhi => ({
         'route results include talents after each visible operation');
     assert.equal(oneSlot.route.steps[0].after.talents[0].id, 271);
 
+    const oneSlotUnfixed = Object.assign({}, rawFor(151), {
+        seed: 184736291,
+        luck_seed: 0,
+        luck_seed_inited: false,
+        talents: [],
+    });
+    const oneSlotWash = await solver.solveJoint(
+        oneSlotUnfixed,
+        [271],
+        {
+            context,
+            budget: 1000000,
+            limits: {
+                maxRuntimeMs: 30000,
+                maxExpandedNodes: 100000,
+                maxWashSteps: 200000,
+                maxUniqueStates: 100000,
+            },
+            runtime: {beamWidth: 50, maxDepth: 60},
+        }
+    );
+    assert.equal(oneSlotWash.ok, true,
+        'one-slot roles without a fixed luck seed can wash to a target');
+    assert.equal(oneSlotWash.searchMode, 'direct-low-slot');
+    assert.ok(oneSlotWash.route.pills > 0);
+    assert.ok(oneSlotWash.route.steps.every(step => step.after),
+        'one-slot wash routes include a state after every step');
+
     const threeSlot = await solver.solveJoint(rawFor(153), [271], {context});
     assert.equal(threeSlot.ok, true, 'the backend must accept a single target for any slot count');
     assert.equal(threeSlot.route.pills, 0);
@@ -59,8 +87,8 @@ const rawFor = zizhi => ({
         washed.state.talents,
         'each route step carries its exact current talent state');
 
-    assert.equal(context.InfiniteSeedFrontier.normalizeNMax(), 300);
-    assert.equal(context.InfiniteSeedFrontier.normalizeNMax(500), 300);
+    assert.equal(context.InfiniteSeedFrontier.normalizeNMax(), 100);
+    assert.equal(context.InfiniteSeedFrontier.normalizeNMax(500), 100);
     assert.equal(context.InfiniteSeedFrontier.normalizeNMax(100), 100);
     console.log('AWASH low-slot and expanded padding tests passed');
 })().catch(error => {
