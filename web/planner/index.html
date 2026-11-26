@@ -25,7 +25,7 @@
         <div class="planner-tool-tabs" role="tablist" aria-label="装备规划子功能">
             <button class="planner-tool-tab is-active" type="button" role="tab" aria-selected="true" data-planner-tool="target">目标装备追踪</button>
             <button class="planner-tool-tab" type="button" role="tab" aria-selected="false" data-planner-tool="fixed">固定打造规划</button>
-            <button class="planner-tool-tab" type="button" role="tab" aria-selected="false" data-planner-tool="standards">属性上限与PVP精炼标准</button>
+            <button class="planner-tool-tab" type="button" role="tab" aria-selected="false" data-planner-tool="standards">打造参考与PVP精炼标准</button>
         </div>
 
         <main class="planner-main planner-tool-view" data-planner-view="fixed" hidden>
@@ -82,7 +82,7 @@
         <main class="planner-main planner-tool-view" data-planner-view="target">
             <aside class="planner-intro planner-intro-target">
                 <strong>目标装备追踪</strong>
-                <p>先限定部位与期望属性，再从当前存档中寻找满足条件的打造路线。默认不限档次，避免评分门槛漏掉想要的装备；也可限定神器/极品。可以按最早出现、连金泥、银两或最终评分排序。聚气仅作为特殊词条展示，不评级为神器。</p>
+                <p>先限定部位与期望属性，再从当前存档中寻找满足条件的打造路线。默认筛选极品及以上，也可改为仅神器或不限档次。可以按最早出现、连金泥、银两或最终评分排序。聚气仅作为特殊词条展示，不评级为神器。</p>
             </aside>
             <section class="config-panel" aria-labelledby="targetConfigTitle">
                 <div class="feature-section-head">
@@ -91,7 +91,7 @@
                 </div>
                 <div class="target-config-grid">
                     <label>装备部位<select id="targetPart"></select></label>
-                    <label>最低档次<select id="targetGrade"><option value="all">不限档次</option><option value="premium">极品及以上</option><option value="artifact">仅神器</option></select></label>
+                    <label>最低档次<select id="targetGrade"><option value="all">不限档次</option><option value="premium" selected>极品及以上</option><option value="artifact">仅神器</option></select></label>
                     <label>精炼属性<select id="targetRefineProp"><option value="all">不限属性</option></select></label>
                     <label>地区附加<select id="targetRegionProp"><option value="all">不限附加</option><option value="attached">任意地区附加</option></select></label>
                     <label>结果排序<select id="targetSort"><option value="earliest">最早命中</option><option value="mud">连金泥最少</option><option value="silver">银两最少</option><option value="score">最终评分最高</option></select></label>
@@ -117,15 +117,15 @@
 
         <main class="planner-main planner-tool-view" data-planner-view="standards" hidden>
             <aside class="planner-intro planner-intro-standards">
-                <strong>属性上限与PVP精炼标准</strong>
-                <p>属性上限根据当前内置的90级常规图纸及其100级升炼配置计算；PVP标准图用于实战选装参考，不参与固定打造规划的自动评分。</p>
+                <strong>基础属性参考与精炼上限</strong>
+                <p>本表只列当前内置图纸配置推算的打造基础属性参考值，以及100级升炼后精炼词条的理论上限；不代表纯打造所有词条/地区附加的上限。PVP标准图用于实战选装参考，不参与自动评分。</p>
             </aside>
             <section class="result-panel planner-results-panel" aria-labelledby="limitsTitle">
-                <div class="planner-title-wrap"><span class="section-step">01</span><div><h2 id="limitsTitle">各部位属性上限</h2><span>按属性分别列出词条1、词条2、词条3的上限</span></div></div>
-                <p class="limits-note">打造列为90级紫装的主属性上限（基础配置×110%，不含强化、地区和材料附加）；精炼列按100级升炼配置分别计算三个词条的理论满值（125%×槽位系数1、0.75、0.5，点数属性逐槽取整，百分比逐槽截取显示精度）。各图纸取同部位最高值，不代表单件装备能同时拥有所有属性，也不保证序列中可达。</p>
+                <div class="planner-title-wrap"><span class="section-step">01</span><div><h2 id="limitsTitle">打造基础属性参考与精炼词条理论上限</h2><span>精炼属性按词条1、词条2、词条3分别列出</span></div></div>
+                <p class="limits-note">左侧仅是90级紫装基础属性配置按×110%推算的参考值，不是纯打造词条或地区附加的完整上限表；右侧是100级升炼配置的精炼理论满值（125%×槽位系数1、0.75、0.5，点数属性逐槽取整，百分比逐槽截取显示精度）。各图纸取同部位最高值，不代表单件装备能同时拥有所有属性，也不保证序列中可达。</p>
                 <div class="limits-table-wrap">
                     <table class="limits-table">
-                        <thead><tr><th>部位</th><th>90级紫装打造主属性上限</th><th>精炼属性</th><th>词条1上限</th><th>词条2上限</th><th>词条3上限</th></tr></thead>
+                        <thead><tr><th>部位</th><th>90级紫装基础属性参考</th><th>精炼属性（100级升炼）</th><th>词条1理论上限</th><th>词条2理论上限</th><th>词条3理论上限</th></tr></thead>
                         <tbody id="limitsTableBody"></tbody>
                     </table>
                 </div>
@@ -148,7 +148,7 @@
     <script src="../shared/sql-wasm-embed.js"></script>
     <script src="../shared/save_decrypt.js"></script>
     <script src="../shared/archive_state.js"></script>
-    <script src="../shared/equip_auto_optimizer.js?v=20261125planner3"></script>
+    <script src="../shared/equip_auto_optimizer.js?v=20261126prelock2"></script>
     <script src="./planner.js?v=20261126tools1"></script>
 </body>
 </html>

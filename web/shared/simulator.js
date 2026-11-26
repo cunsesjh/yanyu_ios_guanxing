@@ -6961,7 +6961,7 @@ function equipAutoRefinementHtml(refinement, upgradeCost = null) {
     return `<div class="equip-auto-refine-card">
         <div class="equip-auto-refine-title"><strong>精炼 · ${escapeAiHtml(label)}</strong><span class="equip-auto-max-value">实际${escapeAiHtml(label)} ${escapeAiHtml(equipAutoFormatRefinementTotal(refinement))}</span></div>
         <div class="equip-auto-slot-list">${slots}</div>
-        <div>状态回放：${accepts}${plan ? `，做到第 ${plan.cutoff} 次为止` : ''}</div>
+        <div class="equip-auto-refine-route"><span class="equip-auto-refine-route-label">操作路线</span><div class="equip-auto-refine-route-steps">${plan ? plan.accepts.map(item => `<span class="equip-auto-refine-step${item.prelock ? ' is-prelock' : ''}"><small>#${Number(item.index)}</small><strong>槽${Number(item.slot)}${item.prelock ? '预锁' : '保留'}</strong>${item.prelock ? `<em>+${escapeAiHtml(equipAutoFormatPropValue(refinement.prop, item.value))}</em>` : ''}</span>`).join('<i aria-hidden="true">›</i>') : '<span class="equip-auto-refine-step">无</span>'}</div><small class="equip-auto-refine-route-cutoff">至第 ${plan ? plan.cutoff : 0} 次</small></div>
         <div class="equip-auto-cost-line">消耗（精炼消耗）：${plan ? equipAutoFormatCost(plan.cost) : '无'}</div>
         <div class="equip-auto-total-cost-line">总消耗（升炼 + 精炼）：${equipAutoFormatCost(totalCost)}</div>
     </div>`;

@@ -240,12 +240,19 @@ assert.match(autoSimulatorSource, /value="lianjin-asc"/,
     'automatic equipment results must support sorting by lianjin consumption');
 assert.match(autoSimulatorSource, /实际\$\{escapeAiHtml\(equipAutoPropertyLabel\(refinement\.prop\)\)\}/,
     'collapsed cards must label refinement values as actual results');
+assert.match(autoSimulatorSource, /equip-auto-refine-route-steps/,
+    'automatic equipment results must render refinement operations as compact steps');
+const simulatorCss = fs.readFileSync(path.join(root, 'web/shared/simulator.css'), 'utf8');
+assert.match(simulatorCss, /\.equip-auto-refine-step\s*\{/,
+    'refinement operations must have compact visual step styling');
 assert.match(plannerHtml, /id="craftCount"[^>]*value="20"/,
     'equipment planner must default each route to 20 crafts');
 assert.equal((plannerHtml.match(/class="planner-intro /g) || []).length, 3,
     'all three equipment planner tools must start with a feature description panel');
 assert.match(plannerHtml, /data-planner-tool="fixed">固定打造规划/);
-assert.match(plannerHtml, /data-planner-tool="standards">属性上限与PVP精炼标准/);
+assert.match(plannerHtml, /data-planner-tool="standards">打造参考与PVP精炼标准/);
+assert.match(plannerHtml, /value="premium" selected>极品及以上/);
+assert.match(plannerHtml, /不是纯打造词条或地区附加的完整上限表/);
 assert.match(plannerHtml, /data-planner-tool="target">目标装备追踪/);
 assert.match(plannerHtml, /\.\.\/shared\/wasm_data\.js/,
     'planner must use the same equipment WASM runtime as automatic simulation');

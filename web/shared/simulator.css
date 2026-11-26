@@ -2715,6 +2715,32 @@ html.auto-simulator-view #simulatorConfigPanel {
     background: rgba(232, 242, 255, 0.5);
 }
 
+.equip-auto-refine-route {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 0.45rem 0;
+}
+
+.equip-auto-refine-route-label,
+.equip-auto-refine-route-cutoff { color: var(--text-muted); white-space: nowrap; }
+.equip-auto-refine-route-steps { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+.equip-auto-refine-route-steps > i { color: var(--text-muted); font-style: normal; }
+.equip-auto-refine-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--bg-card);
+    white-space: nowrap;
+}
+.equip-auto-refine-step small { color: var(--text-muted); }
+.equip-auto-refine-step strong { color: var(--text-primary); font-weight: 600; }
+.equip-auto-refine-step em { color: var(--purple-bright); font-style: normal; font-weight: 600; }
+.equip-auto-refine-step.is-prelock { border-color: var(--purple-bright); background: color-mix(in srgb, var(--purple-bright) 9%, var(--bg-card)); }
+
 .equip-auto-cost-line {
     color: var(--green-bright);
 }
