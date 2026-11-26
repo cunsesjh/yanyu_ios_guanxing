@@ -8,26 +8,47 @@
         const steps = [];
         let totalStepPills = 0, totalStepWashes = 0, currentLocks = null;
 
-        for (const source of route.steps) {
+        for (let sourceIndex = 0; sourceIndex < route.steps.length; sourceIndex++) {
+            const source = route.steps[sourceIndex];
             const op = String(source.op || source.type || 'wash');
+            const afterSource = source.after
+                || (Array.isArray(route.stepStates)
+                    ? route.stepStates[sourceIndex] : null);
+            const after = afterSource && Array.isArray(afterSource.talents)
+                ? {zizhi: Number(afterSource.zizhi) || 0,
+                    talents: afterSource.talents.map(item => {
+                        const id = Number(typeof item === 'object' ? item.id : item) || 0;
+                        return {id, name: typeof item === 'object' && item.name
+                            ? item.name : nameOf(id),
+                        locked: !!(typeof item === 'object' && item.locked)};
+                    })}
+                : null;
             if (op === 'wash') {
                 const count = Math.max(0, Number(source.count) || 0);
                 const pills = Math.max(0, Number(source.cost) || 0);
                 const hasKeepIds = Array.isArray(source.keepIds);
                 const keepIds = hasKeepIds ? source.keepIds.map(Number) : (currentLocks || []);
                 const normalizedKeepIds = [...new Set(keepIds)].sort((a, b) => a - b);
+                const keptNames = normalizedKeepIds.map(nameOf);
+                const generatedPurples = [...new Set([
+                    ...(source.generatedPurples || []).map(item => Number(item && item.id)),
+                    ...(source.pityPurples || []).map(Number),
+                ].filter(id => id > 0))].map(nameOf);
+                const detail = `本段连续洗髓 ${count} 次；洗髓时${keptNames.length
+                    ? `锁定并保留：${keptNames.join('、')}` : '不锁脉'}。${generatedPurples.length
+                    ? `本段遇到紫脉：${generatedPurples.join('、')}。` : ''}`;
                 const key = JSON.stringify(normalizedKeepIds);
                 const previous = steps[steps.length - 1];
                 if (previous && previous._washKey === key) {
                     previous.washes += count;
                     previous.pills += pills;
-                    previous.detail = `洗髓 ${previous.washes} 次${keepIds.length
-                        ? `，保留 ${keepIds.map(nameOf).join('、')}` : ''}`;
+                    previous.detail = `本段连续洗髓 ${previous.washes} 次；洗髓时${keptNames.length
+                        ? `锁定并保留：${keptNames.join('、')}` : '不锁脉'}。${generatedPurples.length
+                        ? `本段遇到紫脉：${generatedPurples.join('、')}。` : ''}`;
+                    if (after) previous.after = after;
                 } else {
-                    steps.push({label: '洗髓',
-                        detail: `洗髓 ${count} 次${keepIds.length
-                            ? `，保留 ${keepIds.map(nameOf).join('、')}` : ''}`,
-                        pills, washes: count, _washKey: key});
+                    steps.push({label: '洗髓', detail, pills, washes: count,
+                        after, _washKey: key});
                 }
                 totalStepPills += pills;
                 totalStepWashes += count;
@@ -44,11 +65,20 @@
                 const detail = special === 'lockConflict' && source.id
                     ? `锁定冲突脉「${nameOf(source.id)}」`
                     : ids.length ? `锁定：${ids.map(nameOf).join('、')}` : '解除全部锁脉';
-                steps.push({label, detail, pills: 0, washes: 0});
+                steps.push({label,
+                    detail: `${detail}；后续洗髓或置换按此锁脉状态执行。`,
+                    pills: 0, washes: 0, after});
             } else if (op === 'exchange' || op === 'burn') {
-                steps.push({label: '置换', detail: `「${nameOf(source.removedId || source.from || source.carrierId)}」→「${nameOf(source.addedId || source.to || source.id)}」`, pills: 0, washes: 0});
+                const lockedNames = (source.lockIds || []).map(Number).filter(id => id > 0).map(nameOf);
+                steps.push({label: '置换',
+                    detail: `将「${nameOf(source.removedId || source.from || source.carrierId)}」置换为「${nameOf(source.addedId || source.to || source.id)}」；置换时${lockedNames.length
+                        ? `锁定：${lockedNames.join('、')}` : '不额外锁脉'}。`,
+                    pills: 0, washes: 0, after});
             } else if (op === 'upgrade') {
-                steps.push({label: '提升资质', detail: `提升至资质 ${Number(source.zizhi || source.toZizhi) || ''}`, pills: 0, washes: 0});
+                const toZizhi = Number(source.zizhi || source.toZizhi) || 0;
+                steps.push({label: '提升资质',
+                    detail: `提升至资质 ${toZizhi}；后续按新的槽位与脉池继续规划。`,
+                    pills: 0, washes: 0, after});
             }
         }
 
@@ -70,7 +100,9 @@
             return typeof item === 'object' ? {...item, id, name: item.name || nameOf(id)}
                 : {id, name: nameOf(id)};
         });
-        if (steps.length) steps[steps.length - 1].after = {talents: finalTalents};
+        if (steps.length && !steps[steps.length - 1].after) {
+            steps[steps.length - 1].after = {talents: finalTalents};
+        }
         return {kind: 'awash-full-route', branchId: `awash-${branchIndex + 1}`,
             totalPills, totalWashes: Number(route.washes) || totalStepWashes,
             exchangeCount: Number(route.exchanges) || 0, finalTalents, steps,

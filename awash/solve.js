@@ -13,6 +13,50 @@ const {
     indexPitySeedChains,
 } = require('./seed_chain_order');
 
+const DEFAULT_PILL_BUDGET = 1000000;
+
+function actualSlotCount(context, raw) {
+    const zizhi = Number(raw && raw.zizhi) || 153;
+    return Number(context.ZZ_DATA
+        && context.ZZ_DATA[String(zizhi)]
+        && context.ZZ_DATA[String(zizhi)].num_talent) || 0;
+}
+
+function attachRouteStepStates(context, raw, targets, result) {
+    const route = result && result.route;
+    if (!route || !Array.isArray(route.steps)) return result;
+    try {
+        const replayed = context.WashSearchV2.replay(
+            raw, targets, route.steps, true
+        );
+        if (!replayed.ok || replayed.trace.length !== route.steps.length
+            || replayed.pills !== Number(route.pills)
+            || replayed.washes !== Number(route.washes)) return result;
+        route.steps = route.steps.map((step, index) => Object.assign({}, step, {
+            after: replayed.trace[index],
+        }));
+    } catch (_) {
+        // A route already returned by an independently verified checkpoint
+        // stays usable if optional presentation-state replay is unavailable.
+    }
+    return result;
+}
+
+function solveLowSlotRole(context, raw, targets, options) {
+    const slots = actualSlotCount(context, raw);
+    if (!(slots > 0 && slots < 3)) return null;
+    const o = options || {};
+    const configuredBudget = Number(o.budget);
+    const result = context.WashFixedChain.search(raw, targets, {
+        budget: Number.isFinite(configuredBudget) && configuredBudget > 0
+            ? configuredBudget : DEFAULT_PILL_BUDGET,
+        limits: o.limits || {},
+        runtime: o.runtime || {},
+    });
+    result.searchMode = 'direct-low-slot';
+    return attachRouteStepStates(context, raw, targets, result);
+}
+
 function compareRoute(a, b) {
     for (const field of ['pills', 'washes', 'exchanges']) {
         const difference = Number(a && a[field] || 0)
@@ -311,6 +355,8 @@ async function solve(raw, targetIds, options) {
         && typeof o.sessionCache.set === 'function'
         ? o.sessionCache : new Map();
     const targets = Array.from(new Set((targetIds || []).map(Number)));
+    const lowSlotResult = solveLowSlotRole(context, raw, targets, o);
+    if (lowSlotResult) return lowSlotResult;
     const sequence = o.plan ? null : Sequence.readSequence(raw, {
         context,
         zi: Number(raw.zizhi) || 153,
@@ -349,8 +395,11 @@ async function solve(raw, targetIds, options) {
             metrics.prunedSeeds++;
             return { upperBound };
         }
+        const configuredBudget = Number(o.budget);
         const budget = Number.isFinite(upperBound)
-            ? upperBound - item.prefixPills : 0;
+            ? upperBound - item.prefixPills
+            : (Number.isFinite(configuredBudget) && configuredBudget > 0
+                ? configuredBudget : DEFAULT_PILL_BUDGET);
         if (Number.isFinite(upperBound) && !(budget > 0)) {
             metrics.prunedSeeds++;
             return { upperBound };
@@ -535,7 +584,7 @@ async function solve(raw, targetIds, options) {
         }
     }
 
-    return {
+    const output = {
         ok: !!best,
         best,
         plan,
@@ -543,6 +592,10 @@ async function solve(raw, targetIds, options) {
         phaseResults,
         upperBound: Number.isFinite(upperBound) ? upperBound : null,
     };
+    if (best && best.route) {
+        attachRouteStepStates(context, raw, targets, {route: best.route});
+    }
+    return output;
 }
 
 async function solveJoint(raw, targetIds, options) {
@@ -555,6 +608,8 @@ async function solveJoint(raw, targetIds, options) {
     const targets = Array.from(new Set(
         (targetIds || []).map(Number)
     ));
+    const lowSlotResult = solveLowSlotRole(context, raw, targets, o);
+    if (lowSlotResult) return lowSlotResult;
     let plan = o.plan || null;
     let firstMethod = plan && Array.isArray(plan.methodOrder)
         ? String(plan.methodOrder[0] || '') : '';
@@ -574,7 +629,10 @@ async function solveJoint(raw, targetIds, options) {
     let infinitePhaseComplete = false;
     const infiniteMaterializationErrors = [];
     // 0 表示还没有路线上界；资源节点/时长限制仍然生效。
-    let sharedUpperBoundPills = Math.max(0, Number(o.budget) || 0);
+    const requestedPillBudget = Number(o.budget);
+    let sharedUpperBoundPills = Number.isFinite(requestedPillBudget)
+        && requestedPillBudget > 0
+        ? requestedPillBudget : DEFAULT_PILL_BUDGET;
     const qualityRequested = !!o.pityQuality
         || !!o.seedQuality;
     let nativePityQuality = qualityRequested;
@@ -662,8 +720,8 @@ async function solveJoint(raw, targetIds, options) {
                 raw,
                 targets,
                 Object.assign({
-                    nMax: 100,
-                    count: 30,
+                    nMax: 300,
+                    count: 60,
                 }, o.infiniteOptions || {}, {
                     onSeed(packet) {
                         if (!packet) return;
@@ -933,6 +991,7 @@ async function solveJoint(raw, targetIds, options) {
         : infiniteRoots.length
         ? 'seed-quality'
         : (pityRoots.length ? 'pity-quality' : 'route-search');
+    attachRouteStepStates(context, raw, targets, result);
     return Object.assign(
         {},
         result,

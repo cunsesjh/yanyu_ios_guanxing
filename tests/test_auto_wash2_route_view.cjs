@@ -7,10 +7,12 @@ const route = view.normalizeRoute({
     exchanges: 0,
     finalTalents: [271, 272],
     steps: [
-        {op: 'wash', type: 'chaseAnchor', count: 1, cost: 4, keepIds: [182]},
+        {op: 'wash', type: 'chaseAnchor', count: 1, cost: 4, keepIds: [182],
+            after: {talents: [{id: 182, locked: true}, {id: 271, locked: false}]}},
         // AWASH lock metadata includes cumulative totals, not a new action cost.
         {op: 'locks', type: 'lockConflict', id: 182, washes: 1, cost: 4, lockIds: [182]},
-        {op: 'wash', type: 'chaseAnchor', count: 1, cost: 4, keepIds: [182]},
+        {op: 'wash', type: 'chaseAnchor', count: 1, cost: 4, keepIds: [182],
+            after: {talents: [{id: 182, locked: true}, {id: 272, locked: false}]}},
     ],
 }, 0, id => ({182: '刀法好手', 271: '转世金仙', 272: '岿然顶天'}[id] || `#${id}`));
 
@@ -20,6 +22,9 @@ assert.equal(route.steps.length, 1, 'a lock instruction that repeats the already
 assert.equal(route.steps[0].washes, 2, 'same washes merge even when internal search labels differ');
 assert.equal(route.steps[0].pills, 8);
 assert.equal(route.steps[0].cumulativePills, 8);
+assert.match(route.steps[0].detail, /连续洗髓 2 次/);
+assert.deepEqual(route.steps[0].after.talents.map(item => item.id), [182, 272]);
+assert.equal(route.steps[0].after.talents[0].locked, true);
 
 const repeated = view.normalizeRoute({
     pills: 12, washes: 3, finalTalents: [271],

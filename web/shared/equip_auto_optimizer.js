@@ -191,8 +191,10 @@
     }
     function scoreEquipmentRefinement(data, equipId, prop, total, region) {
         const equip = data && data.equipment && data.equipment[String(equipId)] || {};
-        const maximum = partRefinementReference(data, equip.type, prop,
-            theoreticalRefinementReference(equip, [prop])[prop]);
+        // Grade against this equipment's own ceiling; a cross-equipment slot
+        // maximum can dwarf the current item and mark every result as "劣质".
+        const ownMaximum = finiteNumber(theoreticalRefinementReference(equip, [prop])[prop]);
+        const maximum = ownMaximum > 0 ? ownMaximum : partRefinementReference(data, equip.type, prop);
         const baseScore = maximum > 0 ? Math.min(100, finiteNumber(total) / maximum * 100) : 0;
         const bonus = regionBonus(region);
         const finalScore = Math.min(100, baseScore + bonus);

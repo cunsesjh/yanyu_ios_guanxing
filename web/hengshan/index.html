@@ -77,6 +77,8 @@
                 <p class="hengshan-ledger-note">每日修炼经验与升级曲线由官方 Rust 内核离线计算；40 / 80 级节点自动结算赠送天赋。所有操作只推进页面沙盒，导入存档不受影响。</p>
                 <div id="unlockResult" class="unlock-result"></div>
                 <div class="action-buttons">
+                    <label for="upgradeExpAmount">本次经验</label>
+                    <input id="upgradeExpAmount" type="number" min="1" max="1000000000" step="1" value="200">
                     <button id="btnAdvanceUnlock" class="btn btn-wash-gold" type="button">推进一天并应用</button>
                 </div>
 
@@ -214,6 +216,7 @@
     <script src="../shared/archive_state.js"></script>
     <script src="./hengshan.js?v=20260921a"></script>
     <script src="./hengshan_day_advance.js"></script>
+    <script src="./hengshan_exp_input.js"></script>
     <script src="./hengshan_auto_sim.js?v=20261125milestone1"></script>
     <script src="./hengshan_shop_view.js"></script>
 </body>

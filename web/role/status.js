@@ -153,6 +153,8 @@
 
     /* 普通卡片 */
     function genericCardHtml(entry, groupId) {
+        // Correct the historical display typo from the status dataset.
+        if (entry && entry.name === '六扇门龙斗淬炼') entry.name = '六扇门笼斗淬炼';
         var body;
         if (entry.metrics) {
             body = metricsHtml(entry.metrics);

@@ -94,7 +94,7 @@ scripts = [r'''JSON.stringify((()=>{
         waiting:status.textContent, role:document.getElementById('w2Role').value,
         targets:document.querySelectorAll('#w2Targets [data-id]').length};
     if (JSON.stringify(state) !== w2Baseline) return {error:'New role selection mutated legacy simulator state'};
-    const b = document.getElementById('w2Budget'); b.value = 1000000; b.dispatchEvent(new Event('input'));
+    if (document.getElementById('w2Budget')) return {error:'Fixed Wash2 budget input is still visible'};
     document.querySelector('#autoWash2ModePanel .w2-section').scrollIntoView({block:'start'});
     return {ready:true};
 })())''', r'''JSON.stringify((()=>{
@@ -119,9 +119,8 @@ scripts = [r'''JSON.stringify((()=>{
             return {error:'Tab isolation failed: ' + panel};
     }
     if (!document.getElementById('anchorRun')) return {error:'Legacy wash controls missing'};
-    const b = document.getElementById('w2Budget'); b.value = 1; b.dispatchEvent(new Event('input'));
-    if (document.querySelector('.w2-route') || !document.getElementById('w2Export').disabled)
-        return {error:'Budget change retained stale results'};
+    if (!document.querySelector('#autoWash2ModePanel .w2-route') || document.getElementById('w2Export').disabled)
+        return {error:'Verified route result disappeared before cancellation test'};
     document.getElementById('w2Run').click(); document.getElementById('w2Stop').click();
     if (document.getElementById('w2Run').disabled || !document.getElementById('w2Stop').hidden) return {error:'Stop failed'};
     return {ready:true};

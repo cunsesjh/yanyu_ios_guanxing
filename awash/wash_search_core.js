@@ -578,7 +578,7 @@
         });
     }
 
-    function replay(raw, targets, steps) {
+    function replay(raw, targets, steps, includeTrace) {
         const adapter = createAdapter(raw);
         let engine = adapter.start.engine;
         let state = adapter.start.state;
@@ -586,7 +586,23 @@
         let pills = 0;
         let washes = 0;
         let exchanges = 0;
+        const trace = includeTrace ? [] : null;
         const lostExchangeIds = new Set();
+
+        function snapshot(displayLocks) {
+            if (!trace) return;
+            const locked = new Set(uniqueNumbers(
+                displayLocks == null ? locks : displayLocks
+            ));
+            trace.push({
+                zizhi: Number(state.zizhi) || 0,
+                lockIds: Array.from(locked),
+                talents: (state.talents || []).map(id => ({
+                    id: Number(id),
+                    locked: locked.has(Number(id)),
+                })),
+            });
+        }
 
         function pruneLostExchanges() {
             for (const id of Array.from(lostExchangeIds)) {
@@ -614,6 +630,7 @@
         for (const step of steps || []) {
             if (step.op === 'locks') {
                 setLocks(step.lockIds || []);
+                snapshot(locks);
                 continue;
             }
             if (step.op === 'upgrade') {
@@ -622,6 +639,7 @@
                 state = to === 154
                     ? engine.upgradeToFour(state)
                     : engine.upgradeToThree(state);
+                snapshot(locks);
                 continue;
             }
             if (step.op === 'wash') {
@@ -639,6 +657,7 @@
                     throw new Error('回放洗髓丹耗不一致');
                 }
                 pills += segmentCost;
+                snapshot(keepIds);
                 continue;
             }
             if (step.op === 'exchange') {
@@ -660,6 +679,7 @@
                 if (Number(result.addedId) !== Number(step.addedId)) {
                     throw new Error('回放置换结果不一致');
                 }
+                snapshot(locks);
                 continue;
             }
             throw new Error('未知路线步骤: ' + String(step.op));
@@ -673,6 +693,7 @@
             exchanges,
             finalTalents: state.talents.slice(),
             finalStateKey: adapter.stateKey(state),
+            trace: trace || undefined,
         };
     }
 
@@ -844,14 +865,14 @@
             optionsValue.pinnedTargetIds || []
         );
         if (targets.length !== (targetIds || []).length
-            || (targets.length !== 3 && targets.length !== 4)) {
+            || targets.length < 1 || targets.length > 4) {
             return {
                 ok: false,
                 status: 'invalid-input',
                 provenOptimal: false,
                 route: null,
                 metrics: {},
-                stopReason: 'targets-must-be-3-or-4-unique',
+                stopReason: 'targets-must-be-1-to-4-unique',
             };
         }
         const budget = Math.max(0, Number(optionsValue.budget) || 0);
@@ -1275,7 +1296,7 @@
                 materializeSteps(node, adapter.start.steps),
                 adapter.pinnedTargetIds
             );
-            const replayed = replay(raw, targets, steps);
+            const replayed = replay(raw, targets, steps, true);
             if (!replayed.ok || replayed.pills !== node.pillsUsed
                 || replayed.washes !== node.washes
                 || replayed.exchanges !== node.exchangeCount
@@ -1319,7 +1340,9 @@
                 finalTalents: replayed.finalTalents,
                 targetAnchors: Object.assign({}, node.targetAnchorOrdinals),
                 targetAnchorDetails,
-                steps,
+                steps: steps.map((step, index) => Object.assign({}, step, {
+                    after: replayed.trace[index],
+                })),
                 finalStateKey: node.stateKey,
                 finalEngineStateKey: adapter.stateKey(node.engineState),
                 signature: JSON.stringify(steps),

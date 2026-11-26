@@ -15,9 +15,9 @@
             <div class="w2-fields">
                 <label>存档人物<select id="w2Role"><option value="">请先导入存档</option></select></label>
                 <label>VIP<select id="w2Vip"><option value="0">无 VIP</option><option value="1" selected>VIP 1+</option><option value="2">VIP 2+</option></select></label>
-            <label>最大耗丹数量<input id="w2Budget" type="number" min="1" max="1000000" step="1000" value="1000000"></label>
                 <div class="w2-stock">背包洗髓丹<strong id="w2Bag">—</strong></div>
             </div>
+            <p id="w2BudgetNotice" class="w2-muted">搜索耗丹上限固定为 100 万丹。</p>
             <p id="w2Summary" class="w2-muted">请先在首页导入存档，再选择人物。</p>
         </section>
         <section class="w2-section">
@@ -33,8 +33,8 @@
                 <button id="w2Preset" type="button" class="btn btn-reset" disabled>金顶混</button>
                 <button id="w2Clear" type="button" class="btn btn-reset">清空选择</button>
             </div>
-        <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，合计最多四槽。切换分组后点击可移动目标，再点同组目标取消。规划会持续比较可执行路线并优先降低丹耗，找到后继续压价；只有经过完整回放核对的候选才会显示。</p>
-            <p class="w2-credit">特别鸣谢 B站大佬「庸丶人」提供欧气种子路线、吞脉/跳脉及统一路线构造的研究方案</p>
+        <p class="w2-muted">必选脉全部取得，每个兼容组至少取得一条，目标数最多四条。切换分组后点击可移动目标，再点同组目标取消。规划会持续比较可执行路线并优先降低丹耗，找到后继续压价；只有经过完整回放核对的候选才会显示。</p>
+            <p class="w2-credit">特别鸣谢 B 站 UP 主「庸丶人」提供欧气种子、无限置换垫洗、吞脉/跳脉、保底种子前沿与检查点质量搜索等路线的研究方案。</p>
             <div id="w2Targets" class="w2-targets"></div>
             <p id="w2Requirements" class="w2-requirements"></p>
         </section>
@@ -153,7 +153,7 @@
                 : r.kind === 'unified-seed-route' ? `欧气种子统一路线 · ${r.seedMethod || '统一构造'}`
                 : r.kind === 'luck-seed-replay' ? `欧气种子路线 · ${r.seedMethod || '种子优化'}`
                 : r.kind === 'anchor-replay' ? '锚点路线' : '分级战术搜索';
-            return `<details class="w2-route" ${i === 0 ? 'open' : ''}><summary><strong>路线 ${i + 1} · ${Number(r.totalPills).toLocaleString()} 丹</strong><span>${esc(method)} · ${Number(r.totalWashes)} 次洗脉 · ${remaining < 0 ? '缺' + -remaining : '余' + remaining} 丹</span></summary><p>最终天赋：${esc((r.finalTalents || []).map(t => t.name || name(t.id)).join('、'))}</p><div class="w2-table"><table><thead><tr><th>步骤</th><th>操作与核对</th><th>本步丹耗</th><th>累计丹耗</th><th>剩余丹数</th></tr></thead><tbody>${(r.steps || []).map((step, n) => `<tr><td>${n + 1}</td><td><strong>${esc(step.label)}</strong><p>${esc(step.detail)}</p><small>${esc((step.after?.talents || []).map(t => (t.name || name(t.id)) + (t.locked ? '（锁）' : '')).join('、'))}</small></td><td>${Number(step.pills || 0)}</td><td>${Number(step.cumulativePills || 0)}</td><td>${bag - Number(step.cumulativePills || 0)}</td></tr>`).join('')}</tbody></table></div></details>`;
+            return `<details class="w2-route" ${i === 0 ? 'open' : ''}><summary><strong>路线 ${i + 1} · ${Number(r.totalPills).toLocaleString()} 丹</strong><span>${esc(method)} · ${Number(r.totalWashes)} 次洗脉 · ${remaining < 0 ? '缺' + -remaining : '余' + remaining} 丹</span></summary><p>最终天赋：${esc((r.finalTalents || []).map(t => t.name || name(t.id)).join('、'))}</p><div class="w2-table"><table><thead><tr><th>步骤</th><th>操作与核对</th><th>本步丹耗</th><th>累计丹耗</th><th>剩余丹数</th></tr></thead><tbody>${(r.steps || []).map((step, n) => `<tr><td>${n + 1}</td><td><strong>${esc(step.label)}</strong><p>${esc(step.detail)}</p>${step.after?.talents?.length ? `<small>当前天赋：${esc(step.after.talents.map(t => (t.name || name(t.id)) + (t.locked ? '（锁）' : '')).join('、'))}</small>` : ''}</td><td>${Number(step.pills || 0)}</td><td>${Number(step.cumulativePills || 0)}</td><td>${bag - Number(step.cumulativePills || 0)}</td></tr>`).join('')}</tbody></table></div></details>`;
         }).join('') : `<div class="ai-result-empty">${esc(result.noResultReason || '本轮搜索暂未找到路线，可以增加耗丹上限或调整目标。')}</div>`;
     }
     async function runAwash(input, branches, id, started, onProgress) {
@@ -168,9 +168,9 @@
                 body: JSON.stringify({raw: input.initialState, targets: branches[index],
                     budget: input.options.maxTotalPills,
                     options: {budget: input.options.maxTotalPills,
-                        concurrency: 16, horizon: 1000, horizonStep: 200, maxHorizon: 4000,
+                        concurrency: 16, horizon: 1000, horizonStep: 200, maxHorizon: 6000,
                         pityQuality: true, seedQuality: true, stopOnFirstRoute: false,
-                        infiniteOptions: {nMax: 100, count: 30},
+                        infiniteOptions: {nMax: 300, count: 60},
                         frontierOptions: {boundaryLanding: true, maxStates: 200, maxRounds: 1},
                         limits: {maxRuntimeMs: 900000, maxExpandedNodes: 500000,
                             maxWashSteps: 2000000, maxUniqueStates: 300000},
@@ -198,8 +198,7 @@
         refresh();
         if (!raw || running) return;
         try {
-            const budget = Number($('Budget').value);
-            if (!Number.isInteger(budget) || budget < 1 || budget > 1000000) throw new Error('耗丹上限须为 1–1,000,000 的整数。');
+            const budget = 1000000;
             const selection = AutoWash2Model.targets(raw, assignments, TALENT_DATA);
             const branches = AutoWash2Model.combinations(selection);
             invalidate();
@@ -221,7 +220,6 @@
     }
     $('Role').addEventListener('change', () => { assignments.clear(); chooseRole(); });
     $('Vip').addEventListener('change', chooseRole);
-    $('Budget').addEventListener('input', () => { invalidate(); status('耗丹上限已修改，请重新规划。'); });
     $('Filter').addEventListener('input', renderTargets);
     $('Targets').addEventListener('click', event => {
         const button = event.target.closest('[data-id]'); if (!button || button.disabled) return;

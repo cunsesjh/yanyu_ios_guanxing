@@ -32,7 +32,7 @@
 #autoWash2ModePanel table { width: 100%; min-width: 620px; border-collapse: collapse; text-align: left; font-size: 13px; }
 #autoWash2ModePanel th, #autoWash2ModePanel td { padding: 12px; border-bottom: 1px solid #2b3c53; vertical-align: top; }
 #autoWash2ModePanel td p { margin: 8px 0; line-height: 1.7; }
-#autoWash2ModePanel td small { color: #b7a0eb; }
+#autoWash2ModePanel td small { display: block; margin-top: 8px; color: #b7a0eb; line-height: 1.7; }
 @media (max-width: 650px) {
     #autoWash2ModePanel .w2-section { padding: 14px; }
     #autoWash2ModePanel .w2-targets { grid-template-columns: repeat(2, minmax(0, 1fr)); }

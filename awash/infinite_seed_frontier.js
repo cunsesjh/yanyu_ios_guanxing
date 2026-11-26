@@ -37,6 +37,12 @@
         return Array.from(new Set((values || []).map(Number).filter(id => id > 0)));
     }
 
+    function normalizeNMax(value) {
+        const parsed = Number(value);
+        const requested = Number.isFinite(parsed) ? Math.trunc(parsed) : 300;
+        return Math.max(0, Math.min(300, requested));
+    }
+
     function engineFor(raw, slots) {
         const zi = Number(slots) === 4 ? 154 : 153;
         const zz = root.ZZ_DATA && root.ZZ_DATA[String(zi)];
@@ -632,8 +638,8 @@
         const o = options || {};
         const raw = Object.assign({}, rawInput);
         const slots = Number(raw.zizhi) >= 154 ? 4 : 3;
-        const nMax = Math.max(0, Math.min(100, Math.trunc(Number(o.nMax) || 100)));
-        const count = Math.max(12, Math.trunc(Number(o.count) || 30));
+        const nMax = normalizeNMax(o.nMax);
+        const count = Math.max(12, Math.trunc(Number(o.count) || 60));
         const maxWash = Math.max(500, Math.trunc(Number(o.maxWash) || 4000));
         const chainLimit = Math.max(2, Math.min(15, Math.trunc(
             Number(o.chainLimit) || 15)));
@@ -800,7 +806,7 @@
         return !(limit > 0) || Number(anchor.wash) < limit;
     }
 
-    const api = Object.freeze({ padPlan, enumerate });
+    const api = Object.freeze({ padPlan, enumerate, normalizeNMax });
     root.InfiniteSeedFrontier = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

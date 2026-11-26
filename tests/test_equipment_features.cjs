@@ -33,6 +33,22 @@ for (const file of [
 
 const data = sandbox.EQUIP_DATA;
 const optimizer = sandbox.EquipmentAutoOptimizer;
+const ratingFixture = optimizer.AUTO_PAPER_IDS.map(id => {
+    const paper = data.papers[String(id)];
+    return paper && data.equipment[String(paper.dz_equip)];
+}).filter(Boolean).find(equip => Object.keys(equip.exts || {}).some(prop => {
+    const ownMax = optimizer.theoreticalRefinementReference(equip, [prop])[prop] || 0;
+    return ownMax > 0 && optimizer.partRefinementReference(data, equip.type, prop, 0) > ownMax;
+}));
+if (ratingFixture) {
+    const prop = Object.keys(ratingFixture.exts).find(key => {
+        const ownMax = optimizer.theoreticalRefinementReference(ratingFixture, [key])[key] || 0;
+        return ownMax > 0 && optimizer.partRefinementReference(data, ratingFixture.type, key, 0) > ownMax;
+    });
+    const ownMax = optimizer.theoreticalRefinementReference(ratingFixture, [prop])[prop];
+    assert.equal(optimizer.scoreEquipmentRefinement(data, ratingFixture.id, prop, ownMax, []).baseScore, 100,
+        'equipment rating must use the current item ceiling instead of another item’s higher slot ceiling');
+}
 const redMarrow = data.special['8825'];
 const stoneCore = data.special['8826'];
 const dragonBone = data.special['2021'];
