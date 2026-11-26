@@ -590,20 +590,17 @@ class MainWindow(QMainWindow):
             if self.auto_update_prompted:
                 return
             self.auto_update_prompted = True
-        detail = ('发现新版本 v%s。\n\n%s\n\n可以直接在应用内下载、校验并重启更新。'
+        detail = ('发现新版本 v%s。\n\n%s\n\n可前往发布页面查看版本信息。'
                   % (result['version'], result['body'] or '请前往发布页面查看更新说明。'))
         dialog = QMessageBox(self)
         dialog.setWindowTitle('发现新版本')
         dialog.setText(detail)
-        install = dialog.addButton('下载并更新', QMessageBox.AcceptRole)
         github = dialog.addButton('前往 GitHub', QMessageBox.ActionRole)
         gitee = (dialog.addButton('前往 Gitee', QMessageBox.ActionRole)
                   if result.get('gitee_url') else None)
         dialog.addButton('取消', QMessageBox.RejectRole)
         dialog.exec()
-        if dialog.clickedButton() == install:
-            self.start_update_download(result)
-        elif dialog.clickedButton() == github:
+        if dialog.clickedButton() == github:
             QDesktopServices.openUrl(QUrl(result['github_url']))
         elif gitee is not None and dialog.clickedButton() == gitee:
             QDesktopServices.openUrl(QUrl(result['gitee_url']))

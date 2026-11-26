@@ -106,11 +106,11 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v4.0-beta.5 测试版更新公告
+            ## v4.0-beta.9 测试版更新公告
 
-            - 装备规划新增资源分配规划与目标装备追踪，可按预算组合装备或筛选指定属性路线。
-            - 修复装备规划与自动模拟使用不同计算内核导致的打造序列偏差。
-            - 修复精炼百分比显示口径不一致，规划结果现与自动模拟保持一致。
+            - 自动洗脉改用 AWASH 路线搜索，并清理旧搜索内核。
+            - 修正洗脉路线步骤丹耗与洗髓次数显示，合并连续相同条件步骤。
+            - 检查更新时隐藏应用内下载更新按钮，保留发布页入口。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt

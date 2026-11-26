@@ -382,6 +382,13 @@
             return new Set(this.allIds.filter(id => this.isAllowedAt(id, zizhi)));
         }
 
+        // Keep the public API expected by simulator.js and its older callers.
+        // The set is scoped by the requested aptitude, while the full state is
+        // retained in the signature for adapters that specialize this method.
+        allowedForState(state, zizhi = state && state.zizhi) {
+            return this.allowedSet(clampZiZhi(zizhi, this.initialZiZhi || 154));
+        }
+
         upgradeToThree(sourceState) {
             const state = cloneState(sourceState);
             if (state.zizhi >= 153) return state;

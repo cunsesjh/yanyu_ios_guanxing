@@ -4,7 +4,7 @@
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const name = id => TALENT_DATA[id]?.name || '#' + id;
     const clone = value => JSON.parse(JSON.stringify(value));
-    let raw = null, worker = null, request = 0, running = false, inspecting = false, available = [], assignments = new Map(), progressTimer = null;
+    let raw = null, worker = null, request = 0, running = false, inspecting = false, available = [], assignments = new Map(), progressTimer = null, awashController = null;
     let source = null, context = '', lastResult = null, bag = 0, activeRole = '';
     const panel = document.getElementById('autoWash2ModePanel');
     if (!panel) return;
@@ -15,7 +15,7 @@
             <div class="w2-fields">
                 <label>存档人物<select id="w2Role"><option value="">请先导入存档</option></select></label>
                 <label>VIP<select id="w2Vip"><option value="0">无 VIP</option><option value="1" selected>VIP 1+</option><option value="2">VIP 2+</option></select></label>
-                <label>最大耗丹数量<input id="w2Budget" type="number" min="0" max="20000" step="100" value="5000"></label>
+            <label>最大耗丹数量<input id="w2Budget" type="number" min="1" max="1000000" step="1000" value="1000000"></label>
                 <div class="w2-stock">背包洗髓丹<strong id="w2Bag">—</strong></div>
             </div>
             <p id="w2Summary" class="w2-muted">请先在首页导入存档，再选择人物。</p>
@@ -53,13 +53,14 @@
             'tail-wash-budget': '尾脉扫描量',
             'tail-exchange-depth': '尾段置换深度',
             'event-node-budget': '状态节点数',
-            'search-safety-limit': '搜索安全预算',
+            'search-safety-limit': '搜索安全上限',
         };
         return [...new Set(reasons || [])].map(reason => labels[reason] || reason).join('、');
     }
     function stop(text) {
         request++;
         if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+        if (awashController) { awashController.abort(); awashController = null; }
         worker?.terminate(); worker = null; running = false;
         $('Stop').hidden = true;
         $('Run').disabled = !raw || !available.length;
@@ -95,7 +96,7 @@
     }
     function makeWorker() {
         if (worker) return worker;
-        worker = new Worker(new URL('auto_wash2_worker.js?v=20261126engine-api3', document.currentScript?.src || new URL('../shared/auto_wash2.js', location.href)));
+        worker = new Worker(new URL('auto_wash2_worker.js?v=20261126washfix4', document.currentScript?.src || new URL('../shared/auto_wash2.js', location.href)));
         worker.onerror = event => { stop(); status('后台计算失败：' + (event.message || '请重新进入此页面重试'), true); };
         return worker;
     }
@@ -155,42 +156,67 @@
             return `<details class="w2-route" ${i === 0 ? 'open' : ''}><summary><strong>路线 ${i + 1} · ${Number(r.totalPills).toLocaleString()} 丹</strong><span>${esc(method)} · ${Number(r.totalWashes)} 次洗脉 · ${remaining < 0 ? '缺' + -remaining : '余' + remaining} 丹</span></summary><p>最终天赋：${esc((r.finalTalents || []).map(t => t.name || name(t.id)).join('、'))}</p><div class="w2-table"><table><thead><tr><th>步骤</th><th>操作与核对</th><th>本步丹耗</th><th>累计丹耗</th><th>剩余丹数</th></tr></thead><tbody>${(r.steps || []).map((step, n) => `<tr><td>${n + 1}</td><td><strong>${esc(step.label)}</strong><p>${esc(step.detail)}</p><small>${esc((step.after?.talents || []).map(t => (t.name || name(t.id)) + (t.locked ? '（锁）' : '')).join('、'))}</small></td><td>${Number(step.pills || 0)}</td><td>${Number(step.cumulativePills || 0)}</td><td>${bag - Number(step.cumulativePills || 0)}</td></tr>`).join('')}</tbody></table></div></details>`;
         }).join('') : `<div class="ai-result-empty">${esc(result.noResultReason || '本轮搜索暂未找到路线，可以增加耗丹上限或调整目标。')}</div>`;
     }
+    async function runAwash(input, branches, id, started, onProgress) {
+        const routes = [], reasons = [];
+        const apiUrl = new URL('../api/awash/search', location.href);
+        awashController = new AbortController();
+        for (let index = 0; index < branches.length; index++) {
+            if (!running || id !== request) return;
+            onProgress(`AWASH 正在规划路线 ${index + 1}/${branches.length}…`);
+            const response = await fetch(apiUrl, {method: 'POST',
+                headers: {'Content-Type': 'application/json'}, signal: awashController.signal,
+                body: JSON.stringify({raw: input.initialState, targets: branches[index],
+                    budget: input.options.maxTotalPills,
+                    options: {budget: input.options.maxTotalPills,
+                        concurrency: 16, horizon: 1000, horizonStep: 200, maxHorizon: 4000,
+                        pityQuality: true, seedQuality: true, stopOnFirstRoute: false,
+                        infiniteOptions: {nMax: 100, count: 30},
+                        frontierOptions: {boundaryLanding: true, maxStates: 200, maxRounds: 1},
+                        limits: {maxRuntimeMs: 900000, maxExpandedNodes: 500000,
+                            maxWashSteps: 2000000, maxUniqueStates: 300000},
+                        runtime: {beamWidth: 150, chainBeamWidth: 24, maxDepth: 150,
+                            maxRunWashes: 1000, maxPolicyWashes: 300000}}})});
+            let payload;
+            try { payload = await response.json(); }
+            catch (_) { throw new Error(`AWASH 服务返回非 JSON（HTTP ${response.status}），请确认已运行支持 AWASH 的本地程序。`); }
+            if (!response.ok) throw new Error(payload?.error || `AWASH 请求失败（HTTP ${response.status}）。`);
+            const route = AutoWash2RouteView.normalizeRoute(payload.route, index, name);
+            if (route) {
+                routes.push(route);
+                renderResult({routes: routes.slice().sort((a, b) => a.totalPills - b.totalPills), noResultReason: ''});
+            } else reasons.push(payload.stopReason || payload.status || '本分支未找到路线');
+        }
+        if (!running || id !== request) return;
+        const sorted = routes.sort((a, b) => a.totalPills - b.totalPills);
+        const result = {routes: sorted, noResultReason: sorted.length ? ''
+            : `AWASH 未找到路线：${[...new Set(reasons)].join('；') || '无可行路线'}`};
+        renderResult(result); stop();
+        status(sorted.length ? `AWASH 完成 · ${sorted.length} 条路线 · ${((Date.now() - started) / 1000).toFixed(1)} 秒。`
+            : `${result.noResultReason} · ${((Date.now() - started) / 1000).toFixed(1)} 秒。`, !sorted.length);
+    }
     function run() {
         refresh();
         if (!raw || running) return;
         try {
             const budget = Number($('Budget').value);
-            if (!Number.isInteger(budget) || budget < 0 || budget > 20000) throw new Error('耗丹上限须为 0–20000 的整数。');
+            if (!Number.isInteger(budget) || budget < 1 || budget > 1000000) throw new Error('耗丹上限须为 1–1,000,000 的整数。');
             const selection = AutoWash2Model.targets(raw, assignments, TALENT_DATA);
-            AutoWash2Model.combinations(selection);
+            const branches = AutoWash2Model.combinations(selection);
             invalidate();
             running = true; $('Run').disabled = true; $('Stop').hidden = false;
             const id = ++request, started = Date.now(), input = {initialState: clone(raw), ...selection,
                 bagPills: bag, hasBagPills: true, dlcMode: false,
-                options: {maxTotalPills: budget, maxStoredStates: 500000, searchPolicy: 'full'}};
-            let progressMessage = '正在启动源码 wash 搜索…';
+                options: {maxTotalPills: budget, timeBudgetMs: 1200000}};
+            let progressMessage = '正在启动 wash 路线构造器…';
             const updateProgress = () => {
                 if (running) status(`${progressMessage} · ${((Date.now() - started) / 1000).toFixed(1)} 秒`);
             };
             updateProgress();
             progressTimer = setInterval(updateProgress, 250);
-            const w = makeWorker();
-            w.onmessage = ({data}) => {
-                if (data.requestId !== id) return;
-                if (data.type === 'progress') { progressMessage = data.progress?.message || '源码 wash 搜索中…'; updateProgress(); }
-                if (data.type === 'candidate') renderResult(data.result);
-                if (data.type === 'error') { stop(); status(data.error, true); }
-                if (data.type === 'result') {
-                    renderResult(data.result); stop();
-                    const internalReason = limitReasonText(data.result?.limitReasons);
-                    const limitMessage = data.result?.limitReason === 'time' ? '已用满总时限'
-                        : data.result?.limitReason === 'time-and-internal' ? '总时限与内部安全上限均已触发'
-                            : data.result?.limitReason === 'internal' ? `触发内部安全上限${internalReason ? '：' + internalReason : ''}`
-                                : '完成当前搜索范围';
-                    status(`本轮搜索${limitMessage} · ${((Date.now() - started) / 1000).toFixed(1)} 秒。${data.result?.routes?.length ? '可展开查看操作路线。' : '本轮未找到不代表不存在可行路线。'}`);
-                }
-            };
-            w.postMessage({type: 'search', requestId: id, input});
+            runAwash(input, branches, id, started, message => { progressMessage = message; updateProgress(); }).catch(error => {
+                if (error?.name === 'AbortError') return;
+                stop(); status(error?.message || String(error), true);
+            });
         } catch (error) { stop(); status(error.message, true); }
     }
     $('Role').addEventListener('change', () => { assignments.clear(); chooseRole(); });
