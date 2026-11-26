@@ -48,6 +48,12 @@ if (ratingFixture) {
     const ownMax = optimizer.theoreticalRefinementReference(ratingFixture, [prop])[prop];
     assert.equal(optimizer.scoreEquipmentRefinement(data, ratingFixture.id, prop, ownMax, []).baseScore, 100,
         'equipment rating must use the current item ceiling instead of another item’s higher slot ceiling');
+    const simulatorSource = fs.readFileSync(path.join(root, 'web/shared/simulator.js'), 'utf8');
+    vm.runInContext(simulatorSource.slice(simulatorSource.indexOf('const EQUIP_AUTO_RATING_LEVELS'),
+        simulatorSource.indexOf('function equipAutoCostTotals')), context);
+    sandbox.purpleRatingFixture = {equipId: ratingFixture.id, color: 4, region: [], refinements: [{prop, total: ownMax}]};
+    assert.equal(vm.runInContext('equipAutoCandidateRating(purpleRatingFixture).label', context), '神器',
+        'purple automatic equipment cards must use the same current-equipment ceiling as the planner scorer');
 }
 const redMarrow = data.special['8825'];
 const stoneCore = data.special['8826'];

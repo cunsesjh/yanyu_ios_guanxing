@@ -7160,6 +7160,12 @@ function equipAutoRefinementRating(candidate, refinement, reference = equipAutoR
     if (refinement && refinement.prop === 'mp_back') {
         return { min: 0, key: 'white', label: '特殊词条', percent: 0, roundedPercent: 0 };
     }
+    if (typeof EquipmentAutoOptimizer !== 'undefined'
+        && typeof EquipmentAutoOptimizer.scoreEquipmentRefinement === 'function') {
+        const score = EquipmentAutoOptimizer.scoreEquipmentRefinement(EQUIP_DATA, candidate.equipId,
+            refinement && refinement.prop, equipAutoRefinementTotal(refinement), candidate.region);
+        return equipAutoRatingForPercent(score.finalScore);
+    }
     const maximum = Number(reference && reference[refinement && refinement.prop]) || 0;
     const percent = maximum > 0 ? equipAutoRefinementTotal(refinement) / maximum * 100 : 0;
     return equipAutoRatingForPercent(percent);
@@ -7167,16 +7173,8 @@ function equipAutoRefinementRating(candidate, refinement, reference = equipAutoR
 
 function equipAutoCandidateRating(candidate, reference = equipAutoRatingReference(candidate)) {
     const refinements = candidate.refinements || [];
-    const ratings = refinements.filter(refinement => refinement.prop !== 'mp_back').map(refinement => {
-        if (typeof EquipmentAutoOptimizer !== 'undefined' && typeof EquipmentAutoOptimizer.scoreEquipmentRefinement === 'function') {
-            return EquipmentAutoOptimizer.scoreEquipmentRefinement(EQUIP_DATA, candidate.equipId,
-                refinement.prop, equipAutoRefinementTotal(refinement), candidate.region);
-        }
-        return equipAutoRefinementRating(candidate, refinement, reference);
-    });
-    if (Number(candidate && candidate.color) === 3) {
-        return equipAutoRatingForPercent(ratings.length ? Math.max(...ratings.map(item => item.finalScore)) : 0);
-    }
+    const ratings = refinements.filter(refinement => refinement.prop !== 'mp_back')
+        .map(refinement => equipAutoRefinementRating(candidate, refinement, reference));
     if (!ratings.length && refinements.some(refinement => refinement.prop === 'mp_back')) {
         return { min: 0, key: 'white', label: '特殊词条', percent: 0, roundedPercent: 0 };
     }
