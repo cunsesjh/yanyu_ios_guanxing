@@ -297,3 +297,84 @@ html[data-theme="light"] #autoWash2ModePanel td small {
     color: #7752aa;
 }
 
+/* Keep automatic equipment grades readable on the light card surfaces. */
+html[data-theme="light"] .equip-auto-rating.is-red {
+    --rating-color: #922d27;
+    --rating-bg: #fbeceb;
+    --rating-border: #c97871;
+}
+html[data-theme="light"] .equip-auto-rating.is-gold {
+    --rating-color: #735000;
+    --rating-bg: #fff5dc;
+    --rating-border: #c5a24d;
+}
+html[data-theme="light"] .equip-auto-rating.is-purple {
+    --rating-color: #65388a;
+    --rating-bg: #f4eafd;
+    --rating-border: #a780c2;
+}
+html[data-theme="light"] .equip-auto-rating.is-blue {
+    --rating-color: #22558b;
+    --rating-bg: #e9f3ff;
+    --rating-border: #7da3ca;
+}
+html[data-theme="light"] .equip-auto-rating.is-green {
+    --rating-color: #24643a;
+    --rating-bg: #eaf6ed;
+    --rating-border: #80ae8c;
+}
+html[data-theme="light"] .equip-auto-rating.is-white {
+    --rating-color: #34465d;
+    --rating-bg: #edf1f6;
+    --rating-border: #8493a6;
+}
+html[data-theme="light"] .equip-auto-max-summary strong.is-red { color: #922d27; }
+html[data-theme="light"] .equip-auto-max-summary strong.is-gold { color: #735000; }
+html[data-theme="light"] .equip-auto-max-summary strong.is-purple { color: #65388a; }
+html[data-theme="light"] .equip-auto-max-summary strong.is-blue { color: #22558b; }
+html[data-theme="light"] .equip-auto-max-summary strong.is-green { color: #24643a; }
+html[data-theme="light"] .equip-auto-max-summary strong.is-white { color: #34465d; }
+html[data-theme="light"] .equip-auto-region-summary strong,
+html[data-theme="light"] .equip-auto-region-card { color: #76530b; }
+html[data-theme="light"] .equip-auto-attach-sequence-item.is-rating-white {
+    border-color: #aab7c7;
+    background: #edf1f6;
+    color: #34465d;
+}
+
+/* Match contrast for the same grade badges in the equipment planner. */
+html[data-theme="light"] .planner-grade {
+    border: 1px solid #b58d34;
+    color: #593e00;
+    background: #fff0c2;
+}
+html[data-theme="light"] .is-artifact .planner-grade {
+    border-color: #c96c64;
+    color: #7b211b;
+    background: #fde9e7;
+}
+html[data-theme="light"] .is-candidate .planner-grade {
+    border-color: #8493a6;
+    color: #34465d;
+    background: #e9eef5;
+}
+
+/* Hengshan's status/error accents were tuned for the dark desktop surface. */
+html[data-theme="light"] .hengshan-message.is-error,
+html[data-theme="light"] .day-result .is-error,
+html[data-theme="light"] .as-progress .is-error,
+html[data-theme="light"] .as-card-fail,
+html[data-theme="light"] .as-validate.is-error { color: #a52b27; }
+html[data-theme="light"] .evidence-badge { color: #76530b; }
+html[data-theme="light"] .evidence-badge.is-verified { color: #24643a; }
+html[data-theme="light"] .as-talent.is-in-must { color: #65388a; }
+html[data-theme="light"] .as-talent.is-in-pick { color: #24643a; }
+html[data-theme="light"] .as-ok { color: #24643a; }
+html[data-theme="light"] .as-fail {
+    border-color: #ca817c;
+    color: #a52b27;
+    background: #fbeceb;
+}
+html[data-theme="light"] .as-hit { color: #76530b; }
+html[data-theme="light"] .as-clear { color: #22558b; }
+

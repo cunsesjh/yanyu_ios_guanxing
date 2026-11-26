@@ -265,6 +265,15 @@ assert.match(autoSimulatorSource, /equip-auto-refine-route-steps/,
 const simulatorCss = fs.readFileSync(path.join(root, 'web/shared/simulator.css'), 'utf8');
 assert.match(simulatorCss, /\.equip-auto-refine-step\s*\{/,
     'refinement operations must have compact visual step styling');
+const desktopLightCss = fs.readFileSync(path.join(root, 'web/desktop-light.css'), 'utf8');
+assert.match(desktopLightCss, /\.equip-auto-rating\.is-white\s*\{[\s\S]*?--rating-color:\s*#34465d/,
+    'poor-quality automatic equipment ratings must remain readable in light mode');
+assert.match(desktopLightCss, /\.equip-auto-max-summary strong\.is-white\s*\{\s*color:\s*#34465d/,
+    'poor-quality maximum summaries must remain readable in light mode');
+assert.match(desktopLightCss, /\.planner-grade\s*\{[\s\S]*?color:\s*#593e00/,
+    'equipment planner grade labels must retain contrast in light mode');
+assert.match(desktopLightCss, /\.as-fail\s*\{[\s\S]*?color:\s*#a52b27/,
+    'Hengshan failure badges must retain contrast in light mode');
 assert.match(plannerHtml, /id="craftCount"[^>]*value="20"/,
     'equipment planner must default each route to 20 crafts');
 assert.equal((plannerHtml.match(/class="planner-intro /g) || []).length, 3,

@@ -106,12 +106,12 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v4.0-beta.12 测试版更新公告
+            ## v4.0-beta.13 测试版更新公告
 
-            - 自动洗脉改用 AWASH 路线搜索，并清理旧搜索内核。
-            - 修正洗脉路线步骤丹耗与洗髓次数显示，合并连续相同条件步骤。
-            - 检查更新时隐藏应用内下载更新按钮，保留发布页入口。
-            - 跳过重复锁脉指令，静默启动后台路线求解器。
+            - 优化自动洗脉路线搜索与步骤回放展示，允许单槽角色规划。
+            - 恒山升级推演支持自定义经验值，角色状态修正六扇门淬炼名称。
+            - 修复自动装备评分，并提升装备评级及多个状态徽标在浅色模式下的可读性。
+            - 更新自动洗脉研究方案鸣谢。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
