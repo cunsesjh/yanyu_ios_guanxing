@@ -6448,6 +6448,7 @@ let equipAutoResultQualityFilter = '';
 let equipAutoResultSort = '';
 let equipAutoResultAttachFilter = '';
 let equipAutoResultAttachOnly = false;
+let equipAutoShowBlue = false;
 let equipAutoManualAttachStates = new Map();
 let jianwangAutoRunning = false;
 let jianwangAutoCancelRequested = false;
@@ -6546,7 +6547,7 @@ function equipAutoAvailablePaperMap() {
             if (!EQUIP_AUTO_ALLOWED_PAPER_IDS.has(Number(item.paper.id))) return;
             const minColor = Number(item.paper.min_color || 1);
             const maxColor = Number(item.paper.max_color || 4);
-            if (Number(item.equip.lv || 0) < 90 || minColor > 4 || maxColor < 4) return;
+            if (Number(item.equip.lv || 0) < 90 || minColor > 4 || maxColor < 3) return;
             const key = String(item.paper.id);
             const entry = map.get(key) || { ...item, npcIds: [] };
             entry.npcIds.push(npcId);
@@ -7132,15 +7133,18 @@ function equipAutoTheoreticalSlotMaximum(candidate, prop, slot = 1) {
 function equipAutoRatingReference(candidate) {
     const reference = {};
     const embedded = candidate && candidate.refinementRatingReference;
+    const equip = typeof EQUIP_DATA !== 'undefined' && EQUIP_DATA.equipment
+        ? EQUIP_DATA.equipment[String(candidate && candidate.equipId)] : null;
     (candidate && candidate.refinements || []).forEach(refinement => {
         const prop = String(refinement.prop || '');
         if (!prop) return;
         const candidateMaximum = Number(embedded && embedded[prop]);
-        reference[prop] = Number.isFinite(candidateMaximum) && candidateMaximum > 0
-            ? candidateMaximum
-            : EQUIP_AUTO_REFINEMENT_SLOT_MULTIPLIERS.reduce((sum, _, index) => (
-                sum + equipAutoTheoreticalSlotMaximum(candidate, prop, index + 1)
-            ), 0);
+        reference[prop] = typeof EquipmentAutoOptimizer !== 'undefined'
+            ? EquipmentAutoOptimizer.partRefinementReference(EQUIP_DATA, equip && equip.type, prop, candidateMaximum)
+            : Number.isFinite(candidateMaximum) && candidateMaximum > 0 ? candidateMaximum
+                : EQUIP_AUTO_REFINEMENT_SLOT_MULTIPLIERS.reduce((sum, _, index) => (
+                    sum + equipAutoTheoreticalSlotMaximum(candidate, prop, index + 1)
+                ), 0);
     });
     return reference;
 }
@@ -7163,8 +7167,16 @@ function equipAutoRefinementRating(candidate, refinement, reference = equipAutoR
 
 function equipAutoCandidateRating(candidate, reference = equipAutoRatingReference(candidate)) {
     const refinements = candidate.refinements || [];
-    const ratings = refinements.filter(refinement => refinement.prop !== 'mp_back')
-        .map(refinement => equipAutoRefinementRating(candidate, refinement, reference));
+    const ratings = refinements.filter(refinement => refinement.prop !== 'mp_back').map(refinement => {
+        if (typeof EquipmentAutoOptimizer !== 'undefined' && typeof EquipmentAutoOptimizer.scoreEquipmentRefinement === 'function') {
+            return EquipmentAutoOptimizer.scoreEquipmentRefinement(EQUIP_DATA, candidate.equipId,
+                refinement.prop, equipAutoRefinementTotal(refinement), candidate.region);
+        }
+        return equipAutoRefinementRating(candidate, refinement, reference);
+    });
+    if (Number(candidate && candidate.color) === 3) {
+        return equipAutoRatingForPercent(ratings.length ? Math.max(...ratings.map(item => item.finalScore)) : 0);
+    }
     if (!ratings.length && refinements.some(refinement => refinement.prop === 'mp_back')) {
         return { min: 0, key: 'white', label: '特殊词条', percent: 0, roundedPercent: 0 };
     }
@@ -7212,10 +7224,11 @@ function equipAutoCandidateHtml(candidate) {
         : '';
     const consumption = equipAutoCandidateConsumption(candidate);
     const consumptionSummary = `<span class="equip-auto-consumption-summary" title="打造至该件装备 + 升炼 + 达到当前最高品质精炼结果的实际总消耗"><span>实际总消耗</span><strong>银两${equipAutoFormatSilver(consumption.silver)}</strong><strong>连金泥×${Number(consumption.lianjin).toLocaleString()}</strong></span>`;
+    const qualityBadge = Number(candidate.color) === 3 ? '<span class="equip-auto-quality-badge is-blue">蓝装</span>' : '';
     return `<details class="equip-auto-candidate">
         <summary>
-            <span class="equip-auto-rating is-${rating.key}" title="精炼评级：${rating.label} ${rating.roundedPercent}%（实际结果相对三槽理论满值）"><strong>${rating.label}</strong><small>${rating.roundedPercent}%</small></span>
-            <span class="equip-auto-candidate-title"><b>${escapeAiHtml(candidate.paperName)} · 第 ${candidate.craftIndex} 次</b><span class="equip-auto-candidate-meta"><span class="equip-auto-equip-summary">${escapeAiHtml(candidate.equipName)}</span>${locationSummary}${targetSummary ? `<span class="equip-auto-summary-separator">·</span>${targetSummary}` : ''}<span class="equip-auto-summary-separator">·</span>${regionSummary}${attachPeakSummary ? `<span class="equip-auto-summary-separator">·</span>${attachPeakSummary}` : ''}<span class="equip-auto-summary-separator">·</span>${consumptionSummary}</span></span>
+            <span class="equip-auto-rating is-${rating.key}" title="综合评分：${rating.label} ${rating.roundedPercent}%（精炼基础 + 地区附加）"><strong>${rating.label}</strong><small>${rating.roundedPercent}%</small></span>
+            <span class="equip-auto-candidate-title"><b>${qualityBadge}${escapeAiHtml(candidate.paperName)} · 第 ${candidate.craftIndex} 次</b><span class="equip-auto-candidate-meta"><span class="equip-auto-equip-summary">${escapeAiHtml(candidate.equipName)}</span>${locationSummary}${targetSummary ? `<span class="equip-auto-summary-separator">·</span>${targetSummary}` : ''}<span class="equip-auto-summary-separator">·</span>${regionSummary}${attachPeakSummary ? `<span class="equip-auto-summary-separator">·</span>${attachPeakSummary}` : ''}<span class="equip-auto-summary-separator">·</span>${consumptionSummary}</span></span>
         </summary>
         <div class="equip-auto-candidate-body">
             <div class="equip-auto-detail-grid">
@@ -7242,6 +7255,7 @@ function equipAutoResultPaperKey(candidate) {
 function equipAutoFilteredCandidates(candidates) {
     const attachThreshold = equipAutoResultAttachFilter === '' ? null : Number(equipAutoResultAttachFilter);
     const filtered = (Array.isArray(candidates) ? candidates : []).filter(candidate => {
+        if (!equipAutoShowBlue && Number(candidate.color) === 3) return false;
         if (equipAutoResultLocationFilter && String(candidate.location || '') !== equipAutoResultLocationFilter) return false;
         if (equipAutoResultPaperFilter && equipAutoResultPaperKey(candidate) !== equipAutoResultPaperFilter) return false;
         if (equipAutoResultQualityFilter && equipAutoCandidateRating(candidate).key !== equipAutoResultQualityFilter) return false;
@@ -7314,6 +7328,10 @@ function equipAutoResultFilterOptionsHtml(candidates) {
             <input type="checkbox" id="equipAutoResultAttachOnlyFilter" ${equipAutoResultAttachOnly ? 'checked' : ''}>
             <span>仅附加装备</span>
         </label>
+        <label class="equip-auto-attach-only-filter" for="equipAutoShowBlueFilter">
+            <input type="checkbox" id="equipAutoShowBlueFilter" ${equipAutoShowBlue ? 'checked' : ''}>
+            <span>显示蓝色装备</span>
+        </label>
     </div>`;
 }
 
@@ -7362,6 +7380,8 @@ function renderEquipAutoResultPage() {
     if (sortFilter) sortFilter.value = equipAutoResultSort;
     const attachOnly = document.getElementById('equipAutoResultAttachOnlyFilter');
     if (attachOnly) attachOnly.checked = equipAutoResultAttachOnly;
+    const showBlue = document.getElementById('equipAutoShowBlueFilter');
+    if (showBlue) showBlue.checked = equipAutoShowBlue;
     if (previous) previous.disabled = pageData.page <= 1;
     if (next) next.disabled = pageData.page >= pageData.pageCount;
     if (heading) heading.textContent = `筛选结果：${filteredCandidates.length} 件，本页 ${pageData.items.length} 件`;
@@ -7453,6 +7473,8 @@ function handleEquipAutoResultControlChange(event) {
         equipAutoResultAttachFilter = String(event.target.value || '');
     } else if (event.target.id === 'equipAutoResultAttachOnlyFilter') {
         equipAutoResultAttachOnly = event.target.checked;
+    } else if (event.target.id === 'equipAutoShowBlueFilter') {
+        equipAutoShowBlue = event.target.checked;
     } else {
         return;
     }
@@ -7503,12 +7525,13 @@ function renderEquipAutoResults(result) {
     equipAutoResultSort = '';
     equipAutoResultAttachFilter = '';
     equipAutoResultAttachOnly = false;
+    equipAutoShowBlue = false;
     equipAutoManualAttachStates = new Map();
     precomputeEquipAutoAttachments(result);
     container.dataset.hasResult = 'true';
     if (!result || !result.candidates || !result.candidates.length) {
         const skipped = Number(result && result.summary && result.summary.skippedBranchCount || 0);
-        container.innerHTML = `<div class="ai-result-error">当前兼容范围没有打造出紫装，请增加打造次数或调整地点、图纸与材料。${skipped ? ` 已跳过 ${skipped} 个属性不兼容分支。` : ''}</div>`;
+        container.innerHTML = `<div class="ai-result-error">当前兼容范围没有打造出可分析的蓝/紫装备，请增加打造次数或调整地点、图纸与材料。${skipped ? ` 已跳过 ${skipped} 个属性不兼容分支。` : ''}</div>`;
         return;
     }
     container.innerHTML = `${(result.skippedBranches || []).length ? `<details class="equip-auto-skipped-branches"><summary>查看跳过的 ${result.skippedBranches.length} 个分支</summary>${result.skippedBranches.map(branch => `<div>${escapeAiHtml(branch.location)} · ${escapeAiHtml(branch.paperName)}：${escapeAiHtml(branch.reason)}</div>`).join('')}</details>` : ''}
@@ -7571,6 +7594,7 @@ async function runEquipAutoSimulation() {
                 craftCount: clampEquipAutoNumber('autoEquipCraftCount', 1, 5000, 100),
                 refineCount: clampEquipAutoNumber('autoEquipRefineCount', 1, 1000, 500),
                 attachCount: clampEquipAutoNumber('autoEquipAttachCount', 1, 5000, 50),
+                includeBlue: true,
             },
             bridge: {
                 getMakeState: () => wasmMakeGetState(),

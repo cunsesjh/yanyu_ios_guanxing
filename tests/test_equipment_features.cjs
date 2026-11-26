@@ -44,6 +44,10 @@ const belt90 = { ...belt100, name: '90级腰带', need_lv: 90 };
 assert.equal(optimizer.mangjingPerAttempt(100), 10);
 assert.equal(optimizer.mangjingPerAttempt(90), 9);
 assert.equal(optimizer.mangjingPerAttempt(1), 1);
+assert.equal(optimizer.normalizeOptions({}).includeBlue, false,
+    'automatic equipment simulation must keep blue equipment excluded by default');
+assert.equal(optimizer.normalizeOptions({includeBlue: true}).includeBlue, true,
+    'equipment simulation must accept an explicit blue-equipment inclusion setting');
 
 const refinementBudgetEquip = {
     id: 5220, need_lv: 100, typ: 7, color: 4,
@@ -250,9 +254,11 @@ assert.match(plannerHtml, /id="craftCount"[^>]*value="20"/,
 assert.equal((plannerHtml.match(/class="planner-intro /g) || []).length, 3,
     'all three equipment planner tools must start with a feature description panel');
 assert.match(plannerHtml, /data-planner-tool="fixed">固定打造规划/);
-assert.match(plannerHtml, /data-planner-tool="standards">打造参考与PVP精炼标准/);
+assert.match(plannerHtml, /data-planner-tool="standards">精炼上限与PVP精炼标准/);
 assert.match(plannerHtml, /value="premium" selected>极品及以上/);
-assert.match(plannerHtml, /不是纯打造词条或地区附加的完整上限表/);
+assert.match(plannerHtml, /不含强化、地区及首次材料附加，也不是纯打造词条完整上限/);
+assert.match(plannerHtml, /id="limitsPartFilter"/);
+assert.match(plannerSource, /class="limits-paper-card"/);
 assert.match(plannerHtml, /data-planner-tool="target">目标装备追踪/);
 assert.match(plannerHtml, /\.\.\/shared\/wasm_data\.js/,
     'planner must use the same equipment WASM runtime as automatic simulation');

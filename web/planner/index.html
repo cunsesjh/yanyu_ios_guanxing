@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>烟雨江湖 · 装备规划</title>
-    <meta name="description" content="按连金泥预算规划90级紫装打造与精炼结果">
+    <meta name="description" content="按连金泥预算规划90级蓝紫装备打造与精炼结果">
     <link rel="stylesheet" href="../shared/simulator.css">
     <link rel="stylesheet" href="./planner.css">
 </head>
@@ -12,7 +12,7 @@
     <div class="app-container planner-app">
         <header class="app-header">
             <h1>装备规划</h1>
-            <p class="subtitle">90级紫装 · 打造、升炼与精炼综合评分</p>
+            <p class="subtitle">90级蓝紫装备 · 打造、升炼与精炼规划</p>
             <nav class="sim-nav">
                 <a href="../index.html">首页</a><span class="nav-sep">·</span>
                 <a href="../equip/index.html">装备模拟</a><span class="nav-sep">·</span>
@@ -25,13 +25,13 @@
         <div class="planner-tool-tabs" role="tablist" aria-label="装备规划子功能">
             <button class="planner-tool-tab is-active" type="button" role="tab" aria-selected="true" data-planner-tool="target">目标装备追踪</button>
             <button class="planner-tool-tab" type="button" role="tab" aria-selected="false" data-planner-tool="fixed">固定打造规划</button>
-            <button class="planner-tool-tab" type="button" role="tab" aria-selected="false" data-planner-tool="standards">打造参考与PVP精炼标准</button>
+            <button class="planner-tool-tab" type="button" role="tab" aria-selected="false" data-planner-tool="standards">精炼上限与PVP精炼标准</button>
         </div>
 
         <main class="planner-main planner-tool-view" data-planner-view="fixed" hidden>
             <aside class="planner-intro planner-intro-fixed">
                 <strong>固定打造规划</strong>
-                <p>把每个地点与图纸都从当前存档的同一份打造状态独立起跑，找出指定件数内达到神器或极品的装备。适合比较“现在去哪里、打造哪一件”最划算，不会连续推进不同路线之间的种子。</p>
+                <p>把每个地点与图纸都从当前存档的同一份打造状态独立起跑，列出指定件数内的蓝装候选，以及达到神器或极品的紫装。适合比较“现在去哪里、打造哪一件”最划算，不会连续推进不同路线之间的种子。</p>
             </aside>
             <section class="config-panel" aria-labelledby="plannerConfigTitle">
                 <div class="feature-section-head">
@@ -48,7 +48,7 @@
                     <button id="btnPlan" class="btn btn-primary" type="button">开始规划</button>
                     <button id="btnCancel" class="btn btn-reset" type="button" hidden>计算完当前部位后停止</button>
                 </div>
-                <p class="field-hint">泥预算包含90级紫装升炼所需的10个连金泥和后续精炼实际消耗。每个地点与图纸均从当前存档的同一份打造状态独立推演。</p>
+                <p class="field-hint">蓝装与紫装均纳入候选，并按精炼基础分与地区附加分综合评级；蓝装也可能达到极品或神器。泥预算包含升炼所需的10个连金泥和后续精炼实际消耗。每个地点与图纸均从当前存档的同一份打造状态独立推演。</p>
                 <div id="planProgress" class="planner-progress" hidden aria-live="polite">
                     <div><span id="progressText">准备计算</span><strong id="progressPercent">0%</strong></div>
                     <div class="planner-progress-track"><span id="progressFill"></span></div>
@@ -64,25 +64,27 @@
                         <select id="partFilter">
                             <option value="all">全部部位</option>
                         </select>
+                        <label for="propertyFilter">属性</label>
+                        <select id="propertyFilter"><option value="all">全部属性</option></select>
                         <label class="attach-only"><input id="attachOnly" type="checkbox"><span>仅附加装备</span></label>
                     </div>
                 </div>
-                <div id="resultEmpty" class="result-empty">只展示最终评分达到神器或极品、且实际泥耗不超过预算的全部装备。</div>
+                <div id="resultEmpty" class="result-empty">列出蓝装候选与达到神器或极品的紫装；蓝装不参与紫装评级，且实际泥耗不超过预算。</div>
                 <div id="resultGroups" class="planner-result-groups" aria-live="polite"></div>
             </section>
 
             <section class="scoring-panel" aria-labelledby="scoringTitle">
                 <div class="panel-title"><span class="section-step">03</span><h2 id="scoringTitle">评分口径</h2></div>
-                <p><strong>最终分 = 精炼基础分 + 地区附加分。</strong>精炼基础分按实际三槽属性相对该装备三槽理论满值计算；96分起为神器，91分起为极品。</p>
-                <p>地区附加按战斗价值折算并封顶30分，例如2%免伤加25分、69攻击约加13.8分、12臂力加15分、10真元加20分。结果卡会分别列出基础分、附加分和最终分。</p>
-                <p>聚气属于离散特殊词条，不单独参与神器/极品评级。只列出实际总泥耗不超过预算的精炼方案。不同地点、图纸和部位均独立推演，不会修改存档或装备模拟背包。</p>
+                <p><strong>最终分 = 精炼基础分 + 地区附加分。</strong>精炼基础分按同部位、同精炼属性统一参考上限计算，避免不同图纸各用不同分母而出现低数值反而高分；96分起为神器，91分起为极品。</p>
+                <p>地区附加按战斗价值折算，合计最多加12分；例如2%免伤约加11分、69攻击约加6.1分、12臂力约加6.6分、10真元约加8.8分。最终分封顶100，结果卡分别列出基础分、附加分和最终分。</p>
+                <p>聚气属于离散特殊词条，不单独参与神器/极品评级。蓝装保留蓝色品质标识，但精炼数值和地区附加与紫装使用同一套综合评分，达到阈值同样可评极品或神器。只列出实际总泥耗不超过预算的精炼方案。不同地点、图纸和部位均独立推演，不会修改存档或装备模拟背包。</p>
             </section>
         </main>
 
         <main class="planner-main planner-tool-view" data-planner-view="target">
             <aside class="planner-intro planner-intro-target">
                 <strong>目标装备追踪</strong>
-                <p>先限定部位与期望属性，再从当前存档中寻找满足条件的打造路线。默认筛选极品及以上，也可改为仅神器或不限档次。可以按最早出现、连金泥、银两或最终评分排序。聚气仅作为特殊词条展示，不评级为神器。</p>
+                <p>先限定部位与期望属性，再从当前存档中寻找满足条件的打造路线。默认筛选极品及以上，也可改为仅神器或不限档次；蓝装与紫装按同一综合评分归档。可以按最早出现、连金泥、银两或最终评分排序。聚气仅作为特殊词条展示，不评级为神器。</p>
             </aside>
             <section class="config-panel" aria-labelledby="targetConfigTitle">
                 <div class="feature-section-head">
@@ -118,17 +120,15 @@
         <main class="planner-main planner-tool-view" data-planner-view="standards" hidden>
             <aside class="planner-intro planner-intro-standards">
                 <strong>基础属性参考与精炼上限</strong>
-                <p>本表只列当前内置图纸配置推算的打造基础属性参考值，以及100级升炼后精炼词条的理论上限；不代表纯打造所有词条/地区附加的上限。PVP标准图用于实战选装参考，不参与自动评分。</p>
+                <p>按部位筛选并展开具体图纸查看，避免把不同图纸的上限混在一起。打造基础属性为配置推算参考；精炼为100级升炼后各图纸的词条理论上限，不代表实际序列必然可达。PVP标准图用于实战选装参考。</p>
             </aside>
             <section class="result-panel planner-results-panel" aria-labelledby="limitsTitle">
-                <div class="planner-title-wrap"><span class="section-step">01</span><div><h2 id="limitsTitle">打造基础属性参考与精炼词条理论上限</h2><span>精炼属性按词条1、词条2、词条3分别列出</span></div></div>
-                <p class="limits-note">左侧仅是90级紫装基础属性配置按×110%推算的参考值，不是纯打造词条或地区附加的完整上限表；右侧是100级升炼配置的精炼理论满值（125%×槽位系数1、0.75、0.5，点数属性逐槽取整，百分比逐槽截取显示精度）。各图纸取同部位最高值，不代表单件装备能同时拥有所有属性，也不保证序列中可达。</p>
-                <div class="limits-table-wrap">
-                    <table class="limits-table">
-                        <thead><tr><th>部位</th><th>90级紫装基础属性参考</th><th>精炼属性（100级升炼）</th><th>词条1理论上限</th><th>词条2理论上限</th><th>词条3理论上限</th></tr></thead>
-                        <tbody id="limitsTableBody"></tbody>
-                    </table>
+                <div class="limits-toolbar">
+                    <div class="planner-title-wrap"><span class="section-step">01</span><div><h2 id="limitsTitle">按图纸查看属性参考与精炼上限</h2><span>每张图纸独立展示，不跨图纸取最高值</span></div></div>
+                    <label for="limitsPartFilter">装备部位<select id="limitsPartFilter"></select></label>
                 </div>
+                <p class="limits-note">打造参考为该图纸90级基础配置×110%，不含强化、地区及首次材料附加，也不是纯打造词条完整上限。精炼按该图纸100级升炼配置分别计算三个词条的理论满值（125%×槽位系数1、0.75、0.5；点数属性逐槽取整）。</p>
+                <div id="limitsDiagramGroups" class="limits-diagram-groups"></div>
             </section>
             <section class="result-panel planner-results-panel pvp-standard-panel" aria-labelledby="pvpStandardTitle">
                 <div class="planner-title-wrap"><span class="section-step">02</span><div><h2 id="pvpStandardTitle">PVP精炼标准表</h2><span>实战选装参考</span></div></div>
@@ -148,7 +148,7 @@
     <script src="../shared/sql-wasm-embed.js"></script>
     <script src="../shared/save_decrypt.js"></script>
     <script src="../shared/archive_state.js"></script>
-    <script src="../shared/equip_auto_optimizer.js?v=20261126prelock2"></script>
+    <script src="../shared/equip_auto_optimizer.js?v=20261126blue1"></script>
     <script src="./planner.js?v=20261126tools1"></script>
 </body>
 </html>

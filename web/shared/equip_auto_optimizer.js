@@ -11,6 +11,7 @@
         maxCraftWork: 100000,
         maxRefineWork: 2000000,
         resultLimit: 30,
+        includeBlue: false,
     });
     const TARGET_PROPERTIES = Object.freeze([
         'atk_add', 'dmg_off', 'def_ign', 'atk_extend',
@@ -75,6 +76,7 @@
             maxCraftWork: integerInRange(raw.maxCraftWork, 1, 500000, DEFAULT_OPTIONS.maxCraftWork),
             maxRefineWork: integerInRange(raw.maxRefineWork, 1, 10000000, DEFAULT_OPTIONS.maxRefineWork),
             resultLimit: integerInRange(raw.resultLimit, 1, 100, DEFAULT_OPTIONS.resultLimit),
+            includeBlue: raw.includeBlue === true,
         };
     }
 
@@ -160,6 +162,44 @@
             if (maximum > 0) reference[prop] = maximum;
             return reference;
         }, {});
+    }
+
+    const partRefinementReferenceCache = new Map();
+    function partRefinementReference(data, part, prop, fallback = 0) {
+        const key = `${Number(part)}::${prop}`;
+        if (partRefinementReferenceCache.has(key)) return partRefinementReferenceCache.get(key);
+        let maximum = 0;
+        AUTO_PAPER_IDS.forEach(id => {
+            const paper = data && data.papers && data.papers[String(id)];
+            const equip = paper && data.equipment && data.equipment[String(paper.dz_equip)];
+            if (!equip || Number(equip.type) !== Number(part)) return;
+            const upgraded = data.equipment[String(equip.equ_next)] || equip;
+            maximum = Math.max(maximum, finiteNumber(theoreticalRefinementReference(upgraded, [prop])[prop]));
+        });
+        maximum = maximum || finiteNumber(fallback);
+        partRefinementReferenceCache.set(key, maximum);
+        return maximum;
+    }
+
+    function regionBonusItem(item) {
+        const value = Math.max(0, finiteNumber(item && item.value));
+        const weights = {dmg_off: 550, dmg_ref: 440, atk: 0.088, atk_add: 0.088, str: 0.55, con: 0.55, dex: 0.55, int: 0.55, mp_f: 0.88, mp_back: 2.2, def: 0.0176, def_add: 0.0176, hp: 0.0132, hp_add: 0.0132, hit: 0.044, hit_add: 0.044, speed: 0.0352, speed_add: 0.0352, dodge: 0.0264, dodge_add: 0.0264, parry: 0.0264, parry_add: 0.0264};
+        return value * finiteNumber(weights[item && item.prop]);
+    }
+    function regionBonus(region) {
+        return Math.min(12, (region || []).reduce((sum, item) => sum + regionBonusItem(item), 0));
+    }
+    function scoreEquipmentRefinement(data, equipId, prop, total, region) {
+        const equip = data && data.equipment && data.equipment[String(equipId)] || {};
+        const maximum = partRefinementReference(data, equip.type, prop,
+            theoreticalRefinementReference(equip, [prop])[prop]);
+        const baseScore = maximum > 0 ? Math.min(100, finiteNumber(total) / maximum * 100) : 0;
+        const bonus = regionBonus(region);
+        const finalScore = Math.min(100, baseScore + bonus);
+        const grade = prop === 'mp_back' || maximum <= 0
+            ? '候选'
+            : finalScore >= 96 ? '神器' : finalScore >= 91 ? '极品' : '候选';
+        return {baseScore, bonus, finalScore, grade};
     }
 
     function craftedMJSeedFromMakeResult(result, paperId) {
@@ -540,7 +580,7 @@
         const earlyBest = { 1: earlyInitial[1]?.theoretical || 0,
             2: earlyInitial[2]?.theoretical || 0,
             3: earlyInitial[3]?.theoretical || 0 };
-        const prefixes = [];
+        const prefixRecordsBySlot = { 1: [], 2: [], 3: [] };
         earlyItems.forEach((item, index) => {
             const slot = finiteNumber(item && item.slot);
             const prop = item && item.prop;
@@ -550,9 +590,13 @@
             const theoretical = refinementTheoreticalValue(prop.value, level);
             if (theoretical > earlyBest[slot]) {
                 earlyBest[slot] = theoretical;
-                prefixes.push({ index: index + 1, slot });
+                prefixRecordsBySlot[slot].push({ index: index + 1, slot, theoretical });
             }
         });
+        // The early scan is only a pre-lock search, not a full route enumeration.
+        // Keep the two strongest record-breakers per slot: the strongest can be the
+        // later target itself, while the preceding record is the useful preload.
+        const prefixes = [1, 2, 3].flatMap(slot => prefixRecordsBySlot[slot].slice(-2));
 
         let selected = best;
         const actualTotal = refinement => [1, 2, 3].reduce((sum, slot) => (
@@ -906,6 +950,7 @@
         const branchResults = [];
         const candidates = [];
         let totalPurple = 0;
+        let totalBlue = 0;
         const startedAt = Date.now();
 
         try {
@@ -924,7 +969,10 @@
                 const items = (response && response.items || []).slice(0, options.craftCount);
                 bridge.setMakeState(clone(initialMakeState));
                 const purpleItems = items.filter(item => finiteNumber(item.color) === 4);
+                const blueItems = items.filter(item => finiteNumber(item.color) === 3);
                 totalPurple += purpleItems.length;
+                totalBlue += blueItems.length;
+                const candidateItems = options.includeBlue ? purpleItems.concat(blueItems) : purpleItems;
                 const branchResult = {
                     key: branch.key,
                     npcId: meta.craftsman.id,
@@ -939,11 +987,12 @@
                     unsupportedTargetProps: plan.unsupportedTargetProps.slice(),
                     craftCount: items.length,
                     purpleCount: purpleItems.length,
+                    blueCount: blueItems.length,
                     purpleRate: items.length ? purpleItems.length / items.length : 0,
                     searchCost: craftCost(branch, items.length, data),
                 };
                 branchResults.push(branchResult);
-                for (const item of purpleItems) {
+                for (const item of candidateItems) {
                     candidates.push({ branch, branchResult, item });
                 }
                 await yieldControl();
@@ -953,7 +1002,7 @@
                 sum + source.branchResult.targetProps.length * options.refineCount
             ), 0);
             if (refineWork > options.maxRefineWork) {
-                throw new Error(`紫装较多：精炼分析需约 ${refineWork.toLocaleString()} 步，请减少图纸、属性或精炼次数`);
+                throw new Error(`候选装备较多：精炼分析需约 ${refineWork.toLocaleString()} 步，请减少图纸、属性或精炼次数`);
             }
 
             const detailed = [];
@@ -969,7 +1018,7 @@
                 const canSimulateSpecialAttach = !!(craftSpecialMaterial && craftSpecialItems.length);
                 onProgress({
                     phase: 'refine', done: candidateIndex, total: candidates.length,
-                    message: `分析紫装 ${candidateIndex + 1}/${candidates.length}：${source.branchResult.equipName} · 第 ${source.item.index} 次`,
+                    message: `分析${finiteNumber(source.item.color) === 3 ? '蓝' : '紫'}装 ${candidateIndex + 1}/${candidates.length}：${source.branchResult.equipName} · 第 ${source.item.index} 次`,
                 });
                 const refinements = source.branchResult.targetProps.map(prop => analyzeRefinement(
                     bridge, equip, prop, options.refineCount, data, options.refineMudBudget,
@@ -993,6 +1042,7 @@
                     originalEquipName: rawEquip.name,
                     craftIndex: finiteNumber(source.item.index),
                     color: finiteNumber(source.item.color),
+                    qualityName: finiteNumber(source.item.color) === 3 ? '蓝' : '紫',
                     base: clone(source.item.base || {}),
                     exts: normalizePropertyList(source.item.exts),
                     region,
@@ -1040,6 +1090,7 @@
                     skippedBranchCount: skippedBranches.length,
                     totalCrafts: branchResults.reduce((sum, item) => sum + item.craftCount, 0),
                     totalPurple,
+                    totalBlue,
                     candidateCount: detailed.length,
                     elapsedMs: Date.now() - startedAt,
                 },
@@ -1063,6 +1114,10 @@
         supportedTargetProperties,
         theoreticalRefinementSlotMaximum,
         theoreticalRefinementReference,
+        partRefinementReference,
+        regionBonusItem,
+        regionBonus,
+        scoreEquipmentRefinement,
         craftedMJSeedFromMakeResult,
         makeResultToEquip,
         canUpgrade,

@@ -3031,6 +3031,18 @@ html.auto-simulator-view #simulatorConfigPanel {
     margin: 0;
 }
 
+.equip-auto-quality-badge.is-blue {
+    display: inline-flex;
+    margin-right: 0.4rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: rgba(73, 147, 230, 0.14);
+    color: #3884d8;
+    font-size: 0.72rem;
+    font-weight: 700;
+    vertical-align: 0.08rem;
+}
+
 .equip-auto-pager-controls .pager-size {
     margin-left: auto;
 }

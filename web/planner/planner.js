@@ -10,6 +10,7 @@
     var cancelRequested = false;
     var targetCancelRequested = false;
     var equipmentEngineReady = null;
+    var sharedRefinementReferenceCache = Object.create(null);
 
     function $(id) { return document.getElementById(id); }
     function number(value, fallback) { var n = Number(value); return Number.isFinite(n) ? n : fallback; }
@@ -49,22 +50,27 @@
     }
     function refinementCost(refinement) { return number(refinement && refinement.plan && refinement.plan.cost && refinement.plan.cost.lianjin, 0); }
     function regionBonusItem(item) {
-        var value = Math.max(0, number(item && item.value, 0));
-        var weights = {dmg_off: 1250, dmg_ref: 1000, atk: 0.2, atk_add: 0.2, str: 1.25, con: 1.25, dex: 1.25, int: 1.25, mp_f: 2, mp_back: 5, def: 0.04, def_add: 0.04, hp: 0.03, hp_add: 0.03, hit: 0.1, hit_add: 0.1, speed: 0.08, speed_add: 0.08, dodge: 0.06, dodge_add: 0.06, parry: 0.06, parry_add: 0.06};
-        return value * number(weights[item && item.prop], 0);
+        return EquipmentAutoOptimizer.regionBonusItem(item);
     }
-    function regionBonus(region) { return Math.min(30, (region || []).reduce(function (sum, item) { return sum + regionBonusItem(item); }, 0)); }
+    function regionBonus(region) { return EquipmentAutoOptimizer.regionBonus(region); }
+    function partRefinementMaximum(part, prop, fallback) {
+        var cacheKey = part + '::' + prop;
+        if (sharedRefinementReferenceCache[cacheKey] != null) return sharedRefinementReferenceCache[cacheKey];
+        sharedRefinementReferenceCache[cacheKey] = EquipmentAutoOptimizer.partRefinementReference(EQUIP_DATA, part, prop, fallback);
+        return sharedRefinementReferenceCache[cacheKey];
+    }
     function scoreableRefinement(prop) { return prop !== 'mp_back'; }
     function bestWithinBudget(candidate, budget, refineProp, allowUnrated) {
         var upgradeMud = candidate.upgraded ? 10 : 0;
-        var reference = candidate.refinementRatingReference || {};
         return (candidate.refinements || []).reduce(function (best, refinement) {
             if (refineProp && refineProp !== 'all' && refinement.prop !== refineProp) return best;
             if (!(refinementTotal(refinement) > 0)) return best;
             var scoreable = scoreableRefinement(refinement.prop);
             if (!scoreable && !(allowUnrated && refineProp === refinement.prop)) return best;
             var mud = upgradeMud + refinementCost(refinement);
-            var maximum = number(reference[refinement.prop], 0);
+            var config = EQUIP_DATA.equipment[String(candidate.equipId)] || {};
+            var maximum = partRefinementMaximum(config.type, refinement.prop,
+                candidate.refinementRatingReference && candidate.refinementRatingReference[refinement.prop]);
             var baseScore = scoreable && maximum > 0 ? Math.min(100, refinementTotal(refinement) / maximum * 100) : 0;
             var option = {refinement: refinement, mud: mud, baseScore: baseScore};
             if (mud > budget) return best;
@@ -76,17 +82,25 @@
         var allowUnrated = refineProp && refineProp !== 'all';
         var best = bestWithinBudget(candidate, budget, refineProp, allowUnrated);
         if (!best) return null;
-        var bonus = regionBonus(candidate.region);
-        var finalScore = Math.min(100, best.baseScore + bonus);
-        if (finalScore < number(minimumScore, 91)) return null;
+        var qualityName = number(candidate.color, 4) === 3 ? '蓝' : '紫';
         var config = EQUIP_DATA.equipment[String(candidate.equipId)] || {};
+        var rating = EquipmentAutoOptimizer.scoreEquipmentRefinement(EQUIP_DATA, candidate.equipId,
+            best.refinement.prop, refinementTotal(best.refinement), candidate.region);
+        var bonus = rating.bonus;
+        var finalScore = rating.finalScore;
+        if (finalScore < number(minimumScore, 91)) return null;
         return {id: candidate.id, part: number(config.type, 0), equipName: candidate.equipName, paperName: candidate.paperName,
             location: candidate.location, craftIndex: number(candidate.craftIndex, 0), region: candidate.region || [], refinement: best.refinement,
             mud: best.mud, silver: number(candidate.craftCost && candidate.craftCost.silver, 0) + number(candidate.upgradeCost && candidate.upgradeCost.silver, 0) + number(best.refinement.plan && best.refinement.plan.cost && best.refinement.plan.cost.silver, 0),
-            baseScore: best.baseScore, bonus: bonus, finalScore: finalScore, grade: finalScore >= 96 ? '神器' : (finalScore >= 91 ? '极品' : '候选')};
+            attachmentScore: (candidate.region || []).reduce(function (sum, item) { return sum + regionBonusItem(item); }, 0),
+            qualityName: qualityName, color: number(candidate.color, 4), baseScore: best.baseScore, bonus: bonus, finalScore: finalScore,
+            grade: rating.grade};
     }
     function resultKey(item, candidate) {
-        return [item.part, candidate.equipId, candidate.S, candidate.CZSeed, item.refinement.prop, refinementTotal(item.refinement), item.mud].join('::');
+        // One craft opportunity may be reachable through several regions. Keep a
+        // single card per paper/craft/property and select its best attachment.
+        return [item.part, candidate.paperId, candidate.specialId || 0, candidate.equipId,
+            candidate.craftIndex, item.refinement.prop].join('::');
     }
     function addToCollection(collection, indexes, candidate, budget, refineProp, minimumScore) {
         var scored = scoreCandidate(candidate, budget, refineProp, minimumScore);
@@ -95,7 +109,11 @@
         var index = indexes[key];
         if (index == null) { indexes[key] = collection.length; collection.push(scored); return; }
         var old = collection[index];
-        if (scored.bonus > old.bonus || (scored.bonus === old.bonus && scored.silver < old.silver)) collection[index] = scored;
+        if (scored.attachmentScore > old.attachmentScore
+            || (scored.attachmentScore === old.attachmentScore && scored.baseScore > old.baseScore)
+            || (scored.attachmentScore === old.attachmentScore && scored.baseScore === old.baseScore && scored.silver < old.silver)
+            || (scored.attachmentScore === old.attachmentScore && scored.baseScore === old.baseScore && scored.silver === old.silver
+                && scored.location.localeCompare(old.location, 'zh') < 0)) collection[index] = scored;
     }
     function compareResults(a, b) { return b.finalScore - a.finalScore || b.bonus - a.bonus || a.mud - b.mud || a.craftIndex - b.craftIndex || a.location.localeCompare(b.location, 'zh'); }
     function dedupeCraftsmen(craftsmen) {
@@ -184,7 +202,7 @@
                 await new Promise(function (resolve) { window.setTimeout(resolve, 0); });
                 var targetProps = options.targetProp && options.targetProp !== 'all' ? [options.targetProp] : propertyTargetsForPart(task.part);
                 var simulated = await EquipmentAutoOptimizer.simulateEquipmentRoutes({data: EQUIP_DATA, initialMakeState: makeRnd, branches: [task.branch], targetProps: targetProps,
-                    options: {craftCount: options.craftCount, refineCount: Math.min(1000, options.mudBudget), refineMudBudget: Math.max(1, options.mudBudget - 10), attachCount: 1, maxCraftWork: 500000, maxRefineWork: 10000000, resultLimit: Math.max(100, options.craftCount)}, bridge: bridge()});
+                    options: {craftCount: options.craftCount, refineCount: Math.min(1000, options.mudBudget), refineMudBudget: Math.max(1, options.mudBudget - 10), attachCount: 1, maxCraftWork: 500000, maxRefineWork: 10000000, resultLimit: Math.max(100, options.craftCount), includeBlue: true}, bridge: bridge()});
                 (simulated.candidates || []).forEach(options.candidate);
                 if (options.afterTask) options.afterTask();
             }
@@ -197,22 +215,38 @@
         var region = item.region.length ? item.region.map(function (prop) { return '<span>' + escapeHtml(propName(prop.prop)) + ' +' + escapeHtml(formatProp(prop.prop, prop.value)) + '</span>'; }).join('') : '<span>无地区附加</span>';
         var refineText = escapeHtml(propName(item.refinement.prop)) + ' ' + escapeHtml(refinementDisplayTotal(item.refinement));
         var gradeClass = item.grade === '神器' ? 'is-artifact' : (item.grade === '极品' ? 'is-premium' : 'is-candidate');
-        return '<article class="planner-card ' + gradeClass + '"><header class="planner-card-head"><div><h4>' + escapeHtml(item.equipName) + '</h4><p>' + escapeHtml(item.paperName) + ' · ' + escapeHtml(item.location) + ' · 第' + item.craftIndex + '件</p></div><span class="planner-grade"><b>' + item.grade + '</b><strong>' + score(item.finalScore) + '</strong></span></header><div class="planner-score-grid"><span>精炼基础<strong>' + score(item.baseScore) + '</strong></span><span>地区附加<strong>+' + score(item.bonus) + '</strong></span><span>最终评分<strong>' + score(item.finalScore) + '</strong></span></div><div class="planner-props"><span>最佳精炼 ' + refineText + '</span>' + region + '</div><footer class="planner-card-foot"><span>实际泥耗 <strong>' + item.mud.toLocaleString() + '</strong></span><span>累计银两 <strong>' + silver(item.silver) + '</strong></span></footer></article>';
+        return '<article class="planner-card ' + gradeClass + '"><header class="planner-card-head"><div><h4>' + escapeHtml(item.equipName) + '</h4><p>' + escapeHtml(item.qualityName) + '装 · ' + escapeHtml(item.paperName) + ' · ' + escapeHtml(item.location) + ' · 第' + item.craftIndex + '件</p></div><span class="planner-grade"><b>' + item.grade + '</b><strong>' + score(item.finalScore) + '</strong></span></header><div class="planner-score-grid"><span>精炼基础<strong>' + score(item.baseScore) + '</strong></span><span>地区附加<strong>+' + score(item.bonus) + '</strong></span><span>最终评分<strong>' + score(item.finalScore) + '</strong></span></div><div class="planner-props"><span>最佳精炼 ' + refineText + '</span>' + region + '</div><footer class="planner-card-foot"><span>实际泥耗 <strong>' + item.mud.toLocaleString() + '</strong></span><span>累计银两 <strong>' + silver(item.silver) + '</strong></span></footer></article>';
     }
     function renderResults() {
         var filter = $('partFilter').value;
+        var property = $('propertyFilter').value;
         var attachOnly = $('attachOnly').checked;
         var html = [], shown = 0;
         (filter === 'all' ? PART_ORDER : [Number(filter)]).forEach(function (part) {
-            var items = results.filter(function (item) { return item.part === part && (!attachOnly || item.region.length); }).sort(compareResults);
+            var items = results.filter(function (item) { return item.part === part
+                && (property === 'all' || item.refinement.prop === property)
+                && (!attachOnly || item.region.length); }).sort(compareResults);
             if (!items.length) return;
             shown += items.length;
             html.push('<section class="planner-part-group"><div class="planner-part-title"><h3>' + PART_NAMES[part] + '</h3><span>符合 ' + items.length + ' 件</span></div><div class="planner-cards">' + items.map(cardHtml).join('') + '</div></section>');
         });
         $('resultGroups').innerHTML = html.join('');
         $('resultEmpty').hidden = shown > 0;
-        if (!shown) $('resultEmpty').textContent = results.length ? '当前筛选条件下没有神器或极品。' : '当前已完成范围内没有达到神器或极品的装备。';
+        if (!shown) $('resultEmpty').textContent = results.length ? '当前筛选条件下没有符合结果。' : '当前已完成范围内没有符合条件的蓝装或极品/神器。';
         $('resultMeta').textContent = results.length ? '共找到 ' + results.length + ' 件 · 当前展示 ' + shown + ' 件' : '尚无符合结果';
+    }
+    function fillPlannerPropertyOptions() {
+        var select = $('propertyFilter');
+        var selected = select.value || 'all';
+        var parts = $('partFilter').value === 'all' ? PART_ORDER : [Number($('partFilter').value)];
+        var props = Object.create(null);
+        parts.forEach(function (part) { propertyTargetsForPart(part).forEach(function (prop) { props[prop] = true; }); });
+        var options = ['<option value="all">全部属性</option>'].concat(
+            Object.keys(props).sort(function (a, b) { return propName(a).localeCompare(propName(b), 'zh'); })
+                .map(function (prop) { return '<option value="' + escapeHtml(prop) + '">' + escapeHtml(propName(prop)) + '</option>'; })
+        );
+        select.innerHTML = options.join('');
+        select.value = props[selected] ? selected : 'all';
     }
     async function runPlanner() {
         var budget = integer($('mudBudget').value, 10, 1000, 200), count = integer($('craftCount').value, 1, 500, 20);
@@ -264,34 +298,39 @@
         if ([].some.call(region.options, function (option) { return option.value === oldRegion; })) region.value = oldRegion;
     }
     function renderLimitsTable() {
-        $('limitsTableBody').innerHTML = PART_ORDER.map(function (part) {
-            var craftBase = {}, refineSlots = {};
-            PAPER_IDS.forEach(function (id) {
+        var selectedPart = Number($('limitsPartFilter').value) || PART_ORDER[0];
+        $('limitsDiagramGroups').innerHTML = PART_ORDER.filter(function (part) { return part === selectedPart; }).map(function (part) {
+            var papers = PAPER_IDS.map(function (id) {
                 var paper = EQUIP_DATA.papers[String(id)];
                 var equip = paper && EQUIP_DATA.equipment[String(paper.dz_equip)];
-                if (!equip || Number(equip.type) !== part) return;
-                Object.keys(equip.base || {}).forEach(function (prop) {
-                    craftBase[prop] = Math.max(craftBase[prop] || 0, Math.floor(number(equip.base[prop], 0) * 1.1 + 1e-8));
-                });
+                if (!equip || Number(equip.type) !== part) return null;
                 var upgraded = EQUIP_DATA.equipment[String(equip.equ_next)] || equip;
+                var craftBase = {};
+                Object.keys(equip.base || {}).forEach(function (prop) {
+                    craftBase[prop] = Math.floor(number(equip.base[prop], 0) * 1.1 + 1e-8);
+                });
+                var refineSlots = {};
                 Object.keys(upgraded.exts || {}).forEach(function (prop) {
                     var slots = refineSlots[prop] || (refineSlots[prop] = [0, 0, 0]);
                     [1, 2, 3].forEach(function (slot) {
                         slots[slot - 1] = Math.max(slots[slot - 1], EquipmentAutoOptimizer.theoreticalRefinementSlotMaximum(upgraded, prop, slot));
                     });
                 });
-            });
+                return {paper: paper, equip: equip, craftBase: craftBase, refineSlots: refineSlots};
+            }).filter(Boolean);
             function propertiesHtml(values) {
                 return Object.keys(values).map(function (prop) {
                     return '<span>' + escapeHtml(propName(prop)) + ' <b>' + escapeHtml(formatProp(prop, values[prop])) + '</b></span>';
                 }).join('');
             }
-            var props = Object.keys(refineSlots);
-            return props.map(function (prop, index) {
-                var group = index === 0 ? '<th scope="rowgroup" rowspan="' + props.length + '">' + PART_NAMES[part] + '</th><td rowspan="' + props.length + '"><div class="limit-values">' + propertiesHtml(craftBase) + '</div></td>' : '';
-                return '<tr' + (index === 0 ? ' class="limit-part-start"' : '') + '>' + group + '<th scope="row">' + escapeHtml(propName(prop)) + '</th>' + refineSlots[prop].map(function (value) {
-                    return '<td>' + escapeHtml(refinementDisplayTotal({prop: prop, maxima: {1: {value: value}}})) + '</td>';
-                }).join('') + '</tr>';
+            return papers.map(function (entry) {
+                var props = Object.keys(entry.refineSlots);
+                var rows = props.map(function (prop, propIndex) {
+                    return '<tr><th scope="row">' + escapeHtml(propName(prop)) + '</th>' + entry.refineSlots[prop].map(function (value) {
+                            return '<td>' + escapeHtml(refinementDisplayTotal({prop: prop, maxima: {1: {value: value}}})) + '</td>';
+                        }).join('') + '</tr>';
+                }).join('');
+                return '<details class="limits-paper-card" open><summary><span class="limits-paper-name">' + escapeHtml(entry.paper.name) + '</span><span class="limits-paper-equipment">' + escapeHtml(entry.equip.name) + '</span><span class="limits-paper-hint">展开查看 ' + props.length + ' 项精炼属性</span></summary><div class="limits-paper-content"><div class="limits-paper-base"><strong>90级打造基础属性参考</strong><div class="limit-values">' + propertiesHtml(entry.craftBase) + '</div></div><div class="limits-table-wrap"><table class="limits-table"><thead><tr><th>精炼属性</th><th>词条1理论上限</th><th>词条2理论上限</th><th>词条3理论上限</th></tr></thead><tbody>' + rows + '</table></div></div></details>';
             }).join('');
         }).join('');
     }
@@ -312,8 +351,14 @@
     function init() {
         PART_ORDER.forEach(function (part) { var option = document.createElement('option'); option.value = String(part); option.textContent = PART_NAMES[part]; $('partFilter').appendChild(option); $('targetPart').appendChild(option.cloneNode(true)); });
         fillTargetOptions();
+        PART_ORDER.forEach(function (part) { var option = document.createElement('option'); option.value = String(part); option.textContent = PART_NAMES[part]; $('limitsPartFilter').appendChild(option); });
+        $('limitsPartFilter').value = String(PART_ORDER[0]);
+        $('limitsPartFilter').addEventListener('change', renderLimitsTable);
         document.querySelector('.planner-tool-tabs').addEventListener('click', function (event) { var button = event.target.closest('[data-planner-tool]'); if (button) switchPlannerTool(button.dataset.plannerTool, true); });
-        $('btnPlan').addEventListener('click', runPlanner); $('btnCancel').addEventListener('click', function () { cancelRequested = true; $('btnCancel').disabled = true; }); $('partFilter').addEventListener('change', renderResults); $('attachOnly').addEventListener('change', renderResults);
+        fillPlannerPropertyOptions();
+        $('btnPlan').addEventListener('click', runPlanner); $('btnCancel').addEventListener('click', function () { cancelRequested = true; $('btnCancel').disabled = true; });
+        $('partFilter').addEventListener('change', function () { fillPlannerPropertyOptions(); renderResults(); });
+        $('propertyFilter').addEventListener('change', renderResults); $('attachOnly').addEventListener('change', renderResults);
         $('btnTargetPlan').addEventListener('click', runTarget); $('btnTargetCancel').addEventListener('click', function () { targetCancelRequested = true; $('btnTargetCancel').disabled = true; }); $('targetPart').addEventListener('change', fillTargetOptions);
         loadSharedSave();
         renderLimitsTable();
