@@ -48,9 +48,13 @@ SCRIPT = r'''JSON.stringify((()=>{
     select.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
     if (select.value !== '21' || changes !== 2) fail('Keyboard confirmation failed');
     select.remove();
-    if (document.getElementById('w2Budget')) fail('Wash2 budget input should be fixed at 1,000,000');
-    if (!document.getElementById('w2BudgetNotice').textContent.includes('100 万丹')) fail('Wash2 fixed budget notice missing');
-    if (document.querySelector('#autoWash2ModePanel [id^="anchor"]')) fail('Anchor control leaked into Wash2 UI');
+    const wash2Panel = document.getElementById('autoWash2ModePanel');
+    if (wash2Panel) {
+        if (document.getElementById('w2Budget')) fail('Wash2 budget input should be fixed at 1,000,000');
+        const budgetNotice = document.getElementById('w2BudgetNotice');
+        if (!budgetNotice || !budgetNotice.textContent.includes('100 万丹')) fail('Wash2 fixed budget notice missing');
+        if (wash2Panel.querySelector('[id^="anchor"]')) fail('Anchor control leaked into Wash2 UI');
+    }
     const guide = document.querySelector('.ghost-guide');
     if (guide && !guide.open) fail('Ghost guide not expanded');
     return {ok:true};
