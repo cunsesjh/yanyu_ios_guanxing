@@ -155,6 +155,33 @@ class DesktopTests(unittest.TestCase):
                 DownloadService(self.store).download_from_har('capture.har')
         self.assertEqual(self.store.list_snapshots(), [])
 
+    def test_complete_dat_json_import_is_saved_without_cloud_session(self):
+        imported = dict(DATA, DBVersion=73576, ServerID=25)
+        path = Path(self.tmp.name) / 'dat.json'
+        path.write_text(json.dumps(imported), encoding='utf-8')
+
+        progress = []
+        result = DownloadService(self.store).import_json(path, progress.append)
+
+        self.assertIsNone(result['session'])
+        self.assertIn('不含登录会话', result['warning'])
+        self.assertEqual(result['row']['version'], '00073576')
+        self.assertEqual(result['row']['area'], '25')
+        self.assertNotIn('session_ref', result['row'])
+        self.assertEqual(self.store.load_snapshot(result['row']['id']), imported)
+        self.assertTrue(any('校验成功' in message for message in progress))
+
+    def test_dat_json_import_rejects_invalid_or_incomplete_content(self):
+        path = Path(self.tmp.name) / 'dat.json'
+        path.write_text('{broken', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'JSON 格式无效'):
+            DownloadService(self.store).import_json(path)
+
+        path.write_text(json.dumps({'MainRole': {}, 'Roles': []}), encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, '存档内容不完整'):
+            DownloadService(self.store).import_json(path)
+        self.assertEqual(self.store.list_snapshots(), [])
+
     def test_history_selection_survives_restart_and_rejects_traversal(self):
         first = self.store.save_snapshot(DATA, 'ios', '1', '73576')
         self.store.save_snapshot(dict(DATA, Rnds={'test': 456}), 'ios', '1', '73580')

@@ -147,15 +147,18 @@ class DownloadThread(QThread):
     completed = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, store, session=None, har=None):
+    def __init__(self, store, session=None, import_path=None):
         super().__init__()
-        self.store, self.session, self.har = store, session, har
+        self.store, self.session, self.import_path = store, session, import_path
 
     def run(self):
         try:
-            if self.har:
-                result = DownloadService(self.store).download_from_har(
-                    self.har, self.progress.emit)
+            if self.import_path:
+                service = DownloadService(self.store)
+                if str(self.import_path).lower().endswith('.json'):
+                    result = service.import_json(self.import_path, self.progress.emit)
+                else:
+                    result = service.download_from_har(self.import_path, self.progress.emit)
             else:
                 result = DownloadService(self.store).download(
                     self.session, self.progress.emit)
@@ -166,7 +169,7 @@ class DownloadThread(QThread):
             message = str(error) if isinstance(error, ValueError) else '文件读取或保存失败，请检查文件和磁盘权限。'
             self.failed.emit(message)
         except Exception:
-            self.failed.emit('下载或解码未完成，请重新导入 HAR 后重试。之前的存档已保留。')
+            self.failed.emit('导入或解码未完成，请检查 HAR / dat.json 后重试。之前的存档已保留。')
 
 
 class UpdateThread(QThread):
@@ -218,24 +221,25 @@ class Welcome(QWidget):
         title = QLabel('江湖进度，一窗掌握。')
         title.setObjectName('headline')
         layout.addWidget(title)
-        text = QLabel('导入一次 HAR，连接你的云存档。\n下载完成后，在这个窗口里开始观星。')
+        text = QLabel('导入 HAR 连接云存档，或直接打开解密后的 dat.json。\n'
+                      '导入完成后，在这个窗口里开始观星。')
         text.setObjectName('muted')
         text.setStyleSheet('font-size: 16px; line-height: 1.6;')
         layout.addWidget(text)
         layout.addSpacing(12)
-        drop = QLabel('将 .har 文件拖到这里\n\n或点击下方按钮选择文件')
+        drop = QLabel('将 .har 或 dat.json 拖到这里\n\n或点击下方按钮选择文件')
         drop.setObjectName('drop')
         drop.setAlignment(Qt.AlignCenter)
         layout.addWidget(drop)
-        button = QPushButton('选择 HAR 并下载云存档  →')
+        button = QPushButton('选择 HAR / dat.json  →')
         button.setObjectName('primary')
         button.setMinimumHeight(48)
         button.clicked.connect(select_file)
         self.select_button = button
         layout.addWidget(button)
-        note = QLabel('会使用 HAR 中的登录会话向游戏服务器发起一次下载。\n'
+        note = QLabel('HAR 会连接游戏服务器下载存档；dat.json 只在本机导入。\n'
                       '只读取服务器已保存的进度，不上传或覆盖游戏存档。\n'
-                      '会话失效时重新导入；已下载的存档始终可以离线查看。')
+                      '云会话失效时重新导入 HAR；历史存档始终可以离线查看。')
         note.setObjectName('muted')
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -245,12 +249,14 @@ class Welcome(QWidget):
 
     def dragEnterEvent(self, event):
         urls = event.mimeData().urls()
-        if len(urls) == 1 and urls[0].isLocalFile() and urls[0].toLocalFile().lower().endswith('.har'):
+        if (len(urls) == 1 and urls[0].isLocalFile()
+                and urls[0].toLocalFile().lower().endswith(('.har', '.json'))):
             event.acceptProposedAction()
 
     def dropEvent(self, event):
         urls = event.mimeData().urls()
-        if len(urls) == 1 and urls[0].isLocalFile() and urls[0].toLocalFile().lower().endswith('.har'):
+        if (len(urls) == 1 and urls[0].isLocalFile()
+                and urls[0].toLocalFile().lower().endswith(('.har', '.json'))):
             self.fileDropped.emit(urls[0].toLocalFile())
             event.acceptProposedAction()
 
@@ -300,7 +306,7 @@ class MainWindow(QMainWindow):
         sidebar.addWidget(self.home_button)
         self.refresh_button = self.button('↓  下载最新云存档', self.refresh, 'primary')
         sidebar.addWidget(self.refresh_button)
-        self.import_button = self.button('＋  导入 / 更换 HAR', self.select_file)
+        self.import_button = self.button('＋  导入 HAR / dat.json', self.select_file)
         sidebar.addWidget(self.import_button)
         self.history_button = self.button('◷  历史存档', self.show_history)
         sidebar.addWidget(self.history_button)
@@ -470,20 +476,22 @@ class MainWindow(QMainWindow):
     def select_file(self):
         if self.worker:
             return
-        path, _ = QFileDialog.getOpenFileName(self, '选择 ProxyPin HAR 文件', '', 'HAR 文件 (*.har)')
+        path, _ = QFileDialog.getOpenFileName(
+            self, '选择 HAR 或 dat.json', '',
+            '存档文件 (*.har *.json);;HAR 文件 (*.har);;dat.json (*.json)')
         if path:
             self.start_download(path)
 
     def dragEnterEvent(self, event):
         urls = event.mimeData().urls()
         if (not self.worker and len(urls) == 1 and urls[0].isLocalFile()
-                and urls[0].toLocalFile().lower().endswith('.har')):
+                and urls[0].toLocalFile().lower().endswith(('.har', '.json'))):
             event.acceptProposedAction()
 
     def dropEvent(self, event):
         urls = event.mimeData().urls()
         if (not self.worker and len(urls) == 1 and urls[0].isLocalFile()
-                and urls[0].toLocalFile().lower().endswith('.har')):
+                and urls[0].toLocalFile().lower().endswith(('.har', '.json'))):
             self.start_download(urls[0].toLocalFile())
             event.acceptProposedAction()
 
@@ -491,19 +499,19 @@ class MainWindow(QMainWindow):
         if self.session:
             self.start_download()
 
-    def start_download(self, har=None):
-        if self.worker or (not har and not self.session):
+    def start_download(self, import_path=None):
+        if self.worker or (not import_path and not self.session):
             return
-        if har and not str(har).lower().endswith('.har'):
-            self.show_status('请选择 .har 格式的抓包文件。', True)
+        if import_path and not str(import_path).lower().endswith(('.har', '.json')):
+            self.show_status('请选择 .har 或 .json 格式的存档文件。', True)
             return
-        self.worker = DownloadThread(self.store, self.session, har)
+        self.worker = DownloadThread(self.store, self.session, import_path)
         self.worker.progress.connect(self.show_status)
         self.worker.completed.connect(self.download_complete)
         self.worker.failed.connect(self.download_failed)
         self.worker.finished.connect(self.download_finished)
         self.progress.show()
-        self.show_status('开始下载当前云存档…')
+        self.show_status('开始导入存档…' if import_path else '开始下载当前云存档…')
         self.update_buttons()
         self.worker.start()
 
