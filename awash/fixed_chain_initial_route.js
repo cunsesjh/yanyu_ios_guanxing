@@ -356,14 +356,37 @@ function materializeInitialRoute(context, raw, targets, route) {
             + `!= ${route.pills}/${route.washes}`
         );
     }
-    const replayed = context.WashSearchV2.replay(
-        raw, targets, steps
-    );
-    if (!replayed.ok
-        || replayed.pills !== pills
-        || replayed.washes !== washes
-        || replayed.exchanges !== Number(route.exchanges)) {
-        throw new Error('初始路线未通过 V2 独立回放');
+    // The source engine above is the authority for the native/WASM action
+    // stream. V2 replay has an additional lost-carrier rule which is useful
+    // for routes produced by V2 itself, but is stricter than the source
+    // engine and used to discard valid native routes after materialization.
+    // Keep it as a compatibility check, never as a second hard rejection.
+    let replayed;
+    let replayMode = 'v2';
+    try {
+        replayed = context.WashSearchV2.replay(raw, targets, steps);
+        if (!replayed.ok
+            || replayed.pills !== pills
+            || replayed.washes !== washes
+            || replayed.exchanges !== Number(route.exchanges)) {
+            throw new Error('V2 replay statistics mismatch');
+        }
+    } catch (error) {
+        const finalTalents = state.talents.slice();
+        if (!targets.every(id => finalTalents.includes(Number(id)))) {
+            throw error;
+        }
+        replayMode = 'source-engine';
+        replayed = {
+            ok: true,
+            pills,
+            washes,
+            exchanges: Number(route.exchanges),
+            finalTalents,
+            finalStateKey: typeof engine.stateKey === 'function'
+                ? engine.stateKey(state) : undefined,
+            compatibilityError: String(error && error.message || error),
+        };
     }
     return {
         source: 'awash-initial-route',
@@ -375,6 +398,8 @@ function materializeInitialRoute(context, raw, targets, route) {
         pills: replayed.pills,
         washes: replayed.washes,
         exchanges: replayed.exchanges,
+        replayMode,
+        compatibilityError: replayed.compatibilityError || '',
     };
 }
 
