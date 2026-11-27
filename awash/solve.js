@@ -430,7 +430,7 @@ async function solveJoint(raw, targetIds, options) {
                 : Number(o.budget) || 0)
             : Number(options.budget) || 0;
         const orders = options.targetOrders || targetOrderCandidates(
-            targets, Number(o.targetOrderCandidates) || 6
+            targets, Number(o.targetOrderCandidates) || 3
         );
         let best = null;
         for (const targetOrder of orders) {
