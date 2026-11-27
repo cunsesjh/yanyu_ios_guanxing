@@ -76,8 +76,12 @@
                     pills: 0, washes: 0, after});
             } else if (op === 'upgrade') {
                 const toZizhi = Number(source.zizhi || source.toZizhi) || 0;
-                steps.push({label: '提升资质',
-                    detail: `提升至资质 ${toZizhi}；后续按新的槽位与脉池继续规划。`,
+                const slotCount = toZizhi >= 154 ? 4
+                    : toZizhi === 153 ? 3
+                        : toZizhi === 152 ? 2
+                            : toZizhi === 151 ? 1 : 0;
+                steps.push({label: '开启槽位',
+                    detail: `开启${slotCount}槽；后续按新的槽位与脉池继续规划。`,
                     pills: 0, washes: 0, after});
             }
         }

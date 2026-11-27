@@ -61,4 +61,15 @@ const inheritedLocks = view.normalizeRoute({
 assert.equal(inheritedLocks.steps.length, 2, 'wash actions without explicit keepIds inherit active locks');
 assert.equal(inheritedLocks.steps[1].washes, 2);
 
+const openedSlot = view.normalizeRoute({
+    pills: 0, washes: 0, finalTalents: [],
+    steps: [
+        {op: 'upgrade', fromZizhi: 153, toZizhi: 154,
+            after: {zizhi: 154, talents: []}},
+    ],
+}, 0, id => `#${id}`);
+assert.equal(openedSlot.steps[0].label, '开启槽位');
+assert.equal(openedSlot.steps[0].detail,
+    '开启4槽；后续按新的槽位与脉池继续规划。');
+
 console.log('auto wash route display accounting tests passed');

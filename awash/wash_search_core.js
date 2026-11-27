@@ -94,13 +94,10 @@
                 };
             }
             const base = engineForZi(sourceZi);
-            let state = base.initialState(Object.assign({}, raw, { zizhi: sourceZi }));
-            const target = engineForZi(153);
-            state = target.upgradeToThree(Object.assign({}, state, { zizhi: 153 }));
             return {
-                engine: target,
-                state,
-                steps: [{ op: 'upgrade', fromZizhi: sourceZi, toZizhi: 153 }],
+                engine: base,
+                state: base.initialState(Object.assign({}, raw, { zizhi: sourceZi })),
+                steps: [],
             };
         }
 

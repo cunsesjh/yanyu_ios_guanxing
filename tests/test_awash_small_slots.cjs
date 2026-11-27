@@ -34,7 +34,8 @@ const rawFor = zizhi => ({
 
     const oneSlot = await solver.solveJoint(rawFor(151), [271], {context});
     assert.equal(oneSlot.ok, true, 'one-slot role with one target should be plannable');
-    assert.equal(oneSlot.searchMode, 'direct-low-slot');
+    assert.ok(oneSlot.searchMode.startsWith('low-slot-'),
+        'one-slot roles use the low-slot planning path');
     assert.equal(oneSlot.route.pills, 0);
     assert.equal(oneSlot.route.steps[0].after.zizhi, 153,
         'route results include talents after each visible operation');
@@ -63,7 +64,8 @@ const rawFor = zizhi => ({
     );
     assert.equal(oneSlotWash.ok, true,
         'one-slot roles without a fixed luck seed can wash to a target');
-    assert.equal(oneSlotWash.searchMode, 'direct-low-slot');
+    assert.ok(oneSlotWash.searchMode.startsWith('low-slot-'),
+        'one-slot wash routes use the low-slot planning path');
     assert.ok(oneSlotWash.route.pills > 0);
     assert.ok(oneSlotWash.route.steps.every(step => step.after),
         'one-slot wash routes include a state after every step');

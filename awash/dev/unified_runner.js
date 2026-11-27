@@ -121,10 +121,12 @@ function computeRoleStats(role) {
 function buildRaw(save, role, meta, vip) {
     const born = role.BornTalent || {};
     const luck = role.LuckTalent || {};
-    const zizhi = Number(role.ZiZhi) || 153;
+    // Keep the actual starting aptitude. Low-slot roles must enter the
+    // search as 0/1/2-slot states so opening slots remains a search decision.
+    const zizhi = Math.max(150, Math.min(154, Number(role.ZiZhi) || 153));
     return {
         mode: 'seed',
-        zizhi: zizhi < 153 ? 153 : zizhi,
+        zizhi,
         sex: Number(role.Sex) || 1,
         vip: Number(vip),
         seed: Number(born.S) || Number(role.S) || 0,

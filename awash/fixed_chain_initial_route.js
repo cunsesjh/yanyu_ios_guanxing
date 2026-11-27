@@ -66,10 +66,10 @@ function validateHeldTargets(steps, heldIds) {
 }
 
 function materializeInitialRoute(context, raw, targets, route) {
-    const zz3 = context.ZZ_DATA['153'];
-    const zz4 = context.ZZ_DATA['154'];
     const engineFor = zi => {
-        const zz = zi >= 154 ? zz4 : zz3;
+        const normalized = Math.max(150, Math.min(154, Number(zi) || 153));
+        const zz = context.ZZ_DATA[String(normalized)]
+            || context.ZZ_DATA['153'];
         return new context.WashSourceEngine.Engine(
             context.TALENT_DATA,
             raw,
@@ -77,14 +77,14 @@ function materializeInitialRoute(context, raw, targets, route) {
                 slotCount: Number(zz.num_talent),
                 pity: Number(zz.bd_zz),
                 eat: Number(zz.eat_xisui),
-                eligibleZi: zi,
+                eligibleZi: normalized,
                 advancePerDraw: true,
                 dlcMode: !!raw.dlc_mode,
             }
         );
     };
 
-    let zizhi = Number(raw.zizhi) || 153;
+    let zizhi = Math.max(150, Math.min(154, Number(raw.zizhi) || 153));
     let engine = engineFor(zizhi);
     let state = engine.initialState(
         Object.assign({}, raw, { zizhi })
@@ -158,16 +158,28 @@ function materializeInitialRoute(context, raw, targets, route) {
     for (const [actionIndex, action] of (route.actions || []).entries()) {
         washTo(action.wash_no);
         if (action.kind === 'open_slot') {
-            zizhi = 154;
+            // The WASM route may open one or several slots at this point.
+            // Its current action is the resulting aptitude, when supplied;
+            // otherwise advance one stage from the actual current state.
+            const fromZizhi = zizhi;
+            const note = String(action.note || '');
+            const noted = /开槽至\s*(15[0-4])/.exec(note);
+            zizhi = noted ? Number(noted[1]) : Math.min(154, zizhi + 1);
             engine = engineFor(zizhi);
-            state = engine.upgradeToFour(
-                Object.assign({}, state, { zizhi })
-            );
+            state = zizhi >= 154
+                ? engine.upgradeToFour(Object.assign({}, state, { zizhi }))
+                : engine.upgradeToThree(Object.assign({}, state, { zizhi }));
             steps.push({
                 op: 'upgrade',
-                fromZizhi: 153,
-                toZizhi: 154,
+                fromZizhi,
+                toZizhi: zizhi,
             });
+            continue;
+        }
+        if (action.kind === 'skip') {
+            // Informational action emitted by the WASM planner; the preceding
+            // wash_to already advanced the state, so no replay operation is
+            // needed here.
             continue;
         }
         if (action.kind === 'lock' || action.kind === 'keep') {
@@ -193,56 +205,57 @@ function materializeInitialRoute(context, raw, targets, route) {
             const from = idByName(context, action.from);
             const to = idByName(context, action.to);
             state = orderedState(state, locks);
-            const position = state.talents.indexOf(from);
-            if (position < 0) {
+            let carrier = from;
+            if (state.talents.indexOf(carrier) < 0) {
                 throw new Error(`置换载体 ${action.from} 不在场`);
             }
-            let exchangeLocks = locks.filter(id =>
-                state.talents.includes(id)
-            );
-            pushLocks();
-            let replaced;
-            try {
-                replaced = engine.replace(
-                    state, position, exchangeLocks
+            const chain = Array.isArray(action.chain) && action.chain.length
+                ? action.chain.map(name => idByName(context, name)) : [to];
+            for (const expected of chain) {
+                const position = state.talents.indexOf(carrier);
+                if (position < 0) throw new Error(`置换链载体不在场: ${carrier}`);
+                let exchangeLocks = locks.filter(id =>
+                    state.talents.includes(id)
                 );
-            } catch (error) {
-                const type = engine.talentType(from);
-                const conflict = state.talents.slice(0, position)
-                    .reverse()
-                    .find(id => id !== 251
-                        && engine.quality(id) < 4
-                        && engine.talentType(id) === type);
-                if (!conflict) throw error;
-                if (!exchangeLocks.includes(conflict)) {
-                    exchangeLocks = exchangeLocks.concat([conflict]);
-                    steps.push({
-                        op: 'locks',
-                        lockIds: exchangeLocks,
-                    });
+                pushLocks();
+                let replaced;
+                try {
+                    replaced = engine.replace(state, position, exchangeLocks);
+                } catch (error) {
+                    const type = engine.talentType(carrier);
+                    const conflict = state.talents.slice(0, position)
+                        .reverse()
+                        .find(id => id !== 251
+                            && engine.quality(id) < 4
+                            && engine.talentType(id) === type);
+                    if (!conflict) throw error;
+                    if (!exchangeLocks.includes(conflict)) {
+                        exchangeLocks = exchangeLocks.concat([conflict]);
+                        steps.push({ op: 'locks', lockIds: exchangeLocks });
+                    }
+                    replaced = engine.replace(state, position, exchangeLocks);
                 }
-                replaced = engine.replace(
-                    state, position, exchangeLocks
+                if (Number(replaced.addedId) !== expected) {
+                    throw new Error(
+                        `置换结果不一致: ${context.WashSearchV2.nameOf(carrier)} -> `
+                        + `${context.WashSearchV2.nameOf(replaced.addedId)}，`
+                        + `期望 ${context.WashSearchV2.nameOf(expected)}`
+                    );
+                }
+                state = replaced.state;
+                locks = locks.filter(id =>
+                    id !== carrier && state.talents.includes(id)
                 );
+                steps.push({
+                    op: 'exchange',
+                    carrierId: carrier,
+                    lockIds: exchangeLocks,
+                    removedId: carrier,
+                    addedId: expected,
+                });
+                carrier = expected;
             }
-            if (Number(replaced.addedId) !== to) {
-                throw new Error(
-                    `置换结果不一致: ${action.from} -> `
-                    + `${context.WashSearchV2.nameOf(replaced.addedId)}，`
-                    + `期望 ${action.to}`
-                );
-            }
-            state = replaced.state;
-            locks = locks.filter(id =>
-                id !== from && state.talents.includes(id)
-            );
-            steps.push({
-                op: 'exchange',
-                carrierId: from,
-                lockIds: exchangeLocks,
-                removedId: from,
-                addedId: to,
-            });
+            if (carrier !== to) throw new Error('置换链终点与目标不一致');
             continue;
         }
         if (action.kind !== 'wash_to') {

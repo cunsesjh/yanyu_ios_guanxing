@@ -334,6 +334,10 @@ async function solveJoint(raw, targetIds, options) {
     const sourceRaw = raw;
     const sourceZizhi = Number(raw && raw.zizhi) || 153;
     const upgradeLowSlot = actualSlotCount(context, raw) < 3;
+    const originalLowSlotRaw = upgradeLowSlot
+        ? Object.assign({}, raw, { talents: (raw.talents || []).map(item =>
+            Object.assign({}, item)) }) : null;
+    let selectedLowSlotRoute = false;
     if (upgradeLowSlot) {
         // Search low-slot roles through the full checkpoint-quality pipeline.
         // Its seed/pity frontiers operate on the three-slot state used after
@@ -629,6 +633,45 @@ async function solveJoint(raw, targetIds, options) {
         }
     }
     let result = null;
+    // Keep the genuine low-slot state in the candidate set. This is the
+    // wangye-style joint decision: opening slots can happen at the cheapest
+    // checkpoint instead of being forced before search.
+    let lowSlotResult = null;
+    if (originalLowSlotRaw) {
+        try {
+            const startedAt = Date.now();
+            const routes = await findInitialRoutes(
+                originalLowSlotRaw,
+                targets,
+                {
+                    horizon: backendHorizon,
+                    topN: 1,
+                    limits: o.limits || {},
+                    runtime: o.runtime || {},
+                }
+            );
+            const route = routes && routes[0];
+            if (route) {
+                lowSlotResult = {
+                    ok: true,
+                    status: 'found',
+                    provenOptimal: false,
+                    route: Object.assign({}, route, {
+                        finalTalents: route.replay && route.replay.state
+                            ? route.replay.state.talents
+                            : (route.replay && route.replay.finalTalents || []),
+                    }),
+                    metrics: {
+                        initializer: 'low-slot-joint-open-slot',
+                        directSearchElapsedMs: Date.now() - startedAt,
+                    },
+                    stopReason: 'low-slot-open-slot-candidate',
+                };
+            }
+        } catch (_) {
+            // The regular three-slot pipeline remains available as fallback.
+        }
+    }
     const checkpointRoots = fixedRoot
         ? [fixedRoot]
         : firstMethod === 'infinite-exchange'
@@ -713,6 +756,12 @@ async function solveJoint(raw, targetIds, options) {
             stopReason: 'route-search-no-route',
         };
     }
+    if (lowSlotResult && lowSlotResult.route
+        && (!result || !result.route
+            || compareRoute(lowSlotResult.route, result.route) <= 0)) {
+        result = lowSlotResult;
+        selectedLowSlotRoute = true;
+    }
     result.metrics = result.metrics || {};
     result.metrics.pityFrontierSeeds = frontierSeeds;
     result.metrics.pityFrontierMetrics = pityFrontierMetrics;
@@ -748,7 +797,7 @@ async function solveJoint(raw, targetIds, options) {
     result.metrics.infiniteMaterializationError =
         infiniteMaterializationErrors[0] || '';
     result.plan = plan;
-    if (upgradeLowSlot && result.route
+    if (upgradeLowSlot && result.route && !selectedLowSlotRoute
         && Array.isArray(result.route.steps)) {
         result.route.steps.unshift({
             op: 'upgrade',
@@ -757,12 +806,14 @@ async function solveJoint(raw, targetIds, options) {
         });
         result.searchMode = 'low-slot-checkpoint-quality';
     }
-    result.searchMode = fixedRoot
+    result.searchMode = selectedLowSlotRoute
+        ? 'low-slot-joint-open-slot'
+        : fixedRoot
         ? 'fixed-current-chain'
         : infiniteRoots.length
         ? 'seed-quality'
         : (pityRoots.length ? 'pity-quality' : 'route-search');
-    if (upgradeLowSlot && result.route) {
+    if (upgradeLowSlot && result.route && !selectedLowSlotRoute) {
         result.searchMode = 'low-slot-checkpoint-quality';
     }
     return attachRouteStepStates(context, upgradeLowSlot ? sourceRaw : raw, targets, Object.assign(
