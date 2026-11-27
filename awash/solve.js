@@ -328,31 +328,18 @@ function attachRouteStepStates(context, raw, targets, result) {
     return result;
 }
 
-function solveLowSlotRole(context, raw, targets, options) {
-    const slots = actualSlotCount(context, raw);
-    // Zero-slot roles still have a valid empty starting state. They must use
-    // the same direct low-slot search as one/two-slot roles, rather than fall
-    // through to the three/four-slot checkpoint pipeline.
-    if (!(slots >= 0 && slots < 3)) return null;
-    const o = options || {};
-    const configuredBudget = Number(o.budget);
-    const searchOptions = {
-        budget: Number.isFinite(configuredBudget) && configuredBudget > 0
-            ? configuredBudget : 1000000,
-        limits: o.limits || {},
-        runtime: o.runtime || {},
-    };
-    const fixedLuckSeed = !!(raw && raw.luck_seed_inited);
-    const result = fixedLuckSeed
-        ? context.WashFixedChain.search(raw, targets, searchOptions)
-        : context.WashSearchV2.search(raw, targets, searchOptions);
-    result.searchMode = 'direct-low-slot';
-    return attachRouteStepStates(context, raw, targets, result);
-}
-
 async function solveJoint(raw, targetIds, options) {
     const o = options || {};
     const context = o.context || loadAWash();
+    const sourceRaw = raw;
+    const sourceZizhi = Number(raw && raw.zizhi) || 153;
+    const upgradeLowSlot = actualSlotCount(context, raw) < 3;
+    if (upgradeLowSlot) {
+        // Search low-slot roles through the full checkpoint-quality pipeline.
+        // Its seed/pity frontiers operate on the three-slot state used after
+        // the free aptitude upgrade, while the result is replayed from sourceRaw.
+        raw = Object.assign({}, raw, { zizhi: 153 });
+    }
     const sessionCache = o.sessionCache
         && typeof o.sessionCache.get === 'function'
         && typeof o.sessionCache.set === 'function'
@@ -360,8 +347,6 @@ async function solveJoint(raw, targetIds, options) {
     const targets = Array.from(new Set(
         (targetIds || []).map(Number)
     ));
-    const lowSlotResult = solveLowSlotRole(context, raw, targets, o);
-    if (lowSlotResult) return lowSlotResult;
     let plan = o.plan || null;
     let firstMethod = plan && Array.isArray(plan.methodOrder)
         ? String(plan.methodOrder[0] || '') : '';
@@ -763,12 +748,24 @@ async function solveJoint(raw, targetIds, options) {
     result.metrics.infiniteMaterializationError =
         infiniteMaterializationErrors[0] || '';
     result.plan = plan;
+    if (upgradeLowSlot && result.route
+        && Array.isArray(result.route.steps)) {
+        result.route.steps.unshift({
+            op: 'upgrade',
+            fromZizhi: sourceZizhi,
+            toZizhi: 153,
+        });
+        result.searchMode = 'low-slot-checkpoint-quality';
+    }
     result.searchMode = fixedRoot
         ? 'fixed-current-chain'
         : infiniteRoots.length
         ? 'seed-quality'
         : (pityRoots.length ? 'pity-quality' : 'route-search');
-    return attachRouteStepStates(context, raw, targets, Object.assign(
+    if (upgradeLowSlot && result.route) {
+        result.searchMode = 'low-slot-checkpoint-quality';
+    }
+    return attachRouteStepStates(context, upgradeLowSlot ? sourceRaw : raw, targets, Object.assign(
         {},
         result,
         { strategy: result.strategy || 'awash-route-search' }

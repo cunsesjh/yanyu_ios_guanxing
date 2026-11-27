@@ -502,28 +502,6 @@ async function solveSeedCheckpointQuality(
             signature: routeSignature(best),
             timedOut: stage.timedOut,
         });
-        // Wangye scans a substantially longer seed horizon. Preserve the
-        // fast first pass, but retry only when it produced no route and the
-        // caller has not disabled expansion. The deadline still bounds the
-        // total work, so this cannot turn a failed search into an unbounded
-        // one.
-        const fallbackHorizon = Math.max(
-            firstHorizon,
-            Number(o.fallbackHorizon) || 6000
-        );
-        if (!best
-            && o.expandHorizon !== false
-            && fallbackHorizon > firstHorizon
-            && Date.now() < deadline) {
-            const expanded = await runStage(fallbackHorizon);
-            metrics.horizons.push({
-                horizon: fallbackHorizon,
-                upperBound,
-                firstRouteMs: metrics.firstRouteMs,
-                signature: routeSignature(best),
-                timedOut: expanded.timedOut,
-            });
-        }
     } finally {
         if (pool) await pool.close();
     }
