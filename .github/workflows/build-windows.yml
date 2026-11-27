@@ -106,12 +106,11 @@ jobs:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
           body: |
-            ## v4.0-beta.15 测试版更新公告
+            ## v4.0-beta.17 测试版更新公告
 
-            - 重新接入最新 AWASH 搜索，并为候选检查点失败增加直接路线搜索回退。
-            - 自动洗脉支持单槽角色，包括尚未初始化欧气种子的存档。
-            - 恢复每步路线说明、当前脉序、锁定状态和天赋详细说明。
-            - 将搜索失败原因改为用户可读的中文提示。
+            - 修复装备自动模拟选择不必要的提前锁槽、导致精炼路线额外消耗连金泥的问题。
+            - 鬼市材料推演增加目标获取路线，目标总数与每次命中可以逐项核对。
+            - 当前支持版本更新为国服 73648、国际服 73680。
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt

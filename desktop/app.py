@@ -312,7 +312,7 @@ class MainWindow(QMainWindow):
         self.session_label.setObjectName('muted')
         self.session_label.setWordWrap(True)
         sidebar.addWidget(self.session_label)
-        supported = QLabel('当前支持版本\n国服 73576 · 先行服 73580\n国际服 73680')
+        supported = QLabel('当前支持版本\n国服 73648\n国际服 73680')
         supported.setTextFormat(Qt.PlainText)
         supported.setObjectName('supportedVersions')
         supported.setWordWrap(True)
