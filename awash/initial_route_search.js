@@ -124,7 +124,7 @@ async function searchInitialRoute(raw, targetText, options) {
         desired_ids: targets,
         max_pad: Number(opts.maxPad) || 0,
         horizon: Number(opts.horizon) || 2000,
-        top_n: Number(opts.topN) || 1,
+        top_n: Number(opts.topN) || 6,
         allow_open_slot: true,
         allow_pity: true,
     });

@@ -22,6 +22,21 @@ function compareRoute(a, b) {
     return 0;
 }
 
+function targetOrderCandidates(targets, limit) {
+    const ids = Array.from(new Set((targets || []).map(Number)));
+    if (ids.length < 2) return [ids];
+    const out = [ids];
+    const reversed = ids.slice().reverse();
+    if (reversed.join(',') !== ids.join(',')) out.push(reversed);
+    // Rotations cover the common case where one purple is much cheaper as
+    // the first carrier without exploding into all factorial permutations.
+    for (let index = 1; index < ids.length && out.length < (limit || 3); index++) {
+        const rotated = ids.slice(index).concat(ids.slice(0, index));
+        if (!out.some(item => item.join(',') === rotated.join(','))) out.push(rotated);
+    }
+    return out.slice(0, limit || 3);
+}
+
 function normalizeCheckpoint(packet) {
     return Object.assign({}, packet, {
         prefixPills: Math.max(
@@ -401,19 +416,38 @@ async function solveJoint(raw, targetIds, options) {
         const requestedBudget = options.budget == null
             ? sharedUpperBoundPills
             : Number(options.budget) || 0;
-        return backend(
-            checkpoints,
-            targets,
-            {
+        const orders = options.targetOrders || targetOrderCandidates(
+            targets, Number(o.targetOrderCandidates) || 3
+        );
+        let best = null;
+        for (const targetOrder of orders) {
+            const candidate = await backend(
+                checkpoints,
+                targets,
+                {
                 budget: requestedBudget > 0 ? requestedBudget : 0,
                 concurrency: Number(o.concurrency) || 16,
                 horizon: backendHorizon,
                 limits: o.limits || {},
                 runtime: o.runtime || {},
                 sessionCache,
-                targetOrder: targets,
+                targetOrder,
+                adaptiveHorizon: o.adaptiveHorizon !== false,
+                }
+            );
+            if (candidate && candidate.route
+                && (!best || compareRoute(candidate.route, best.route) < 0)) {
+                best = candidate;
+                if (Number(candidate.route.pills) > 0) {
+                    sharedUpperBoundPills = Math.min(
+                        sharedUpperBoundPills > 0
+                            ? sharedUpperBoundPills : Infinity,
+                        Number(candidate.route.pills)
+                    );
+                }
             }
-        );
+        }
+        return best;
     }
     if (raw && raw.luck_seed_inited) {
         plan = plan || {
@@ -475,21 +509,33 @@ async function solveJoint(raw, targetIds, options) {
         const collectQualityRoots = nativePityQuality
             || methods.includes('infinite-exchange');
         if (collectQualityRoots && methods.includes('infinite-exchange')) {
-            context.InfiniteSeedFrontier.enumerate(
-                raw,
-                targets,
-                Object.assign({
-                    nMax: 100,
-                    count: 30,
-                    sequenceCache: sessionCache,
-                }, o.infiniteOptions || {}, {
-                    onSeed(packet) {
-                        if (!packet) return;
-                        infiniteFrontierSeeds++;
-                        infinitePackets.push(packet);
-                    },
-                })
-            );
+            const collectInfinite = settings =>
+                context.InfiniteSeedFrontier.enumerate(
+                    raw,
+                    targets,
+                    Object.assign({
+                        nMax: 100,
+                        count: 30,
+                        sequenceCache: sessionCache,
+                    }, settings, {
+                        onSeed(packet) {
+                            if (!packet) return;
+                            infiniteFrontierSeeds++;
+                            infinitePackets.push(packet);
+                        },
+                    })
+                );
+            collectInfinite(o.infiniteOptions || {});
+            // Adaptive frontier widening: only pay for the larger anchor
+            // scan when the normal pass produced no usable seed packets.
+            if (!infinitePackets.length
+                && o.adaptiveFrontier !== false) {
+                collectInfinite(Object.assign(
+                    {},
+                    o.infiniteOptions || {},
+                    { nMax: 300, count: 60 }
+                ));
+            }
             const batches = classifyInfiniteSeedPackets(
                 infinitePackets, raw
             );
@@ -645,12 +691,13 @@ async function solveJoint(raw, targetIds, options) {
                 targets,
                 {
                     horizon: backendHorizon,
-                    topN: 1,
+                    topN: 6,
                     limits: o.limits || {},
                     runtime: o.runtime || {},
                 }
             );
-            const route = routes && routes[0];
+            const route = (routes || []).reduce((best, item) =>
+                !best || compareRoute(item, best) < 0 ? item : best, null);
             if (route) {
                 lowSlotResult = {
                     ok: true,
@@ -707,12 +754,13 @@ async function solveJoint(raw, targetIds, options) {
                 targets,
                 {
                     horizon: backendHorizon,
-                    topN: 1,
+                    topN: 6,
                     limits: o.limits || {},
                     runtime: o.runtime || {},
                 }
             );
-            const direct = directRoutes && directRoutes[0];
+            const direct = (directRoutes || []).reduce((best, item) =>
+                !best || compareRoute(item, best) < 0 ? item : best, null);
             const budget = Number(o.budget);
             if (direct && (!Number.isFinite(budget)
                 || budget <= 0 || Number(direct.pills) <= budget)) {

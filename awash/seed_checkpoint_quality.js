@@ -410,7 +410,8 @@ async function solveSeedCheckpointQuality(
                 stopReason: 'no-remaining-budget',
             };
         }
-        const cacheKey = `${checkpoint.key}|${budget}|${horizon}`;
+        const targetOrderKey = (o.targetOrder || targets).join(',');
+        const cacheKey = `${checkpoint.key}|${budget}|${horizon}|${targetOrderKey}`;
         if (cache.has(cacheKey)) {
             metrics.cacheHits++;
             return cache.get(cacheKey);
@@ -494,14 +495,29 @@ async function solveSeedCheckpointQuality(
     }
 
     try {
-        const stage = await runStage(firstHorizon);
-        metrics.horizons.push({
-            horizon: firstHorizon,
-            upperBound,
-            firstRouteMs: metrics.firstRouteMs,
-            signature: routeSignature(best),
-            timedOut: stage.timedOut,
-        });
+        const horizonStages = [firstHorizon];
+        if (o.adaptiveHorizon !== false) {
+            const ceiling = Math.min(
+                6000,
+                Math.max(firstHorizon, Number(o.maxAdaptiveHorizon) || 6000)
+            );
+            let next = firstHorizon;
+            while (next < ceiling) {
+                next = Math.min(ceiling, next * 2);
+                horizonStages.push(next);
+            }
+        }
+        for (const horizon of horizonStages) {
+            const stage = await runStage(horizon);
+            metrics.horizons.push({
+                horizon,
+                upperBound,
+                firstRouteMs: metrics.firstRouteMs,
+                signature: routeSignature(best),
+                timedOut: stage.timedOut,
+            });
+            if (best || stage.timedOut) break;
+        }
     } finally {
         if (pool) await pool.close();
     }

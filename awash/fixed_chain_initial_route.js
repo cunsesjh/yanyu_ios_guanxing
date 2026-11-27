@@ -182,6 +182,12 @@ function materializeInitialRoute(context, raw, targets, route) {
             // needed here.
             continue;
         }
+        if (action.kind === 'pity') {
+            // Pity is a marker for the wash already replayed by washTo().
+            // It does not change state independently; the engine accounts
+            // for the pity draw while advancing through that wash count.
+            continue;
+        }
         if (action.kind === 'lock' || action.kind === 'keep') {
             const id = idByName(context, action.talent);
             if (!state.talents.includes(id)) {
@@ -223,17 +229,41 @@ function materializeInitialRoute(context, raw, targets, route) {
                     replaced = engine.replace(state, position, exchangeLocks);
                 } catch (error) {
                     const type = engine.talentType(carrier);
-                    const conflict = state.talents.slice(0, position)
-                        .reverse()
-                        .find(id => id !== 251
+                    const conflict = state.talents
+                        .filter(id => id !== carrier
+                            && id !== 251
+                            && exchangeLocks.includes(id)
                             && engine.quality(id) < 4
-                            && engine.talentType(id) === type);
-                    if (!conflict) throw error;
+                            && engine.talentType(id) === type)
+                        .pop();
+                    if (!conflict) {
+                        throw new Error(
+                            `${error.message} @动作#${actionIndex + 1} `
+                            + `${action.from || ''}->${action.to || ''} `
+                            + `洗${washes}，当前脉=${state.talents.join(',')}，`
+                            + `锁=${exchangeLocks.join(',')}`
+                        );
+                    }
                     if (!exchangeLocks.includes(conflict)) {
                         exchangeLocks = exchangeLocks.concat([conflict]);
-                        steps.push({ op: 'locks', lockIds: exchangeLocks });
                     }
-                    replaced = engine.replace(state, position, exchangeLocks);
+                    // The source engine requires the ordinary locked
+                    // conflict to appear before the purple carrier. Search
+                    // actions describe locks semantically, but their order
+                    // can differ after a keep/lock sequence. Reorder the
+                    // current field before retrying the same exchange.
+                    exchangeLocks = [conflict].concat(
+                        exchangeLocks.filter(id => id !== conflict)
+                    );
+                    state = orderedState(state, exchangeLocks);
+                    steps.push({ op: 'locks', lockIds: exchangeLocks });
+                    const reorderedPosition = state.talents.indexOf(carrier);
+                    if (reorderedPosition < 0) {
+                        throw error;
+                    }
+                    replaced = engine.replace(
+                        state, reorderedPosition, exchangeLocks
+                    );
                 }
                 if (Number(replaced.addedId) !== expected) {
                     throw new Error(
@@ -329,12 +359,16 @@ async function findInitialRoutes(raw, targetIds, options) {
         fastRaw,
         names.join(','),
         Object.assign({
-            topN: requiredHeldIds.length ? 8 : 1,
+            // Keep a small candidate pool so callers can compare different
+            // opening-slot timings and seed prefixes.  The native search
+            // already ranks these; replay below remains the final verifier.
+            topN: requiredHeldIds.length ? 8 : 6,
             horizon: 2000,
         }, options || {})
     );
     const routes = (searched.result.routes || []);
     const verified = [];
+    const verificationFailures = [];
     for (const route of routes) {
         try {
                 const materialized = materializeInitialRoute(
@@ -349,10 +383,15 @@ async function findInitialRoutes(raw, targetIds, options) {
                 heldTargetsVerified: true,
             }));
         } catch (error) {
-            // A generic search candidate may use a different runtime version.
-            // Keep trying the next route instead of treating it as solved.
+            // Keep trying candidates, but preserve why each searched route
+            // could not be replayed; otherwise a replay mismatch looks like
+            // the native search found no route at all.
+            verificationFailures.push(String(
+                error && error.message || error
+            ));
         }
     }
+    searched.result.verificationFailures = verificationFailures;
     verified.sort((a, b) =>
         a.replay.pills - b.replay.pills
         || a.replay.washes - b.replay.washes
