@@ -25,16 +25,27 @@ function compareRoute(a, b) {
 function targetOrderCandidates(targets, limit) {
     const ids = Array.from(new Set((targets || []).map(Number)));
     if (ids.length < 2) return [ids];
-    const out = [ids];
-    const reversed = ids.slice().reverse();
-    if (reversed.join(',') !== ids.join(',')) out.push(reversed);
-    // Rotations cover the common case where one purple is much cheaper as
-    // the first carrier without exploding into all factorial permutations.
-    for (let index = 1; index < ids.length && out.length < (limit || 3); index++) {
-        const rotated = ids.slice(index).concat(ids.slice(0, index));
-        if (!out.some(item => item.join(',') === rotated.join(','))) out.push(rotated);
-    }
-    return out.slice(0, limit || 3);
+    // The exchange chain is order-sensitive. Try a bounded prefix of the
+    // permutations first; callers can raise the cap when broader search is
+    // worth the additional checkpoint-quality runs.
+    const cap = Math.max(1, Number(limit) || 6);
+    const out = [];
+    const visit = (prefix, remaining) => {
+        if (out.length >= cap) return;
+        if (!remaining.length) {
+            out.push(prefix);
+            return;
+        }
+        for (let index = 0; index < remaining.length; index++) {
+            visit(
+                prefix.concat(remaining[index]),
+                remaining.slice(0, index).concat(remaining.slice(index + 1))
+            );
+            if (out.length >= cap) return;
+        }
+    };
+    visit([], ids);
+    return out;
 }
 
 function normalizeCheckpoint(packet) {
@@ -419,7 +430,7 @@ async function solveJoint(raw, targetIds, options) {
                 : Number(o.budget) || 0)
             : Number(options.budget) || 0;
         const orders = options.targetOrders || targetOrderCandidates(
-            targets, Number(o.targetOrderCandidates) || 3
+            targets, Number(o.targetOrderCandidates) || 6
         );
         let best = null;
         for (const targetOrder of orders) {
