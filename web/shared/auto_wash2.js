@@ -122,7 +122,7 @@
     }
     function makeWorker() {
         if (worker) return worker;
-        worker = new Worker(new URL('auto_wash2_worker.js?v=20261126washfix4', document.currentScript?.src || new URL('../shared/auto_wash2.js', location.href)));
+        worker = new Worker(new URL('auto_wash2_worker.js?v=20261127smallslotpool', document.currentScript?.src || new URL('../shared/auto_wash2.js', location.href)));
         worker.onerror = event => { stop(); status('后台计算失败：' + (event.message || '请重新进入此页面重试'), true); };
         return worker;
     }

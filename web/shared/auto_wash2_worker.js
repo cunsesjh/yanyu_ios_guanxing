@@ -11,9 +11,14 @@ self.onmessage = async ({data: message}) => {
         if (message.type === 'inspect') {
             const engine = new WashSourceEngine.Engine(TALENT_DATA, message.raw);
             const initial = engine.initialState(message.raw);
+            // Low-slot roles are upgraded to three slots before the direct
+            // search begins. Inspect that effective pool as well; checking
+            // raw 0/1-slot aptitude here incorrectly hides valid targets
+            // (notably 天生神力) before the user can select them.
+            const inspectZi = Number(initial.zizhi) < 153 ? 153 : initial.zizhi;
             const allowedSet = typeof engine.allowedForState === 'function'
-                ? engine.allowedForState(initial, initial.zizhi)
-                : engine.allowedSet(initial.zizhi);
+                ? engine.allowedForState(initial, inspectZi)
+                : engine.allowedSet(inspectZi);
             const summary = {
                 allowed: [...allowedSet], purpleIds: engine.purpleIds,
             };
