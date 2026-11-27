@@ -271,8 +271,9 @@
                 }
                 return `${name(id)}${Number(raw?.zizhi) < 151 ? '（需要至少 1 槽资质）' : '（不在当前人物可用脉池）'}`;
             });
-            if (Number(raw?.zizhi) === 151 && missing.includes(250)) {
-                status(`当前是单槽角色，金顶混预设中的${name(250)}需要至少 2 槽。单槽仍可自动洗脉，请手动选择一条当前可用紫脉。`);
+            if (Number(raw?.zizhi) <= 151 && missing.includes(250)) {
+                const slotText = Number(raw?.zizhi) === 150 ? '零槽' : '单槽';
+                status(`当前是${slotText}角色，金顶混预设中的${name(250)}需要至少 2 槽。${slotText}仍可自动洗脉，请手动选择当前可用紫脉。`);
                 return;
             }
             status(`无法选择完整的金顶混组合，缺少：${reasons.join('、')}。`, true);

@@ -330,7 +330,10 @@ function attachRouteStepStates(context, raw, targets, result) {
 
 function solveLowSlotRole(context, raw, targets, options) {
     const slots = actualSlotCount(context, raw);
-    if (!(slots > 0 && slots < 3)) return null;
+    // Zero-slot roles still have a valid empty starting state. They must use
+    // the same direct low-slot search as one/two-slot roles, rather than fall
+    // through to the three/four-slot checkpoint pipeline.
+    if (!(slots >= 0 && slots < 3)) return null;
     const o = options || {};
     const configuredBudget = Number(o.budget);
     const searchOptions = {

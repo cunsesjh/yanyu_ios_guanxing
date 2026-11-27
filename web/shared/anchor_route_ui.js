@@ -128,7 +128,7 @@
     function describeSteps(route) {
         let locks=(raw.talents||[]).filter(t=>t.locked).map(t=>Number(t.id));
         const startingPills=raw.has_bag_pills?Number(raw.bag_pills):null;
-        const slotLabel=Number(raw.zizhi)>=154?'四槽':Number(raw.zizhi)===153?'三槽':`${Number(raw.zizhi)-151}槽`;
+        const slotLabel=Number(raw.zizhi)>=154?'四槽':Number(raw.zizhi)===153?'三槽':Number(raw.zizhi)===152?'二槽':Number(raw.zizhi)===151?'一槽':'零槽';
         const rows=[];
         let pendingUpgrade=false;
         for(const [i,a] of route.steps.entries()) {

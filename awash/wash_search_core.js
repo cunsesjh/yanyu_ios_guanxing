@@ -82,7 +82,9 @@
         }
 
         function initialValue() {
-            const sourceZi = Math.max(151, Math.min(number(raw.zizhi, 153), 154));
+            // 150 is a real zero-slot aptitude. Keep it as the source state so
+            // the initial empty pool and its upgrade step are replayed exactly.
+            const sourceZi = Math.max(150, Math.min(number(raw.zizhi, 153), 154));
             if (sourceZi >= 153) {
                 const engine = engineForZi(sourceZi);
                 return {
