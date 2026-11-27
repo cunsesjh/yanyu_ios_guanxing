@@ -27,6 +27,31 @@
         const context = o.context || root;
         const zi = Number(o.zi) >= 150 ? Number(o.zi) : 153;
         const count = Math.max(12, Number(o.count) || 40);
+        const cache = o.cache
+            && typeof o.cache.get === 'function'
+            && typeof o.cache.set === 'function'
+            ? o.cache : null;
+        // The sequence depends on every seed/state field consumed by
+        // WashSourceEngine.initialState. Keep this key local to AWash so the
+        // shared session cache cannot collide with pity/checkpoint entries.
+        const cacheKey = cache ? `awash:sequence:${JSON.stringify({
+            zi,
+            count,
+            seed: raw && raw.seed,
+            luck_seed: raw && raw.luck_seed,
+            luck_seed_inited: !!(raw && raw.luck_seed_inited),
+            born_talent_rc: raw && raw.born_talent_rc,
+            tal_lucky: raw && raw.tal_lucky,
+            zizhi: raw && raw.zizhi,
+            dlc_mode: !!(raw && raw.dlc_mode),
+            talents: (raw && raw.talents || []).map(item => ({
+                id: Number(item && item.id != null ? item.id : item),
+                locked: !!(item && item.locked),
+            })),
+        })}` : '';
+        if (cache && cache.has(cacheKey)) {
+            return cache.get(cacheKey);
+        }
         const engine = engineFor(context, raw, zi);
         const initial = engine.initialState(
             Object.assign({}, raw, { zizhi: zi })
@@ -68,13 +93,15 @@
                 }
             }
         }
-        return {
+        const output = {
             zizhi: zi,
             slots: engine.slotCount,
             seq,
             context,
             raw,
         };
+        if (cache) cache.set(cacheKey, output);
+        return output;
     }
 
     const api = Object.freeze({ readSequence });

@@ -80,7 +80,7 @@
         if (!talents.length) return '';
         return `<div class="w2-step-state"><strong>本步完成后的当前脉序</strong><ul>${talents.map(t => {
             const item = TALENT_DATA[Number(t.id)] || {};
-            return `<li><b>${esc(item.name || name(t.id))}${t.locked ? '（已锁定）' : ''}</b><span>${esc(item.desc || '暂无天赋说明')}</span></li>`;
+            return `<li><b>${esc(item.name || name(t.id))}${t.locked ? '（已锁定）' : ''}</b></li>`;
         }).join('')}</ul></div>`;
     }
     function stop(text) {

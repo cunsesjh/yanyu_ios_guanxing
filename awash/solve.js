@@ -380,6 +380,10 @@ async function solveJoint(raw, targetIds, options) {
     let lockOneInfiniteResult = null;
     let infinitePhaseComplete = false;
     const infiniteMaterializationErrors = [];
+    const sequenceMetrics = {
+        cacheHits: 0,
+        reads: 0,
+    };
     const backendHorizon = Number(o.horizon) || 2000;
     // 0 表示还没有路线上界；资源节点/时长限制仍然生效。
     let sharedUpperBoundPills = 0;
@@ -444,11 +448,32 @@ async function solveJoint(raw, targetIds, options) {
         };
     } else if (raw) {
         if (!plan) {
-            const sequence = Sequence.readSequence(raw, {
-                context,
-                zi: Number(raw.zizhi) || 153,
-                count: Number(o.count) || 40,
-            });
+            const sequenceCacheKey = `awash:sequence-plan:${JSON.stringify({
+                seed: raw.seed,
+                luck_seed: raw.luck_seed,
+                luck_seed_inited: !!raw.luck_seed_inited,
+                born_talent_rc: raw.born_talent_rc,
+                tal_lucky: raw.tal_lucky,
+                zizhi: raw.zizhi,
+                dlc_mode: !!raw.dlc_mode,
+                talents: (raw.talents || []).map(item => ({
+                    id: Number(item && item.id != null ? item.id : item),
+                    locked: !!(item && item.locked),
+                })),
+            })}`;
+            let sequence = sessionCache.get(sequenceCacheKey);
+            if (sequence) {
+                sequenceMetrics.cacheHits += 1;
+            } else {
+                sequenceMetrics.reads += 1;
+                sequence = Sequence.readSequence(raw, {
+                    context,
+                    zi: Number(raw.zizhi) || 153,
+                    count: Number(o.count) || 40,
+                    cache: sessionCache,
+                });
+                sessionCache.set(sequenceCacheKey, sequence);
+            }
             plan = RolePlanner.selectPlan(raw, sequence, {
                 context,
             });
@@ -467,6 +492,7 @@ async function solveJoint(raw, targetIds, options) {
                 Object.assign({
                     nMax: 100,
                     count: 30,
+                    sequenceCache: sessionCache,
                 }, o.infiniteOptions || {}, {
                     onSeed(packet) {
                         if (!packet) return;
@@ -719,6 +745,8 @@ async function solveJoint(raw, targetIds, options) {
         result.metrics.sharedUpperBoundPills = null;
     }
     result.metrics.horizon = backendHorizon;
+    result.metrics.sequenceCacheHits = sequenceMetrics.cacheHits;
+    result.metrics.sequenceReads = sequenceMetrics.reads;
     result.metrics.preliminaryInfinitePills =
         preliminaryInfiniteResult
         && preliminaryInfiniteResult.route

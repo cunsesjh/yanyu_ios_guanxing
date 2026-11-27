@@ -136,7 +136,7 @@
         return anchors;
     }
 
-    function findSequenceAnchors(context, engine, raw, slots, count) {
+    function findSequenceAnchors(context, engine, raw, slots, count, cache) {
         if (!root.AWashSequence) {
             throw new Error('AWashSequence 未加载');
         }
@@ -144,6 +144,7 @@
             context,
             zi: Number(slots) === 4 ? 154 : 153,
             count,
+            cache,
         });
         const firstPity = (sequence.seq || []).find(item => item.fromPity);
         const pityWash = firstPity ? Number(firstPity.wash) || Infinity : Infinity;
@@ -648,7 +649,7 @@
         const sequenceInfo = findSequenceAnchors(
             root, engine, Object.assign({}, raw, {
                 zizhi: slots === 4 ? 154 : 153,
-            }), slots, count);
+            }), slots, count, o.sequenceCache || o.cache);
         const anchors = findFieldAnchors(engine, initial)
             .concat(sequenceInfo.anchors.filter(item =>
                 anchorBeforePity(item, sequenceInfo.pityWash)));
