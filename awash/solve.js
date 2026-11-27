@@ -414,7 +414,9 @@ async function solveJoint(raw, targetIds, options) {
                     backendOptions
                 );
         const requestedBudget = options.budget == null
-            ? sharedUpperBoundPills
+            ? (sharedUpperBoundPills > 0
+                ? sharedUpperBoundPills
+                : Number(o.budget) || 0)
             : Number(options.budget) || 0;
         const orders = options.targetOrders || targetOrderCandidates(
             targets, Number(o.targetOrderCandidates) || 3

@@ -95,6 +95,7 @@ function materializeInitialRoute(context, raw, targets, route) {
         .filter(item => item && item.locked)
         .map(item => Number(item.id))
         .filter(id => id > 0);
+    let pendingRelayRestore = null;
     const steps = [];
 
     const pushLocks = () => {
@@ -215,6 +216,39 @@ function materializeInitialRoute(context, raw, targets, route) {
             if (state.talents.indexOf(carrier) < 0) {
                 throw new Error(`置换载体 ${action.from} 不在场`);
             }
+            const previousAction = route.actions[actionIndex - 1];
+            const isRelayContinuation = previousAction
+                && previousAction.kind === 'exchange'
+                && String(previousAction.to) === String(action.from);
+            if (!isRelayContinuation) {
+                pendingRelayRestore = locks.slice();
+            }
+            // Consecutive exchange actions are an implicit relay chain in
+            // the native planner. Any ordinary conflict needed by a later
+            // carrier must be locked before the first exchange creates that
+            // carrier; locking it in the later action is invalid in replay.
+            const relayCarriers = [];
+            let relayFrom = action.to;
+            for (let look = actionIndex + 1;
+                look < (route.actions || []).length; look++) {
+                const next = route.actions[look];
+                if (!next || next.kind !== 'exchange'
+                    || String(next.from) !== String(relayFrom)) break;
+                relayCarriers.push(idByName(context, next.from));
+                relayFrom = next.to;
+            }
+            for (const planned of relayCarriers) {
+                const plannedType = engine.talentType(planned);
+                const conflict = state.talents.find(id =>
+                    id !== planned && id !== 251
+                    && engine.quality(id) < 4
+                    && engine.talentType(id) === plannedType
+                );
+                if (conflict && !locks.includes(conflict)) {
+                    locks.push(conflict);
+                }
+            }
+            state = orderedState(state, locks);
             const chain = Array.isArray(action.chain) && action.chain.length
                 ? action.chain.map(name => idByName(context, name)) : [to];
             for (const expected of chain) {
@@ -230,12 +264,17 @@ function materializeInitialRoute(context, raw, targets, route) {
                 } catch (error) {
                     const type = engine.talentType(carrier);
                     const conflict = state.talents
-                        .filter(id => id !== carrier
-                            && id !== 251
-                            && exchangeLocks.includes(id)
+                        .slice(0, position)
+                        .reverse()
+                        .find(id => id !== 251
                             && engine.quality(id) < 4
                             && engine.talentType(id) === type)
-                        .pop();
+                        || state.talents
+                            .filter(id => id !== carrier
+                                && id !== 251
+                                && engine.quality(id) < 4
+                                && engine.talentType(id) === type)
+                            .pop();
                     if (!conflict) {
                         throw new Error(
                             `${error.message} @动作#${actionIndex + 1} `
@@ -286,6 +325,17 @@ function materializeInitialRoute(context, raw, targets, route) {
                 carrier = expected;
             }
             if (carrier !== to) throw new Error('置换链终点与目标不一致');
+            const nextAction = route.actions[actionIndex + 1];
+            const hasNextRelay = nextAction
+                && nextAction.kind === 'exchange'
+                && String(nextAction.from) === String(action.to);
+            if (!hasNextRelay && pendingRelayRestore) {
+                locks = pendingRelayRestore.filter(id =>
+                    state.talents.includes(id)
+                );
+                pendingRelayRestore = null;
+                pushLocks();
+            }
             continue;
         }
         if (action.kind !== 'wash_to') {
