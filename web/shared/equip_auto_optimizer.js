@@ -333,16 +333,17 @@
             if (slot < 1 || slot > 3 || !prop || prop.prop !== targetProp) return;
             const value = finiteNumber(prop.value, Number.NEGATIVE_INFINITY);
             if (!Number.isFinite(value)) return;
-            // 比较用「理论最大值」而不是原始值：81 之前的低系数机会，除以系数后可能一样到顶
+            // 直算路线只能按这一刀实际得到的值比较。低系数机会若能通过更早
+            // 的锁槽抬高，会由 analyzeRefinement 的预锁分支单独重放验证。
             const cumMud = finiteNumber(item && item.xl_level, 0);
             if (maxMud > 0 && cumMud > maxMud) return;
             const theoretical = refinementTheoreticalValue(value, cumMud);
             const occurrence = {
                 index: finiteNumber(item.index, zeroIndex + 1), slot, value, cumMud, theoretical,
             };
-            if (!maxima[slot] || theoretical > maxima[slot].theoretical) {
+            if (!maxima[slot] || value > maxima[slot].value) {
                 maxima[slot] = { slot, value, theoretical, occurrences: [occurrence] };
-            } else if (theoretical === maxima[slot].theoretical) {
+            } else if (value === maxima[slot].value) {
                 maxima[slot].occurrences.push(occurrence);
             }
         });
@@ -483,7 +484,7 @@
         const maxima = collectSlotMaxima(items, targetProp, maxMud);
         const choices = [1, 2, 3]
             .filter(slot => !settledSlots.has(slot) && maxima[slot]
-                && (!currentMaxima[slot] || maxima[slot].theoretical > currentMaxima[slot].theoretical))
+                && (!currentMaxima[slot] || maxima[slot].value > currentMaxima[slot].value))
             .flatMap(slot => maxima[slot].occurrences);
         choices.sort((a, b) => a.index - b.index || a.slot - b.slot);
         return choices[0] || null;
@@ -551,8 +552,7 @@
             }
         }
 
-        // 总分按「理论最大值」累加：这样 81 之前那些除以系数后一样到顶的机会才算得进来
-        const total = [1, 2, 3].reduce((sum, slot) => sum + (maxima[slot] ? maxima[slot].theoretical : 0), 0);
+        const total = [1, 2, 3].reduce((sum, slot) => sum + (maxima[slot] ? maxima[slot].value : 0), 0);
         if (!accepted.length) return { prop: targetProp, maxima, total, plan: null, previewCount: count };
         const cutoff = accepted[accepted.length - 1].index;
         const cost = refinementCost(equip, plannedItems, cutoff, data, accepted.map(item => item.index));

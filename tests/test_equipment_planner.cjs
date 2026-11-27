@@ -116,7 +116,8 @@ assert.equal(vm.runInContext('equipAutoCandidateRating(ringFixture).label', cont
 
 async function main() {
     if (process.argv[2]) {
-        api.setSave(JSON.parse(fs.readFileSync(process.argv[2], 'utf8')));
+        const actualSave = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+        api.setSave(actualSave);
         const found = [];
         await api.scanRoutes({parts: [7], mudBudget: 374, craftCount: 100, targetProp: 'atk_add',
             cancelled: () => false, progress() {}, candidate(item) {
@@ -135,6 +136,35 @@ async function main() {
         assert.equal(item.mud, 374, 'the 10-mud upgrade cost must be added separately to the 364 refinement mud');
         console.log('actual-save craft 65:', api.refinementDisplayTotal(item.refinement), 'attack;',
             item.refinement.plan.cost.lianjin, 'refinement mud + 10 upgrade mud');
+
+        const saveRoot = Array.isArray(actualSave) ? actualSave[0] : actualSave;
+        const make = saveRoot.MakeRnd;
+        const makeState = {Seeds: make.Seeds || {}, LuckySeeds: make.LuckySeeds || {},
+            IDSeeds: make.IDSeeds || {}, MakeLucky: make.MakeLucky || {}};
+        const focused = await sandbox.EquipmentAutoOptimizer.simulateEquipmentRoutes({
+            data: sandbox.EQUIP_DATA,
+            initialMakeState: makeState,
+            branches: [{npcId: 31230, paperId: 3458, specialId: 0}],
+            targetProps: ['dmg_off'],
+            options: {craftCount: 55, refineCount: 1000, refineMudBudget: 1000,
+                includeBlue: true, maxRefineWork: 100000, resultLimit: 100},
+            bridge: {
+                getMakeState: () => sandbox.wasmMakeGetState(),
+                setMakeState: next => sandbox.wasmMakeSetState(next),
+                makePreview: (request, count) => sandbox.wasmMakePreview(request, count),
+                xilianPlan: (equip, accepts) => sandbox.wasmXilianPlan(equip, accepts),
+            },
+            yieldControl: () => Promise.resolve(),
+        });
+        const craft55 = focused.candidates.find(candidate => candidate.craftIndex === 55);
+        assert.ok(craft55, 'the actual save must contain Lingyue Huru wood armor craft 55');
+        const damageOff = craft55.refinements.find(refinement => refinement.prop === 'dmg_off');
+        assert.deepEqual(Array.from(damageOff.plan.accepts, step => step.index), [82, 135, 242],
+            'a full-value keep at #82 must replace the unnecessary and more expensive #20 pre-lock');
+        assert.equal(damageOff.plan.cost.lianjin, 616,
+            'the optimized craft-55 damage-reduction route must use the cheaper 616-mud path');
+        console.log('actual-save craft 55:', api.refinementDisplayTotal(damageOff), 'damage reduction;',
+            damageOff.plan.cost.lianjin, 'refinement mud');
     }
     console.log('equipment planner regression tests passed');
 }

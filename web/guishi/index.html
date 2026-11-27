@@ -1078,6 +1078,11 @@ table.grt-table .f{color:var(--free,#4ade80)}
 .grt-steptop .grt-gain{font-size:12px;font-weight:700;color:var(--free,#4ade80)}
 .grt-steptop .grt-whenx{margin-left:auto;font-size:11.5px;color:var(--muted,#8194ad)}
 .grt-cands{display:flex;flex-wrap:wrap;gap:4px 8px;font-size:12.5px;color:var(--text-2,#5b6c86);line-height:1.7}
+.grt-hit-route{margin:0 0 10px;padding:10px 12px;border:1px solid var(--gold,#e0a94a);border-left:4px solid var(--gold,#e0a94a);border-radius:10px;background:var(--gold-soft,#faf1dc)}
+.grt-hit-route-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:5px;color:var(--text,#1b2c46)}
+.grt-hit-route-head span{font-size:12px;color:var(--text-2,#5b6c86)}
+.grt-hit-route-list{display:grid;gap:4px;font-size:12.5px;color:var(--text-2,#5b6c86)}
+.grt-hit-route-item b{color:#8c5c11}
 .grt-cand{white-space:nowrap}
 .grt-cand.on{color:#86efac;font-weight:700}
 @media (max-width:760px){
@@ -1518,6 +1523,18 @@ table.grt-table .f{color:var(--free,#4ade80)}
     return parts.length ? parts.join('、') : '不点元宝';
   }
 
+  function targetHitSummary(res) {
+    var steps = [];
+    (res && res.steps || []).forEach(function (step) {
+      var hits = (step.hits || []).filter(function (hit) { return Number(hit.take) > 0; });
+      if (!hits.length) return;
+      steps.push({ step: step, hits: hits, units: hits.reduce(function (sum, hit) {
+        return sum + (Number(hit.take) || 0);
+      }, 0) });
+    });
+    return { steps: steps, units: steps.reduce(function (sum, item) { return sum + item.units; }, 0) };
+  }
+
   /* ---------- 引擎自己那条「每天刷满」日程的结果（作对照，不再重放） ---------- */
   function engineFull(ctx, sel) {
     var units = 0, refreshGold = 0, buyGold = 0, buySilver = 0, bought = {}, golds = 0;
@@ -1674,6 +1691,7 @@ table.grt-table .f{color:var(--free,#4ade80)}
     });
     var names = Object.keys(sel);
     var byName = res.byName || {};
+    var targetHits = targetHitSummary(res);
     var h = '';
 
     // 视图切换
@@ -1699,6 +1717,22 @@ table.grt-table .f{color:var(--free,#4ade80)}
       + ' · 搜索方式：候选搜索（' + days + ' 天内' + (view === 'max' ? '材料最多' : (view === 'free' ? '不花元宝' : '最省元宝')) + '）'
       + ' · 自检 ' + (chk.ok ? '<span class="ok">与引擎时间轴一致 ✅</span>' : '<span class="warn">⚠ ' + esc(chk.err || (chk.bad + ' 处')) + '</span>')
       + ' · 用时 ' + ms + ' ms</div>';
+
+    // 与“目标总数”使用同一批实际购买记录，避免目标散落在完整货架列表中难以核对。
+    h += '<div class="grt-hit-route"><div class="grt-hit-route-head"><b>目标获取路线</b>'
+      + '<span>共 ' + targetHits.units + ' 个 · ' + targetHits.steps.length + ' 次命中</span></div>';
+    if (!targetHits.steps.length) {
+      h += '<div class="grt-hit-route-list"><span>当前路线没有获得目标物品。</span></div>';
+    } else {
+      h += '<div class="grt-hit-route-list">' + targetHits.steps.map(function (item) {
+        var s = item.step;
+        var got = item.hits.map(function (hit) { return esc(hit.name) + '×' + hit.take; }).join('、');
+        var kind = s.kind === 'gold' ? '元宝刷新' : (s.pending ? '赠送免费刷新' : '自动免费刷新');
+        return '<div class="grt-hit-route-item"><b>#' + s.idx + ' · ' + dayName(s.day) + ' ' + fmtTime(s.when)
+          + '</b> · ' + kind + ' · ' + got + '</div>';
+      }).join('') + '</div>';
+    }
+    h += '</div>';
 
     // 逐日逐次
     var byDay = {};
