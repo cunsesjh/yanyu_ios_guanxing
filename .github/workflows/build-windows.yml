@@ -105,12 +105,7 @@ jobs:
         with:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
-          body: |
-            ## v4.0-beta.19 测试版更新公告
-
-            - Windows 桌面版现在可以直接导入完整解密后的 dat.json 存档。
-            - HAR 仍用于连接游戏服务器下载最新云存档；dat.json 仅在本机读取和保存。
-            - 导入 dat.json 后可立即使用全部观星功能，并可在历史存档中再次打开。
+          body_path: .github/release-notes/v3.1.0.md
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt
