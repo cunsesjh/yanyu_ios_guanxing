@@ -276,6 +276,9 @@
                 sex: numeric(initialState.sex, 1),
                 roleLevel: numeric(initialState.role_level, 90),
                 roleStats: initialState.role_stats || {},
+                // 主角专属资格（如五蕴皆空的根骨门槛）需要在每次状态变化后
+                // 依据原始角色重算；伙伴不走这条动态分支。
+                roleRaw: initialState.role_raw || null,
                 globalVars: initialState.global_vars || {},
             };
             const ordered = apkPairsOrder()
@@ -378,7 +381,31 @@
             return !allowed(config, this.source, this.initialZiZhi) && allowed(config, this.source, zizhi);
         }
 
-        allowedSet(zizhi) {
+        // 主角的部分天赋资格会随当前经脉属性变化（例如五蕴皆空要求根骨 60）。
+        // 伙伴没有这类主角专属动态资格，因此保留构造时的静态属性。
+        roleStatsFor(state) {
+            if (this.source.roleId !== 1 || !this.source.roleRaw
+                || !root.WashRoleContext
+                || typeof root.WashRoleContext.roleStats !== 'function') {
+                return this.source.roleStats || {};
+            }
+            const stats = root.WashRoleContext.roleStats(this.source.roleRaw, state?.talents || []);
+            return stats || this.source.roleStats || {};
+        }
+
+        allowedAtState(configOrId, state) {
+            const dynamicSource = {...this.source, roleStats: this.roleStatsFor(state)};
+            const config = typeof configOrId === 'object' ? configOrId : this.config.get(numeric(configOrId));
+            if (!config) return false;
+            const id = numeric(config.id);
+            if (this.externalAllowed && this.externalAllowed.has(id)) return true;
+            if (!allowed(config, dynamicSource, state?.zizhi ?? this.initialZiZhi)) return false;
+            if (!this.externalAllowed) return true;
+            return !allowed(config, dynamicSource, this.initialZiZhi);
+        }
+
+        allowedSet(zizhi, state = null) {
+            if (state) return new Set(this.allIds.filter(id => this.allowedAtState(id, {...state, zizhi})));
             return new Set(this.allIds.filter(id => this.isAllowedAt(id, zizhi)));
         }
 
@@ -386,7 +413,7 @@
         // The set is scoped by the requested aptitude, while the full state is
         // retained in the signature for adapters that specialize this method.
         allowedForState(state, zizhi = state && state.zizhi) {
-            return this.allowedSet(clampZiZhi(zizhi, this.initialZiZhi || 154));
+            return this.allowedSet(clampZiZhi(zizhi, this.initialZiZhi || 154), state);
         }
 
         upgradeToThree(sourceState) {
@@ -420,11 +447,12 @@
                 || this.talentType(talentId) === 248;
         }
 
-        hasOrdinaryPurpleSuccessor(id) {
+        hasOrdinaryPurpleSuccessor(id, state = null) {
             const talentId = numeric(id);
             if (this.quality(talentId) === 4 || this.isShenmai(talentId)) return false;
             const type = this.talentType(talentId);
-            return this.purpleIds.some(candidate => this.allowed.has(candidate)
+            const allowedNow = state ? this.allowedForState(state) : this.allowed;
+            return this.purpleIds.some(candidate => allowedNow.has(candidate)
                 && !this.isShenmai(candidate) && this.talentType(candidate) === type);
         }
 
@@ -486,9 +514,10 @@
                     bornRC = this.hooks.advanceRc({ advance, bornRC });
                 }
                 draws += 1;
-                if (fromPity && this.allowed.has(candidate)) purpleDraws += 1;
+                const currentState = {...state, talents};
+                if (fromPity && this.allowedForState(currentState).has(candidate)) purpleDraws += 1;
                 if (draws > 100000) throw new Error('源码洗脉抽取未收敛');
-                if (!this.isAllowedAt(candidate, state.zizhi) || talents.includes(candidate)) continue;
+                if (!this.allowedAtState(candidate, currentState) || talents.includes(candidate)) continue;
                 if (this.quality(candidate) === 4 && newPurple) continue;
                 talents.push(candidate);
                 generatedEvents.push({ id: candidate, bornRC, fromPity, luckSeed: fromPity ? luck : null });
@@ -673,9 +702,9 @@
                 let candidate;
                 [candidate, luck] = this.draw(luck, true);
                 draws += 1;
-                if (this.allowed.has(candidate)) purpleDraws += 1;
+                if (this.allowedForState(state).has(candidate)) purpleDraws += 1;
                 if (draws > 100000) throw new Error('源码置换抽取未收敛');
-                if (this.isAllowedAt(candidate, state.zizhi) && !talents.includes(candidate)) {
+                if (this.allowedAtState(candidate, state) && !talents.includes(candidate)) {
                     talents.push(candidate);
                     return {
                         state: {
