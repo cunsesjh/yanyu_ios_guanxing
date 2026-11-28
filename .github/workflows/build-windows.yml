@@ -105,7 +105,7 @@ jobs:
         with:
           name: iosGuanxing ${{ github.ref_name }}（${{ github.repository == 'cunsesjh/iosGuanxing' && '测试版' || '正式版' }}）
           prerelease: ${{ github.repository == 'cunsesjh/iosGuanxing' }}
-          body_path: .github/release-notes/v3.1.0.md
+          body_path: .github/release-notes/v3.1.1.md
           files: |
             dist/iosGuanxing.exe
             dist/SHA256SUMS.txt

@@ -42,9 +42,34 @@
         <p id="w2Status" role="status" aria-live="polite">等待选择人物。</p>
         <div id="w2Results"><div class="ai-result-empty">选择人物及目标后开始规划。</div></div>`;
 
-    function status(text, error = false) {
+    function status(text) {
         $('Status').textContent = text;
-        $('Status').classList.toggle('w2-error', error);
+        // Search failures are presented as recoverable status, not a red
+        // stack/error banner. Detailed diagnostics remain in the console.
+        $('Status').classList.remove('w2-error');
+    }
+    function friendlyError(error) {
+        const detail = String(error?.message || error || '');
+        if (/timed out|timeout|超时|max-runtime/i.test(detail)) {
+            return '本轮搜索耗时过长，暂未完成。可以减少目标后重试；已找到的路线会保留。';
+        }
+        if (/out of memory|memory access|native stack trace|wasm.*unreachable|unreachable.*wasm/i.test(detail)) {
+            return '本轮搜索占用资源过多，已停止。请减少目标后重试；如果反复出现，请重新启动程序。';
+        }
+        if (/failed to fetch|load failed|network|fetch|econnrefused|非 json|http 5\d\d|连接失败/i.test(detail)) {
+            return '自动洗脉服务暂时无法连接，请重新打开程序后重试。';
+        }
+        // Keep concise Chinese validation guidance, but never expose Node/WASM
+        // stack traces or raw runtime messages to users.
+        if (detail && !/\bat\s+.*\(|node\.exe|wasm:|runtimeerror|fatal process|native stack/i.test(detail)
+            && !detail.includes('\n')) {
+            return detail;
+        }
+        return '自动洗脉本轮未能完成，请检查人物和目标后重试。';
+    }
+    function reportError(error, source) {
+        console.error(`[自动洗脉${source ? ` · ${source}` : ''}]`, error);
+        status(friendlyError(error));
     }
     function limitReasonText(reasons) {
         const labels = {
@@ -123,7 +148,7 @@
     function makeWorker() {
         if (worker) return worker;
         worker = new Worker(new URL('auto_wash2_worker.js?v=20261127smallslotpool', document.currentScript?.src || new URL('../shared/auto_wash2.js', location.href)));
-        worker.onerror = event => { stop(); status('后台计算失败：' + (event.message || '请重新进入此页面重试'), true); };
+        worker.onerror = event => { stop(); reportError(event.message || '后台计算失败', '后台计算'); };
         return worker;
     }
     function inspect() {
@@ -134,7 +159,7 @@
         const w = makeWorker();
         w.onmessage = ({data}) => {
             if (data.requestId !== id) return;
-            if (data.type === 'error') { inspecting = false; stop(); status(data.error, true); return; }
+            if (data.type === 'error') { inspecting = false; stop(); reportError(data.error, '人物检查'); return; }
             if (data.type !== 'summary') return;
             inspecting = false;
             const allowed = new Set(data.summary.allowed);
@@ -157,7 +182,7 @@
             $('Bag').textContent = bag.toLocaleString() + ' 丹';
             $('Summary').textContent = `${entry.tag} · ${entry.role.Name || '无名'} · ${ZZ_DATA[raw.zizhi]?.zz_name || ZZ_DATA[raw.zizhi]?.name || ['资质平平', '资质过人', '武林俊杰', '绝世奇才', '空前绝后'][raw.zizhi - 150]} · ${raw.zizhi - 150} 槽 · 从导入存档的原始状态起算${raw.zizhi === 151 ? ' · 单槽也支持自动规划（请选择可用目标）' : ''}`;
             renderLocks(); renderTargets(); inspect();
-        } catch (error) { raw = null; $('Run').disabled = true; renderLocks(); renderTargets(); status(error.message, true); }
+        } catch (error) { raw = null; $('Run').disabled = true; renderLocks(); renderTargets(); reportError(error, '人物选择'); }
     }
     function refresh() {
         const s = window.state || {}, signature = JSON.stringify([s.saveChannel, s.savePlatform, s.dlcMode]);
@@ -225,7 +250,7 @@
             : `AWASH 未找到路线：${[...new Set(reasons)].join('；') || '无可行路线'}`};
         renderResult(result); stop();
         status(sorted.length ? `AWASH 完成 · ${sorted.length} 条路线 · ${((Date.now() - started) / 1000).toFixed(1)} 秒。`
-            : `${result.noResultReason} · ${((Date.now() - started) / 1000).toFixed(1)} 秒。`, !sorted.length);
+            : `${result.noResultReason} · ${((Date.now() - started) / 1000).toFixed(1)} 秒。`);
     }
     function run() {
         refresh();
@@ -247,9 +272,9 @@
             progressTimer = setInterval(updateProgress, 250);
             runAwash(input, branches, id, started, message => { progressMessage = message; updateProgress(); }).catch(error => {
                 if (error?.name === 'AbortError') return;
-                stop(); status(error?.message || String(error), true);
+                stop(); reportError(error, '路线搜索');
             });
-        } catch (error) { stop(); status(error.message, true); }
+        } catch (error) { stop(); reportError(error, '启动搜索'); }
     }
     $('Role').addEventListener('change', () => { assignments.clear(); chooseRole(); });
     $('Vip').addEventListener('change', chooseRole);
@@ -283,7 +308,7 @@
                 status(`当前是${slotText}角色，金顶混预设中的${name(250)}需要至少 2 槽。${slotText}仍可自动洗脉，请手动选择当前可用紫脉。`);
                 return;
             }
-            status(`无法选择完整的金顶混组合，缺少：${reasons.join('、')}。`, true);
+            status(`无法选择完整的金顶混组合，缺少：${reasons.join('、')}。`);
             return;
         }
         invalidate(); assignments = new Map([271, 272, 250].map(id => [id, -1])); renderTargets();
