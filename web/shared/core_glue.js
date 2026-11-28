@@ -786,6 +786,7 @@ function syncStateToWasm(jsState) {
         global_vars: jsState.globalVars || {},
         born_talent_rc: Number(jsState.bornTalentRC) || 0,
         save_channel: jsState.saveChannel || '',
+        save_version: Number(jsState.saveVersion) || 0,
     };
     return wasmSetState(ws);
 }
@@ -821,6 +822,7 @@ function syncStateFromWasm(jsState) {
     jsState.roleLevel = ws.role_level;
     if (ws.born_talent_rc !== undefined) jsState.bornTalentRC = Number(ws.born_talent_rc) || 0;
     if (ws.save_channel !== undefined) jsState.saveChannel = String(ws.save_channel || '');
+    if (ws.save_version !== undefined) jsState.saveVersion = Number(ws.save_version) || 0;
 }
 
 function convertWashResult(wr) {

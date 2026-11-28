@@ -125,6 +125,7 @@
                 role_stats_complete: !!(fullState && fullState.role_stats_complete),
                 global_vars: (fullState && fullState.global_vars) || {},
                 save_channel: (fullState && fullState.save_channel) || (options && options.saveChannel) || '',
+                save_version: Number(fullState && fullState.save_version) || Number(options && options.saveVersion) || 0,
             };
             const WSE = root.WashSourceEngine;
             return new WSE.Engine(TALENT_DATA, source, {

@@ -33,6 +33,7 @@ var state = {
     roleStats: { str_val: 0, dex: 0, con: 0, int_val: 0 },
     globalVars: {},
     saveChannel: '',
+    saveVersion: 0,
     bornTalentRC: 0,
 };
 
@@ -550,6 +551,7 @@ function captureImportSnapshot() {
         global_vars: state.globalVars || {},
         born_talent_rc: Number(state.bornTalentRC) || 0,
         save_channel: state.saveChannel || '',
+        save_version: Number(state.saveVersion) || 0,
     };
 }
 
@@ -860,6 +862,7 @@ function renderTalents() {
                 global_vars: state.globalVars || state.saveData?.globalVariable || {},
                 born_talent_rc: Number(state.bornTalentRC) || 0,
                 save_channel: state.saveChannel || '',
+                save_version: Number(state.saveVersion) || 0,
             };
             const analysis = wasmFirstPityJumpCandidates(snapshot);
             const candidates = (analysis && analysis.candidates) || [];
@@ -1245,6 +1248,14 @@ function selectRoleFromSave(roleKey) {
 
     const role = entry.role;
     const bt = role.BornTalent || {};
+
+    // 手动洗髓入口也必须使用存档本身的数据库版本。共享存档可能把
+    // `meta.version` 保存成“明文”等展示标签；如果这里不重新校准，
+    // wash_route_engine 会误走旧版脉序（于小雪会退回第 22 洗/66 丹出紫）。
+    const archiveVersion = Number(state.saveData?.DBVersion);
+    if (Number.isFinite(archiveVersion) && archiveVersion > 0) {
+        state.saveVersion = archiveVersion;
+    }
 
     state.seed = bt.S !== undefined ? Number(bt.S) : 0;
     state.bornTalentRC = bt.RC !== undefined && bt.RC !== null ? (Number(bt.RC) || 0) : 0;
@@ -1801,6 +1812,7 @@ function buildExchangeSequenceWasmState(role) {
         global_vars: state.saveData?.globalVariable || {},
         born_talent_rc: born.RC !== undefined && born.RC !== null ? (Number(born.RC) || 0) : 0,
         save_channel: state.saveChannel || '',
+        save_version: Number(state.saveVersion) || 0,
     };
 }
 
@@ -5648,6 +5660,7 @@ function pulseStartState() {
         role_stats: pick(src.role_stats, pick(src.roleStats, {})),
         global_vars: pick(src.global_vars, pick(src.globalVars, {})),
         save_channel: pick(src.save_channel, pick(src.saveChannel, '')),
+        save_version: Number(pick(src.save_version, pick(src.saveVersion, state.saveVersion))) || 0,
         // —— 模拟器当前资质：决定槽数 / 丹耗 / 保底 / 可用紫脉池 ——
         zizhi: (state && state.zizhi != null) ? Number(state.zizhi) : Number(src.zizhi),
         mode: pick(src.mode, state.mode),
