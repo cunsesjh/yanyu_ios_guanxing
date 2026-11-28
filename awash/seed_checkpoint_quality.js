@@ -179,6 +179,26 @@ class PersistentWorkerPool {
             worker.terminate()
         ));
     }
+
+    async cancelPending() {
+        const cancelled = {
+            ok: false,
+            status: 'cancelled',
+            stopReason: 'another-checkpoint-found-a-route',
+        };
+        for (const task of this.queue.splice(0)) {
+            task.resolve(cancelled);
+        }
+        for (const pending of this.pending.values()) {
+            pending.resolve(cancelled);
+        }
+        this.pending.clear();
+        await Promise.all(this.workers.map(worker =>
+            worker.terminate()
+        ));
+        this.workers = [];
+        this.idle = [];
+    }
 }
 
 function normalizeCheckpoints(checkpoints) {
@@ -349,6 +369,7 @@ async function solveSeedCheckpointQuality(
         1,
         Math.min(
             Number(o.concurrency) || Math.min(16, cpuCount),
+            o.stopOnFirstRoute ? 2 : 16,
             ordered.length || 1
         )
     );
@@ -371,6 +392,7 @@ async function solveSeedCheckpointQuality(
     let upperBound = Number.isFinite(requestedBudget)
         && requestedBudget > 0 ? requestedBudget : Infinity;
     let best = null;
+    const stopOnFirstRoute = !!o.stopOnFirstRoute;
     const metrics = {
         inputCheckpointCount,
         checkpointCount: ordered.length,
@@ -440,6 +462,7 @@ async function solveSeedCheckpointQuality(
         } else {
             result = await runLocal(data);
         }
+        if (result && result.status === 'cancelled') return result;
         cache.set(cacheKey, result);
         if (result && result.ok
             && routeBeats(result, best)) {
@@ -476,6 +499,14 @@ async function solveSeedCheckpointQuality(
                 );
                 routes.push(result);
                 activeChains.delete(checkpoint.chainKey);
+                if (stopOnFirstRoute && result && result.ok
+                    && result.route) {
+                    // Do not keep expanding more checkpoints once a usable
+                    // route has been verified. Cancel other active checkpoints
+                    // so they cannot keep the request waiting or exhaust WASM.
+                    stopped = true;
+                    if (pool) await pool.cancelPending();
+                }
             }
         }
         await Promise.all(Array.from(
@@ -521,6 +552,8 @@ async function solveSeedCheckpointQuality(
     } finally {
         if (pool) await pool.close();
     }
+    // The route search can stop as soon as it has a verified incumbent;
+    // refine that incumbent in a separate, explicitly bounded pass.
     best = optimizeGlobalBest(
         rootRaw,
         targets,
@@ -537,7 +570,9 @@ async function solveSeedCheckpointQuality(
         route: best,
         metrics,
         stopReason: best
-            ? (metrics.elapsedMs >= maxRuntimeMs
+            ? (stopOnFirstRoute && metrics.firstRouteMs != null
+                ? 'first-route'
+                : metrics.elapsedMs >= maxRuntimeMs
                 ? 'max-runtime'
                 : 'checkpoint-quality-exhausted')
             : 'checkpoint-quality-no-route',

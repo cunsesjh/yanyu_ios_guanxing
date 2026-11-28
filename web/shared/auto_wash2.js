@@ -194,11 +194,18 @@
                 body: JSON.stringify({raw: input.initialState, targets: branches[index],
                     budget: input.options.maxTotalPills,
                     options: {budget: input.options.maxTotalPills,
-                        concurrency: 16, horizon: 2000,
-                        pityQuality: true, seedQuality: true, stopOnFirstRoute: false,
+                        // The initial-route WASM is instantiated per worker.
+                        // Large worker pools can exhaust WASM/V8 memory on
+                        // Windows desktops; keep the production pool small.
+                        concurrency: 2, horizon: 2000,
+                        earlyReturnOnRoute: true,
+                        pityQuality: true, seedQuality: true, stopOnFirstRoute: true,
+                        incumbentMaxRuntimeMs: 120000,
                         infiniteOptions: {nMax: 100, count: 30},
                         frontierOptions: {boundaryLanding: true, maxStates: 200, maxRounds: 1},
-                        limits: {maxRuntimeMs: 900000, maxExpandedNodes: 500000,
+                        // Leave headroom for AWASH to serialize a best route
+                        // before the desktop subprocess hard timeout (15 min).
+                        limits: {maxRuntimeMs: 600000, maxExpandedNodes: 500000,
                             maxWashSteps: 2000000, maxUniqueStates: 300000},
                         runtime: {beamWidth: 150, chainBeamWidth: 24, maxDepth: 150,
                             maxRunWashes: 1000, maxPolicyWashes: 300000}}})});

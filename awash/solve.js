@@ -402,11 +402,16 @@ async function solveJoint(raw, targetIds, options) {
     const backendHorizon = Number(o.horizon) || 2000;
     // 0 表示还没有路线上界；资源节点/时长限制仍然生效。
     let sharedUpperBoundPills = 0;
+    let earlyRouteResult = null;
+    const earlyReturnOnRoute = !!o.earlyReturnOnRoute;
     const qualityRequested = !!o.pityQuality
         || !!o.seedQuality;
     let nativePityQuality = qualityRequested;
 
     async function runCheckpointQuality(roots, overrides) {
+        if (earlyReturnOnRoute && earlyRouteResult) {
+            return earlyRouteResult;
+        }
         if (!roots || !roots.length) {
             return null;
         }
@@ -439,13 +444,20 @@ async function solveJoint(raw, targetIds, options) {
                 targets,
                 {
                 budget: requestedBudget > 0 ? requestedBudget : 0,
-                concurrency: Number(o.concurrency) || 16,
+                concurrency: earlyReturnOnRoute
+                    ? Math.min(2, Number(o.concurrency) || 2)
+                    : Number(o.concurrency) || 16,
                 horizon: backendHorizon,
                 limits: o.limits || {},
                 runtime: o.runtime || {},
                 sessionCache,
                 targetOrder,
                 adaptiveHorizon: o.adaptiveHorizon !== false,
+                stopOnFirstRoute: earlyReturnOnRoute,
+                incumbentMaxRuntimeMs: earlyReturnOnRoute
+                    ? Math.min(120000,
+                        Number(o.incumbentMaxRuntimeMs) || 120000)
+                    : Number(o.incumbentMaxRuntimeMs) || 300000,
                 }
             );
             if (candidate && candidate.route
@@ -458,6 +470,10 @@ async function solveJoint(raw, targetIds, options) {
                         Number(candidate.route.pills)
                     );
                 }
+            }
+            if (earlyReturnOnRoute && candidate && candidate.route) {
+                earlyRouteResult = candidate;
+                break;
             }
         }
         return best;
@@ -635,9 +651,9 @@ async function solveJoint(raw, targetIds, options) {
                 }
             }
         }
-        const shouldCollectPity = nativePityQuality
+        const shouldCollectPity = !earlyRouteResult && (nativePityQuality
             || (methods.includes('infinite-exchange')
-                && !infiniteRoots.length);
+                && !infiniteRoots.length));
         if (shouldCollectPity && methods.includes('pity')) {
             const frontierOptions =
                 productionPityFrontierOptions(
