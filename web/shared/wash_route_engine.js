@@ -281,6 +281,8 @@
                 roleRaw: initialState.role_raw || null,
                 globalVars: initialState.global_vars || {},
             };
+            this.dynamicRoleStatsCache = new Map();
+            this.allowedStateCache = new Map();
             const ordered = apkPairsOrder()
                 .map(key => talentData[String(key)])
                 .filter(item => item && numeric(item.weight));
@@ -389,14 +391,30 @@
                 || typeof root.WashRoleContext.roleStats !== 'function') {
                 return this.source.roleStats || {};
             }
-            const stats = root.WashRoleContext.roleStats(this.source.roleRaw, state?.talents || []);
-            return stats || this.source.roleStats || {};
+            const talents = state?.talents || [];
+            const key = talents.join(',');
+            if (this.dynamicRoleStatsCache.has(key)) return this.dynamicRoleStatsCache.get(key);
+            const stats = root.WashRoleContext.roleStats(this.source.roleRaw, talents)
+                || this.source.roleStats || {};
+            // Search can visit many states. Keep this cache bounded while reusing
+            // the same talent set across candidate checks in a single draw.
+            if (this.dynamicRoleStatsCache.size >= 128) {
+                this.dynamicRoleStatsCache.delete(this.dynamicRoleStatsCache.keys().next().value);
+            }
+            this.dynamicRoleStatsCache.set(key, stats);
+            return stats;
         }
 
         allowedAtState(configOrId, state) {
-            const dynamicSource = {...this.source, roleStats: this.roleStatsFor(state)};
             const config = typeof configOrId === 'object' ? configOrId : this.config.get(numeric(configOrId));
             if (!config) return false;
+            // Most talents have static eligibility. Avoid invoking the full
+            // protagonist attribute model unless this talent actually has a
+            // stat-gated rule (currently 五蕴皆空).
+            const statLimit = normalizeLimit(config, 'sx_limit');
+            const dynamicSource = statLimit
+                ? {...this.source, roleStats: this.roleStatsFor(state)}
+                : this.source;
             const id = numeric(config.id);
             if (this.externalAllowed && this.externalAllowed.has(id)) return true;
             if (!allowed(config, dynamicSource, state?.zizhi ?? this.initialZiZhi)) return false;
@@ -405,7 +423,24 @@
         }
 
         allowedSet(zizhi, state = null) {
-            if (state) return new Set(this.allIds.filter(id => this.allowedAtState(id, {...state, zizhi})));
+            if (state) {
+                const stateKey = `${clampZiZhi(zizhi, this.initialZiZhi || 154)}|${(state.talents || []).join(',')}`;
+                if (this.allowedStateCache.has(stateKey)) return this.allowedStateCache.get(stateKey);
+                const dynamicSource = {...this.source, roleStats: this.roleStatsFor(state)};
+                const result = new Set(this.allIds.filter(id => {
+                    const config = this.config.get(id);
+                    if (!config || (this.externalAllowed && this.externalAllowed.has(id))) {
+                        return !!config && !!this.externalAllowed && this.externalAllowed.has(id);
+                    }
+                    if (!allowed(config, dynamicSource, zizhi)) return false;
+                    return !this.externalAllowed || !allowed(config, dynamicSource, this.initialZiZhi);
+                }));
+                if (this.allowedStateCache.size >= 256) {
+                    this.allowedStateCache.delete(this.allowedStateCache.keys().next().value);
+                }
+                this.allowedStateCache.set(stateKey, result);
+                return result;
+            }
             return new Set(this.allIds.filter(id => this.isAllowedAt(id, zizhi)));
         }
 
@@ -490,7 +525,7 @@
             let luckyBefore = state.talLucky;
             if (this.dlcMode) luckyBefore += Math.max(1, 3 * kept.length);
             // pity<=0 表示「无保底机制」，不能当成「永远保底」
-            const advance = this.advancePerDraw || this.international;
+            const advance = this.useBornRC;
             // 显式 pity（注册表按当前资质传入）优先；否则按资质分档查 ZZ_RULES
             const pityThreshold = this.dlcMode ? 300 : (this.pity != null ? this.pity : rule.pity);
             let pityActive = !!this.hooks.pityActive({

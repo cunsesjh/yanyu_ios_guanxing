@@ -1330,6 +1330,13 @@ function resetCurrentRole() {
 
 function loadParsedSaveData(saveData, silent) {
     state.saveData = saveData;
+    // Plain JSON files may carry a human-readable import label in
+    // state.saveVersion. Keep the numeric game version from the save itself
+    // so sequence rules (notably BornTalent.RC stepping) select correctly.
+    const archiveVersion = Number(saveData?.DBVersion);
+    if (Number.isFinite(archiveVersion) && archiveVersion > 0) {
+        state.saveVersion = archiveVersion;
+    }
     // 存档平台/渠道在调用本函数前已由导入入口写入 state.savePlatform / state.saveChannel
     autoSelectWashAlgoForSave();
     state.bagPills = 0;

@@ -12,6 +12,7 @@ for (const file of [
     'shared/data.js', 'shared/born_talent_data.js', 'shared/battle_talent_data.js',
     'shared/life_hedao_data.js', 'shared/extra_attr_data.js', 'shared/equip_data.js',
     'shared/kongfu_data.js', 'role/role.js', 'shared/wash_role_context.js',
+    'shared/wash_route_engine.js',
     'shared/wash_source_engine.js',
 ]) {
     vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, {filename: file});

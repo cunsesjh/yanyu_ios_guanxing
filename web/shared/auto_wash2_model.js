@@ -1,6 +1,13 @@
 /* Independent save adapter: never writes simulator state or the imported save. */
 (function (root) {
     'use strict';
+    function numericVersion(...values) {
+        for (const value of values) {
+            const number = Number(value);
+            if (Number.isFinite(number) && number > 0) return number;
+        }
+        return 0;
+    }
     function snapshot(save, role, context = {}) {
         if (!role?.BornTalent || !Number.isFinite(Number(role.BornTalent.S))) {
             throw new Error('该人物缺少洗脉种子，请重新下载完整存档。');
@@ -18,7 +25,13 @@
             role_stats: {str_val: attr('Str'), con: attr('Con'), dex: attr('Dex'), int_val: attr('Int')},
             role_raw: JSON.parse(JSON.stringify(role)),
             global_vars: JSON.parse(JSON.stringify(save.globalVariable || {})),
-            save_version: Number(context.saveVersion ?? save.saveVersion ?? save.save_version) || 0,
+            // Plain JSON imports expose a display label such as "明文" in
+            // context.saveVersion; the actual algorithm version lives in
+            // DBVersion. Prefer the first numeric value so newer saves do not
+            // silently use the legacy fixed-RC sequence.
+            save_version: numericVersion(
+                context.saveVersion, save.saveVersion, save.save_version, save.DBVersion
+            ),
             save_channel: context.channel || '',
             talents: talentRows.filter(t => t && typeof t === 'object')
                 .map(t => ({id: Number(t.ID ?? t.id), locked: !!(t.Lock ?? t.locked ?? t.lock)}))

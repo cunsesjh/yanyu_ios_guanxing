@@ -223,7 +223,10 @@ function readPlainJsonBytes(bytes, fileName) {
         columns: null,
         row: null,
         format: 'plain-json',
-        version: '明文',
+        // Keep the display/import format separate from the game algorithm
+        // version. Consumers can now use DBVersion even for plain JSON saves.
+        version: Number.isFinite(Number(data.DBVersion)) && Number(data.DBVersion) > 0
+            ? String(Number(data.DBVersion)) : '明文',
         file: String(fileName || '')
     };
 }
